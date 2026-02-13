@@ -384,8 +384,8 @@ const FootballTacticsApp = () => {
     }
 
     ffmpegLoadingRef.current = true;
-    const coreUrl = new URL('@ffmpeg/core/dist/esm/ffmpeg-core.js', import.meta.url).href;
-    const wasmUrl = new URL('@ffmpeg/core/dist/esm/ffmpeg-core.wasm', import.meta.url).href;
+    const coreUrl = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js';
+    const wasmUrl = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm';
     const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
     const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
 

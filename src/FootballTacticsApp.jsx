@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
-import GIF from 'gif.js';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 const FootballTacticsApp = () => {
   const [gameFormat, setGameFormat] = useState('11v11');
@@ -51,6 +51,9 @@ const FootballTacticsApp = () => {
   
   const canvasRef = useRef(null);
   const commentsRef = useRef(null);
+  const ffmpegRef = useRef(null);
+  const ffmpegLoadedRef = useRef(false);
+  const ffmpegLoadingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPlayer, setDraggedPlayer] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null); // Wybrany zawodnik do rotacji
@@ -358,35 +361,104 @@ const FootballTacticsApp = () => {
     return canvas.toDataURL('image/png');
   };
 
-  // Helper: Wygeneruj animowany GIF z klatek
-  const generateGifFromFrames = (frames, format) => new Promise((resolve, reject) => {
-    const gif = new GIF({
-      workers: 2,
-      quality: 10,
-      workerScript: new URL('gif.js/dist/gif.worker.js', import.meta.url).href
+  const toBlobURL = async (url, mimeType) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return URL.createObjectURL(new Blob([blob], { type: mimeType }));
+  };
+
+  const ensureFfmpegLoaded = async () => {
+    if (ffmpegLoadedRef.current && ffmpegRef.current) {
+      return ffmpegRef.current;
+    }
+
+    if (!ffmpegRef.current) {
+      ffmpegRef.current = new FFmpeg();
+    }
+
+    if (ffmpegLoadingRef.current) {
+      while (!ffmpegLoadedRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return ffmpegRef.current;
+    }
+
+    ffmpegLoadingRef.current = true;
+    const coreUrl = new URL('@ffmpeg/core/dist/esm/ffmpeg-core.js', import.meta.url).href;
+    const wasmUrl = new URL('@ffmpeg/core/dist/esm/ffmpeg-core.wasm', import.meta.url).href;
+    const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
+    const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
+
+    await ffmpegRef.current.load({
+      coreURL: coreBlobUrl,
+      wasmURL: wasmBlobUrl
     });
 
+    ffmpegLoadedRef.current = true;
+    ffmpegLoadingRef.current = false;
+    return ffmpegRef.current;
+  };
+
+  const generateMp4FromFrames = async (frames, format) => {
+    if (!frames.length) {
+      throw new Error('Brak klatek do wygenerowania MP4');
+    }
+
+    const ffmpeg = await ensureFfmpegLoaded();
     const canvas = document.createElement('canvas');
     canvas.width = 700;
     canvas.height = 1080;
     const ctx = canvas.getContext('2d');
-    const frameDelay = 200;
 
-    frames.forEach(frameData => {
-      drawFrameToCanvas(frameData, format, canvas, ctx);
-      gif.addFrame(canvas, { copy: true, delay: frameDelay });
-    });
+    const frameFiles = [];
+    const frameCount = frames.length;
 
-    gif.on('finished', (blob) => {
+    for (let i = 0; i < frameCount; i++) {
+      drawFrameToCanvas(frames[i], format, canvas, ctx);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) {
+        throw new Error('Nie mozna wygenerowac klatki PNG');
+      }
+      const arrayBuffer = await blob.arrayBuffer();
+      const fileName = `frame_${String(i).padStart(3, '0')}.png`;
+      await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
+      frameFiles.push(fileName);
+    }
+
+    const outputName = `output_${Date.now()}.mp4`;
+    try {
+      await ffmpeg.exec([
+        '-framerate', '5',
+        '-i', 'frame_%03d.png',
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        outputName
+      ]);
+    } catch (error) {
+      await ffmpeg.exec([
+        '-framerate', '5',
+        '-i', 'frame_%03d.png',
+        '-c:v', 'mpeg4',
+        '-pix_fmt', 'yuv420p',
+        outputName
+      ]);
+    }
+
+    const data = await ffmpeg.readFile(outputName);
+
+    await Promise.all([
+      ...frameFiles.map(fileName => ffmpeg.deleteFile(fileName)),
+      ffmpeg.deleteFile(outputName)
+    ]);
+
+    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('GIF read error'));
-      reader.readAsDataURL(blob);
+      reader.onerror = () => reject(new Error('MP4 read error'));
+      reader.readAsDataURL(videoBlob);
     });
-
-    gif.on('abort', () => reject(new Error('GIF generation aborted')));
-    gif.render();
-  });
+  };
 
   // Eksport do PowerPoint
   const exportToPowerPoint = async () => {
@@ -418,18 +490,19 @@ const FootballTacticsApp = () => {
           // Dodaj slajd
           const slide = pres.addSlide();
           
-          // Lewy panel - animacja jako GIF
+          // Lewy panel - animacja jako MP4
           try {
-            const gifDataUrl = await generateGifFromFrames(scheme.frames, gameFormat);
-            slide.addImage({
-              data: gifDataUrl,
+            const mp4DataUrl = await generateMp4FromFrames(scheme.frames, gameFormat);
+            slide.addMedia({
+              type: 'video',
+              data: mp4DataUrl,
               x: 0.3,
               y: 0.5,
               w: 3.2,
               h: 6.5
             });
-          } catch (gifError) {
-            console.warn('Błąd przy tworzeniu GIF, używam statycznych obrazów', gifError);
+          } catch (mp4Error) {
+            console.warn('Błąd przy tworzeniu MP4, używam statycznych obrazów', mp4Error);
 
             // Fallback: użyj statycznych obrazów
             const imageDataUrl = getFrameImageDataUrl(scheme.frames[0], gameFormat);

@@ -1154,10 +1154,17 @@ const FootballTacticsApp = () => {
         ...prev,
         [newPhaseName.trim()]: []
       }));
-      setSchemes(prev => ({
-        ...prev,
-        [newPhaseName.trim()]: []
-      }));
+      setSchemes(prev => {
+        const newSchemes = { ...prev };
+        // Dodaj klucz dla każdego formatu gry
+        Object.keys(newSchemes).forEach(format => {
+          newSchemes[format] = {
+            ...newSchemes[format],
+            [newPhaseName.trim()]: []
+          };
+        });
+        return newSchemes;
+      });
       setSelectedPhase(newPhaseName.trim());
     }
     setNewPhaseMode(false);
@@ -1174,10 +1181,18 @@ const FootballTacticsApp = () => {
         ...prev,
         [phaseName]: [...prev[phaseName], newSubPhaseName.trim()]
       }));
-      setSchemes(prev => ({
-        ...prev,
-        [`${phaseName}-${newSubPhaseName.trim()}`]: []
-      }));
+      setSchemes(prev => {
+        const newSchemes = { ...prev };
+        const key = `${phaseName}-${newSubPhaseName.trim()}`;
+        // Dodaj klucz dla każdego formatu gry
+        Object.keys(newSchemes).forEach(format => {
+          newSchemes[format] = {
+            ...newSchemes[format],
+            [key]: []
+          };
+        });
+        return newSchemes;
+      });
       setSelectedPhase(phaseName);
       setSelectedSubPhase(newSubPhaseName.trim());
     }
@@ -1312,9 +1327,21 @@ const FootballTacticsApp = () => {
     const key = phases[selectedPhase]?.length > 0 ? 
       `${selectedPhase}-${selectedSubPhase}` : selectedPhase;
     
+    // Upewnij się, że klucz istnieje w schemes[gameFormat]
+    if (!schemes[gameFormat][key]) {
+      setSchemes(prev => ({
+        ...prev,
+        [gameFormat]: {
+          ...prev[gameFormat],
+          [key]: []
+        }
+      }));
+    }
+    
+    const existingSchemesCount = schemes[gameFormat][key]?.length || 0;
     const newScheme = {
       id: Date.now(),
-      name: `Schemat ${schemes[gameFormat][key].length + 1}`,
+      name: `Schemat ${existingSchemesCount + 1}`,
       comments: '',
       frames: [JSON.parse(JSON.stringify(getInitialPlayers(gameFormat)))]
     };
@@ -1323,7 +1350,7 @@ const FootballTacticsApp = () => {
       ...schemes,
       [gameFormat]: {
         ...schemes[gameFormat],
-        [key]: [...schemes[gameFormat][key], newScheme]
+        [key]: [...(schemes[gameFormat][key] || []), newScheme]
       }
     });
     setCurrentScheme(newScheme);

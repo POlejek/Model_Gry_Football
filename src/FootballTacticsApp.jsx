@@ -460,6 +460,436 @@ const FootballTacticsApp = () => {
     });
   };
 
+  // Funkcja pomocnicza do renderowania pełnej klatki animacji z liniami ruchu
+  const drawAnimationFrame = (ctx, currentFrameData, nextFrameData, progress, format) => {
+    const width = ctx.canvas.width;
+    const height = ctx.canvas.height;
+    const margin = 20;
+
+    const fieldDimensions = {
+      '7v7': { length: 55, width: 37, penaltyBoxWidth: 20, penaltyBoxDepth: 13, goalBoxWidth: 12, goalBoxDepth: 5, goalWidth: 5, penaltySpot: 0, centerCircle: 6, arcRadius: 0 },
+      '9v9': { length: 70, width: 50, penaltyBoxWidth: 30, penaltyBoxDepth: 13, goalBoxWidth: 15, goalBoxDepth: 5, goalWidth: 6, penaltySpot: 9, centerCircle: 7, arcRadius: 7 },
+      '11v11': { length: 105, width: 68, penaltyBoxWidth: 40.32, penaltyBoxDepth: 16.5, goalBoxWidth: 18.32, goalBoxDepth: 5.5, goalWidth: 7.32, penaltySpot: 11, centerCircle: 9.15, arcRadius: 9.15 }
+    };
+
+    const dims = fieldDimensions[format];
+    const fieldLength = dims.length;
+    const fieldWidthMeters = dims.width;
+    const fieldWidth = width - 2 * margin;
+    const fieldHeight = height - 2 * margin;
+
+    // Białe tło
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(0, 0, width, height);
+
+    // Obramowanie
+    ctx.strokeStyle = '#c4a76e';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(margin, margin, fieldWidth, fieldHeight);
+
+    // Linie boiska
+    ctx.strokeStyle = '#c4a76e';
+    ctx.lineWidth = 2;
+
+    // Linia środkowa
+    ctx.beginPath();
+    ctx.moveTo(margin, height / 2);
+    ctx.lineTo(width - margin, height / 2);
+    ctx.stroke();
+
+    // Okrąg środkowy
+    const centerCircleRadius = (dims.centerCircle / fieldWidthMeters) * fieldWidth;
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, centerCircleRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Punkt środkowy
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#c4a76e';
+    ctx.fill();
+
+    // Pola karne i bramkowe
+    const penaltyBoxWidth = (dims.penaltyBoxWidth / fieldWidthMeters) * fieldWidth;
+    const penaltyBoxDepth = (dims.penaltyBoxDepth / fieldLength) * fieldHeight;
+    const goalBoxWidth = (dims.goalBoxWidth / fieldWidthMeters) * fieldWidth;
+    const goalBoxDepth = (dims.goalBoxDepth / fieldLength) * fieldHeight;
+
+    const penaltyBoxLeft = (width - penaltyBoxWidth) / 2;
+    const goalBoxLeft = (width - goalBoxWidth) / 2;
+    const penaltyBoxRight = penaltyBoxLeft + penaltyBoxWidth;
+    const goalBoxRight = goalBoxLeft + goalBoxWidth;
+
+    ctx.strokeStyle = '#c4a76e';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(penaltyBoxLeft, margin, penaltyBoxWidth, penaltyBoxDepth);
+    ctx.strokeRect(goalBoxLeft, margin, goalBoxWidth, goalBoxDepth);
+    ctx.strokeRect(penaltyBoxLeft, height - margin - penaltyBoxDepth, penaltyBoxWidth, penaltyBoxDepth);
+    ctx.strokeRect(goalBoxLeft, height - margin - goalBoxDepth, goalBoxWidth, goalBoxDepth);
+
+    // Bramki
+    ctx.strokeStyle = '#c4a76e';
+    ctx.lineWidth = 4;
+    const goalWidth = (dims.goalWidth / fieldWidthMeters) * fieldWidth;
+    const goalLeft = (width - goalWidth) / 2;
+    const goalRight = goalLeft + goalWidth;
+    
+    ctx.beginPath();
+    ctx.moveTo(goalLeft, margin);
+    ctx.lineTo(goalLeft, margin - 5);
+    ctx.lineTo(goalRight, margin - 5);
+    ctx.lineTo(goalRight, margin);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(goalLeft, height - margin);
+    ctx.lineTo(goalLeft, height - margin + 5);
+    ctx.lineTo(goalRight, height - margin + 5);
+    ctx.lineTo(goalRight, height - margin);
+    ctx.stroke();
+
+    // Łuki i punkty karne (dla 9v9 i 11v11)
+    if (dims.arcRadius > 0 && dims.penaltySpot > 0) {
+      ctx.strokeStyle = '#c4a76e';
+      ctx.lineWidth = 2;
+      const arcRadius = (dims.arcRadius / fieldWidthMeters) * fieldWidth;
+      const penaltySpotDistance = (dims.penaltySpot / fieldLength) * fieldHeight;
+      const penaltySpotTop = margin + penaltySpotDistance;
+      const penaltySpotBottom = height - margin - penaltySpotDistance;
+      
+      const distancePenaltySpotToLine = ((dims.penaltyBoxDepth - dims.penaltySpot) / fieldLength) * fieldHeight;
+      const arcAngle = Math.asin(Math.min(distancePenaltySpotToLine / arcRadius, 1));
+      
+      ctx.beginPath();
+      ctx.arc(width / 2, penaltySpotTop, arcRadius, arcAngle, Math.PI - arcAngle);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(width / 2, penaltySpotBottom, arcRadius, Math.PI + arcAngle, Math.PI * 2 - arcAngle);
+      ctx.stroke();
+
+      ctx.fillStyle = '#c4a76e';
+      ctx.beginPath();
+      ctx.arc(width / 2, penaltySpotTop, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(width / 2, penaltySpotBottom, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Wyszarzenie stref
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    ctx.fillRect(goalBoxLeft, margin, penaltyBoxLeft - goalBoxLeft, fieldHeight);
+    ctx.fillRect(goalBoxRight, margin, penaltyBoxRight - goalBoxRight, fieldHeight);
+
+    // Linie półprzestrzeni
+    ctx.strokeStyle = 'rgba(196, 167, 110, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([10, 10]);
+
+    ctx.beginPath();
+    ctx.moveTo(penaltyBoxLeft, margin);
+    ctx.lineTo(penaltyBoxLeft, height - margin);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(penaltyBoxRight, margin);
+    ctx.lineTo(penaltyBoxRight, height - margin);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(goalBoxLeft, margin);
+    ctx.lineTo(goalBoxLeft, height - margin);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(goalBoxRight, margin);
+    ctx.lineTo(goalBoxRight, height - margin);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // Rysuj linie ruchu jeśli mamy następną klatkę
+    if (nextFrameData) {
+      currentFrameData.team.forEach((player, i) => {
+        if (nextFrameData.team[i]) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(26, 54, 93, 0.3)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          
+          ctx.beginPath();
+          ctx.moveTo(player.x, player.y);
+          ctx.lineTo(nextFrameData.team[i].x, nextFrameData.team[i].y);
+          ctx.stroke();
+          
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      });
+
+      currentFrameData.opponent.forEach((player, i) => {
+        if (nextFrameData.opponent[i]) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(139, 0, 0, 0.3)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          
+          ctx.beginPath();
+          ctx.moveTo(player.x, player.y);
+          ctx.lineTo(nextFrameData.opponent[i].x, nextFrameData.opponent[i].y);
+          ctx.stroke();
+          
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      });
+    }
+
+    // Interpoluj pozycje zawodników jeśli jest progress
+    let interpolatedData = currentFrameData;
+    if (nextFrameData && progress > 0) {
+      interpolatedData = {
+        team: currentFrameData.team.map((player, i) => ({
+          ...player,
+          x: player.x + (nextFrameData.team[i].x - player.x) * progress,
+          y: player.y + (nextFrameData.team[i].y - player.y) * progress,
+          rotation: player.rotation
+        })),
+        opponent: currentFrameData.opponent.map((player, i) => ({
+          ...player,
+          x: player.x + (nextFrameData.opponent[i].x - player.x) * progress,
+          y: player.y + (nextFrameData.opponent[i].y - player.y) * progress,
+          rotation: player.rotation
+        })),
+        ball: {
+          x: currentFrameData.ball.x + (nextFrameData.ball.x - currentFrameData.ball.x) * progress,
+          y: currentFrameData.ball.y + (nextFrameData.ball.y - currentFrameData.ball.y) * progress
+        }
+      };
+    }
+
+    // Rysuj zawodników
+    const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
+    const playerRadius = playerSizes[format] || 18;
+    const fontSize = Math.floor(playerRadius * 0.65);
+
+    // Drużyna (niebieska)
+    interpolatedData.team.forEach(player => {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.rotation || 0);
+      
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+      
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#1a365d';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.shadowColor = 'transparent';
+      
+      // Ręce zawodnika
+      ctx.strokeStyle = '#1a365d';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(-playerRadius * 0.5, -playerRadius * 0.3);
+      ctx.lineTo(-playerRadius * 1.3, -playerRadius * 0.8);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.moveTo(playerRadius * 0.5, -playerRadius * 0.3);
+      ctx.lineTo(playerRadius * 1.3, -playerRadius * 0.8);
+      ctx.stroke();
+      
+      ctx.rotate(-(player.rotation || 0));
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(player.number, 0, 0);
+      
+      ctx.restore();
+    });
+
+    // Przeciwnik (czerwona)
+    interpolatedData.opponent.forEach(player => {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.rotation || 0);
+      
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+      
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#8b0000';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.shadowColor = 'transparent';
+      
+      // Ręce zawodnika
+      ctx.strokeStyle = '#8b0000';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(-playerRadius * 0.5, -playerRadius * 0.3);
+      ctx.lineTo(-playerRadius * 1.3, -playerRadius * 0.8);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.moveTo(playerRadius * 0.5, -playerRadius * 0.3);
+      ctx.lineTo(playerRadius * 1.3, -playerRadius * 0.8);
+      ctx.stroke();
+      
+      ctx.rotate(-(player.rotation || 0));
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(player.number, 0, 0);
+      
+      ctx.restore();
+    });
+
+    // Piłka
+    const ballSizes = { '7v7': 10, '9v9': 9, '11v11': 8 };
+    const ballRadius = ballSizes[format] || 8;
+    
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    
+    ctx.beginPath();
+    ctx.arc(interpolatedData.ball.x, interpolatedData.ball.y, ballRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  // Eksport animacji do MP4
+  const exportAnimationToMP4 = async () => {
+    if (!currentScheme || currentScheme.frames.length < 2) {
+      alert('Musisz mieć co najmniej 2 klatki, aby wyeksportować animację!');
+      return;
+    }
+
+    try {
+      const ffmpeg = await ensureFfmpegLoaded();
+      const canvas = document.createElement('canvas');
+      canvas.width = 700;
+      canvas.height = 1080;
+      const ctx = canvas.getContext('2d');
+
+      const frameFiles = [];
+      const framesPerTransition = 15; // Liczba klatek pomiędzy każdą parą klatek schematu (dla zwolnionego tempa)
+      let frameIndex = 0;
+
+      // Generuj klatki animacji
+      for (let i = 0; i < currentScheme.frames.length; i++) {
+        const currentFrameData = currentScheme.frames[i];
+        const nextFrameData = i < currentScheme.frames.length - 1 ? currentScheme.frames[i + 1] : null;
+
+        if (nextFrameData) {
+          // Generuj interpolowane klatki między obecną a następną
+          for (let step = 0; step < framesPerTransition; step++) {
+            const progress = step / framesPerTransition;
+            
+            // Rysuj klatkę z liniami ruchu
+            drawAnimationFrame(ctx, currentFrameData, nextFrameData, progress, gameFormat);
+            
+            // Zapisz klatkę
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) {
+              throw new Error('Nie można wygenerować klatki PNG');
+            }
+            const arrayBuffer = await blob.arrayBuffer();
+            const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
+            await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
+            frameFiles.push(fileName);
+            frameIndex++;
+          }
+        } else {
+          // Ostatnia klatka - narysuj ją bez interpolacji
+          drawAnimationFrame(ctx, currentFrameData, null, 0, gameFormat);
+          
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          if (!blob) {
+            throw new Error('Nie można wygenerować klatki PNG');
+          }
+          const arrayBuffer = await blob.arrayBuffer();
+          const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
+          await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
+          frameFiles.push(fileName);
+          frameIndex++;
+        }
+      }
+
+      const outputName = `animation_${Date.now()}.mp4`;
+      
+      // Generuj MP4 z framerate 20 fps (zwolnione tempo)
+      try {
+        await ffmpeg.exec([
+          '-framerate', '20',
+          '-i', 'frame_%04d.png',
+          '-c:v', 'libx264',
+          '-pix_fmt', 'yuv420p',
+          '-movflags', '+faststart',
+          outputName
+        ]);
+      } catch (error) {
+        // Fallback na mpeg4
+        await ffmpeg.exec([
+          '-framerate', '20',
+          '-i', 'frame_%04d.png',
+          '-c:v', 'mpeg4',
+          '-pix_fmt', 'yuv420p',
+          outputName
+        ]);
+      }
+
+      const data = await ffmpeg.readFile(outputName);
+
+      // Czyszczenie plików tymczasowych
+      await Promise.all([
+        ...frameFiles.map(fileName => ffmpeg.deleteFile(fileName)),
+        ffmpeg.deleteFile(outputName)
+      ]);
+
+      // Pobierz plik MP4
+      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+      const url = URL.createObjectURL(videoBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `animacja-${currentScheme.name || 'schemat'}-${Date.now()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert('Animacja została pobrana pomyślnie!');
+    } catch (error) {
+      console.error('Błąd podczas eksportu animacji:', error);
+      alert('Błąd podczas eksportu animacji: ' + error.message);
+    }
+  };
+
   // Eksport do PowerPoint
   const exportToPowerPoint = async () => {
     try {
@@ -2455,6 +2885,16 @@ const FootballTacticsApp = () => {
               >
                 <Plus size={14} />
                 Klatkę
+              </button>
+              
+              <button
+                onClick={exportAnimationToMP4}
+                className="control-btn px-2 py-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed rounded font-medium flex items-center gap-1 whitespace-nowrap text-xs flex-shrink-0"
+                title="Pobierz animację jako MP4 (zwolnione tempo, z liniami ruchu)"
+                disabled={!currentScheme || currentScheme.frames.length < 2}
+              >
+                <Download size={14} />
+                Pobierz animację
               </button>
               
               {/* Podgląd klatek - po prawej */}

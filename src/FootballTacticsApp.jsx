@@ -505,6 +505,181 @@ const FootballTacticsApp = () => {
     ctx.strokeRect(penaltyBoxLeft, height - margin - penaltyBoxDepth, penaltyBoxWidth, penaltyBoxDepth);
     ctx.strokeRect(goalBoxLeft, height - margin - goalBoxDepth, goalBoxWidth, goalBoxDepth);
 
+    // Rysuj strefy jeśli są w klatce
+    if (frameData.zones && frameData.zones.length > 0) {
+      frameData.zones.forEach(zone => {
+        ctx.save();
+        ctx.fillStyle = zone.color || '#3b82f6';
+        ctx.globalAlpha = zone.opacity || 0.3;
+        ctx.strokeStyle = zone.color || '#3b82f6';
+        ctx.lineWidth = 2;
+
+        switch (zone.type) {
+          case 'rectangle':
+            ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+            ctx.globalAlpha = 1;
+            ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+            break;
+          
+          case 'circle':
+            ctx.beginPath();
+            ctx.arc(zone.centerX, zone.centerY, zone.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.stroke();
+            break;
+          
+          case 'polygon':
+            if (zone.points && zone.points.length > 0) {
+              ctx.beginPath();
+              ctx.moveTo(zone.points[0].x, zone.points[0].y);
+              for (let i = 1; i < zone.points.length; i++) {
+                ctx.lineTo(zone.points[i].x, zone.points[i].y);
+              }
+              ctx.closePath();
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.stroke();
+            }
+            break;
+        }
+        ctx.restore();
+      });
+    }
+
+    // Rysuj linie jeśli są w klatce
+    if (frameData.lines && frameData.lines.length > 0) {
+      frameData.lines.forEach(line => {
+        ctx.save();
+        ctx.strokeStyle = line.color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const dx = line.endX - line.startX;
+        const dy = line.endY - line.startY;
+        const angle = Math.atan2(dy, dx);
+        const arrowSize = 15;
+
+        const drawArrowHead = (x, y, angle) => {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(
+            x - arrowSize * Math.cos(angle - Math.PI / 6),
+            y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          ctx.moveTo(x, y);
+          ctx.lineTo(
+            x - arrowSize * Math.cos(angle + Math.PI / 6),
+            y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          ctx.stroke();
+        };
+
+        const getControlPoint = () => {
+          if (line.controlX !== undefined && line.controlY !== undefined) {
+            return { x: line.controlX, y: line.controlY };
+          }
+          return {
+            x: (line.startX + line.endX) / 2 + (line.endY - line.startY) * 0.3,
+            y: (line.startY + line.endY) / 2 - (line.endX - line.startX) * 0.3
+          };
+        };
+
+        switch (line.type) {
+          case 'line-solid':
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            break;
+
+          case 'line-dashed':
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            break;
+
+          case 'arrow-solid':
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'arrow-dashed':
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'double-arrow-solid':
+            const offset = 4;
+            const perpX = -Math.sin(angle) * offset;
+            const perpY = Math.cos(angle) * offset;
+            const arrowGap = 8;
+            const shortenedEndX = line.endX - arrowGap * Math.cos(angle);
+            const shortenedEndY = line.endY - arrowGap * Math.sin(angle);
+            
+            ctx.beginPath();
+            ctx.moveTo(line.startX + perpX, line.startY + perpY);
+            ctx.lineTo(shortenedEndX + perpX, shortenedEndY + perpY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(line.startX - perpX, line.startY - perpY);
+            ctx.lineTo(shortenedEndX - perpX, shortenedEndY - perpY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(line.endX, line.endY);
+            ctx.lineTo(
+              line.endX - (arrowSize + 2) * Math.cos(angle - Math.PI / 6),
+              line.endY - (arrowSize + 2) * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.moveTo(line.endX, line.endY);
+            ctx.lineTo(
+              line.endX - (arrowSize + 2) * Math.cos(angle + Math.PI / 6),
+              line.endY - (arrowSize + 2) * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.stroke();
+            break;
+
+          case 'curve-line':
+            const cp1 = getControlPoint();
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.quadraticCurveTo(cp1.x, cp1.y, line.endX, line.endY);
+            ctx.stroke();
+            break;
+
+          case 'curve-arrow-solid':
+            const cp2 = getControlPoint();
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.quadraticCurveTo(cp2.x, cp2.y, line.endX, line.endY);
+            ctx.stroke();
+            
+            const t = 0.95;
+            const nearEndX = (1-t)*(1-t)*line.startX + 2*(1-t)*t*cp2.x + t*t*line.endX;
+            const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
+            const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
+            drawArrowHead(line.endX, line.endY, curveAngle);
+            break;
+        }
+
+        ctx.restore();
+      });
+    }
+
     // Rysuj zawodników
     const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[format] || 18;
@@ -889,6 +1064,183 @@ const FootballTacticsApp = () => {
     ctx.stroke();
 
     ctx.setLineDash([]);
+
+    // Rysuj strefy jeśli są w klatce
+    if (currentFrameData.zones && currentFrameData.zones.length > 0) {
+      currentFrameData.zones.forEach(zone => {
+        ctx.save();
+        ctx.fillStyle = zone.color || '#3b82f6';
+        ctx.globalAlpha = zone.opacity || 0.3;
+        ctx.strokeStyle = zone.color || '#3b82f6';
+        ctx.lineWidth = 2;
+
+        switch (zone.type) {
+          case 'rectangle':
+            ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+            ctx.globalAlpha = 1;
+            ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+            break;
+          
+          case 'circle':
+            ctx.beginPath();
+            ctx.arc(zone.centerX, zone.centerY, zone.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.stroke();
+            break;
+          
+          case 'polygon':
+            if (zone.points && zone.points.length > 0) {
+              ctx.beginPath();
+              ctx.moveTo(zone.points[0].x, zone.points[0].y);
+              for (let i = 1; i < zone.points.length; i++) {
+                ctx.lineTo(zone.points[i].x, zone.points[i].y);
+              }
+              ctx.closePath();
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.stroke();
+            }
+            break;
+        }
+        ctx.restore();
+      });
+    }
+
+    // Rysuj linie jeśli są w klatce
+    if (currentFrameData.lines && currentFrameData.lines.length > 0) {
+      currentFrameData.lines.forEach(line => {
+        ctx.save();
+        ctx.strokeStyle = line.color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const dx = line.endX - line.startX;
+        const dy = line.endY - line.startY;
+        const angle = Math.atan2(dy, dx);
+        const arrowSize = 15;
+
+        // Funkcja rysująca grot strzałki
+        const drawArrowHead = (x, y, angle) => {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(
+            x - arrowSize * Math.cos(angle - Math.PI / 6),
+            y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          ctx.moveTo(x, y);
+          ctx.lineTo(
+            x - arrowSize * Math.cos(angle + Math.PI / 6),
+            y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          ctx.stroke();
+        };
+
+        // Funkcja licząca punkt kontrolny dla krzywej
+        const getControlPoint = () => {
+          if (line.controlX !== undefined && line.controlY !== undefined) {
+            return { x: line.controlX, y: line.controlY };
+          }
+          return {
+            x: (line.startX + line.endX) / 2 + (line.endY - line.startY) * 0.3,
+            y: (line.startY + line.endY) / 2 - (line.endX - line.startX) * 0.3
+          };
+        };
+
+        switch (line.type) {
+          case 'line-solid':
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            break;
+
+          case 'line-dashed':
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            break;
+
+          case 'arrow-solid':
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'arrow-dashed':
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'double-arrow-solid':
+            const offset = 4;
+            const perpX = -Math.sin(angle) * offset;
+            const perpY = Math.cos(angle) * offset;
+            const arrowGap = 8;
+            const shortenedEndX = line.endX - arrowGap * Math.cos(angle);
+            const shortenedEndY = line.endY - arrowGap * Math.sin(angle);
+            
+            ctx.beginPath();
+            ctx.moveTo(line.startX + perpX, line.startY + perpY);
+            ctx.lineTo(shortenedEndX + perpX, shortenedEndY + perpY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(line.startX - perpX, line.startY - perpY);
+            ctx.lineTo(shortenedEndX - perpX, shortenedEndY - perpY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(line.endX, line.endY);
+            ctx.lineTo(
+              line.endX - (arrowSize + 2) * Math.cos(angle - Math.PI / 6),
+              line.endY - (arrowSize + 2) * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.moveTo(line.endX, line.endY);
+            ctx.lineTo(
+              line.endX - (arrowSize + 2) * Math.cos(angle + Math.PI / 6),
+              line.endY - (arrowSize + 2) * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.stroke();
+            break;
+
+          case 'curve-line':
+            const cp1 = getControlPoint();
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.quadraticCurveTo(cp1.x, cp1.y, line.endX, line.endY);
+            ctx.stroke();
+            break;
+
+          case 'curve-arrow-solid':
+            const cp2 = getControlPoint();
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.quadraticCurveTo(cp2.x, cp2.y, line.endX, line.endY);
+            ctx.stroke();
+            
+            const t = 0.95;
+            const nearEndX = (1-t)*(1-t)*line.startX + 2*(1-t)*t*cp2.x + t*t*line.endX;
+            const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
+            const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
+            drawArrowHead(line.endX, line.endY, curveAngle);
+            break;
+        }
+
+        ctx.restore();
+      });
+    }
 
     // Rysuj linie ruchu jeśli mamy następną klatkę
     if (nextFrameData) {

@@ -5278,11 +5278,18 @@ const FootballTacticsApp = () => {
                       }
                     }}
                     onDoubleClick={() => setEditingPhase(phase)}
-                    className={`phase-btn flex-1 px-4 py-3 rounded-lg text-left font-semibold flex items-center justify-between ${
-                      selectedPhase === phase ? 'active' : 'bg-white/5 hover:bg-white/10'
+                    className={`flex-1 px-4 py-3 rounded-lg text-left font-semibold flex items-center justify-between transition-all cursor-grab active:cursor-grabbing border-2 ${
+                      draggedPhase === phase 
+                        ? 'bg-yellow-500/30 border-yellow-500 shadow-lg' 
+                        : selectedPhase === phase 
+                          ? 'bg-blue-600/30 border-blue-500' 
+                          : 'bg-white/5 hover:bg-white/10 border-white/10'
                     }`}
                   >
-                    <span>{phase}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 cursor-grab active:cursor-grabbing">☰</span>
+                      {phase}
+                    </span>
                     {phases[phase].length > 0 && (
                       expandedPhases[phase] ? <ChevronDown size={18} /> : <ChevronRight size={18} />
                     )}

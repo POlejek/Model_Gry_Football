@@ -915,6 +915,92 @@ const FootballTacticsApp = () => {
     });
   };
 
+  const generateAnimatedMp4FromFrames = async (frames, format, tColor, oColor) => {
+    if (frames.length < 2) {
+      throw new Error('Brak wystarczajacej liczby klatek do animacji');
+    }
+
+    const ffmpeg = await ensureFfmpegLoaded();
+    const canvas = document.createElement('canvas');
+    canvas.width = 700;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+
+    const frameFiles = [];
+    const framesPerTransition = 15;
+    let frameIndex = 0;
+
+    for (let i = 0; i < frames.length; i++) {
+      const currentFrameData = frames[i];
+      const nextFrameData = i < frames.length - 1 ? frames[i + 1] : null;
+
+      if (nextFrameData) {
+        for (let step = 0; step < framesPerTransition; step++) {
+          const progress = step / framesPerTransition;
+          drawAnimationFrame(ctx, currentFrameData, nextFrameData, progress, format, tColor, oColor);
+
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          if (!blob) {
+            throw new Error('Nie mozna wygenerowac klatki PNG');
+          }
+          const arrayBuffer = await blob.arrayBuffer();
+          const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
+          await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
+          frameFiles.push(fileName);
+          frameIndex++;
+        }
+      } else {
+        drawAnimationFrame(ctx, currentFrameData, null, 0, format, tColor, oColor);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) {
+          throw new Error('Nie mozna wygenerowac klatki PNG');
+        }
+        const arrayBuffer = await blob.arrayBuffer();
+        const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
+        await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
+        frameFiles.push(fileName);
+        frameIndex++;
+      }
+    }
+
+    const outputName = `ppt_animation_${Date.now()}.mp4`;
+
+    try {
+      await ffmpeg.exec([
+        '-framerate', '20',
+        '-i', 'frame_%04d.png',
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-movflags', '+faststart',
+        outputName
+      ]);
+    } catch (error) {
+      await ffmpeg.exec([
+        '-framerate', '20',
+        '-i', 'frame_%04d.png',
+        '-c:v', 'mpeg4',
+        '-pix_fmt', 'yuv420p',
+        outputName
+      ]);
+    }
+
+    const data = await ffmpeg.readFile(outputName);
+
+    await Promise.all([
+      ...frameFiles.map(fileName => ffmpeg.deleteFile(fileName)),
+      ffmpeg.deleteFile(outputName)
+    ]);
+
+    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('MP4 read error'));
+      reader.readAsDataURL(videoBlob);
+    });
+  };
+
   // Funkcja pomocnicza do renderowania pełnej klatki animacji z liniami ruchu
   const drawAnimationFrame = (ctx, currentFrameData, nextFrameData, progress, format, tColor = '#1a365d', oColor = '#8b0000') => {
     const width = ctx.canvas.width;
@@ -1571,8 +1657,32 @@ const FootballTacticsApp = () => {
   const exportToPowerPoint = async () => {
     try {
       const pres = new PptxGenJs();
+      pres.layout = 'LAYOUT_WIDE';
       let schemeCount = 0;
       let processedSchemes = 0;
+
+      const slideWidth = 13.333;
+      const slideHeight = 7.5;
+      const marginX = 0.4;
+      const topRowY = 0.2;
+      const topRowH = 0.35;
+      const rowGap = 0.1;
+      const subRowY = topRowY + topRowH + rowGap;
+      const subRowH = 0.32;
+      const contentTop = subRowY + subRowH + 0.3;
+      const contentBottom = 0.4;
+      const contentHeight = slideHeight - contentTop - contentBottom;
+      const leftPanelW = 6.2;
+      const panelGap = 0.4;
+      const rightPanelX = marginX + leftPanelW + panelGap;
+      const rightPanelW = slideWidth - rightPanelX - marginX;
+
+      const phaseKeys = Object.keys(phases);
+      const phaseGap = 0.18;
+      const phaseCellW = (slideWidth - (2 * marginX) - (phaseKeys.length - 1) * phaseGap) / phaseKeys.length;
+      const activeFill = '8BC34A';
+      const inactiveFill = 'FFFFFF';
+      const borderColor = '1F2937';
       
       // Najpierw policz ile będzie schematów
       Object.keys(schemes[gameFormat]).forEach(key => {
@@ -1596,90 +1706,129 @@ const FootballTacticsApp = () => {
           
           // Dodaj slajd
           const slide = pres.addSlide();
+
+          phaseKeys.forEach((phaseKey, idx) => {
+            const phaseX = marginX + idx * (phaseCellW + phaseGap);
+            const isActivePhase = phaseKey === phase;
+
+            slide.addText(phaseKey, {
+              x: phaseX,
+              y: topRowY,
+              w: phaseCellW,
+              h: topRowH,
+              fontSize: 14,
+              bold: true,
+              align: 'center',
+              valign: 'mid',
+              color: '0F172A',
+              fill: { color: isActivePhase ? activeFill : inactiveFill },
+              line: { color: borderColor, width: 1 }
+            });
+
+            const subPhases = phases[phaseKey] || [];
+            if (subPhases.length > 0) {
+              const subGap = 0.08;
+              const subCellW = (phaseCellW - (subPhases.length - 1) * subGap) / subPhases.length;
+
+              subPhases.forEach((subPhaseKey, subIdx) => {
+                const subX = phaseX + subIdx * (subCellW + subGap);
+                const isActiveSub = phaseKey === phase && subPhaseKey === subPhase;
+
+                slide.addText(subPhaseKey, {
+                  x: subX,
+                  y: subRowY,
+                  w: subCellW,
+                  h: subRowH,
+                  fontSize: 11,
+                  bold: true,
+                  align: 'center',
+                  valign: 'mid',
+                  color: '0F172A',
+                  fill: { color: isActiveSub ? activeFill : inactiveFill },
+                  line: { color: borderColor, width: 1 }
+                });
+              });
+            }
+          });
           
-          // Lewy panel - animacja jako MP4
+          // Lewy panel - animacja jak w "Pobierz animacje" lub klatka 1
+          const schemeTeamColor = scheme.teamColor || teamColor;
+          const schemeOpponentColor = scheme.opponentColor || opponentColor;
+          const leftPanelX = marginX;
+          const leftTitleH = 0.35;
+          const leftMediaY = contentTop + leftTitleH + 0.15;
+          const leftMediaH = contentHeight - leftTitleH - 0.15;
+
+          slide.addText('Animacja', {
+            x: leftPanelX,
+            y: contentTop,
+            w: leftPanelW,
+            h: leftTitleH,
+            fontSize: 18,
+            bold: true,
+            color: '111827'
+          });
+
           try {
-            const mp4DataUrl = await generateMp4FromFrames(scheme.frames, gameFormat);
+            const mp4DataUrl = await generateAnimatedMp4FromFrames(
+              scheme.frames,
+              gameFormat,
+              schemeTeamColor,
+              schemeOpponentColor
+            );
             slide.addMedia({
               type: 'video',
               data: mp4DataUrl,
-              x: 0.3,
-              y: 0.5,
-              w: 3.2,
-              h: 6.5
+              x: leftPanelX,
+              y: leftMediaY,
+              w: leftPanelW,
+              h: leftMediaH
             });
           } catch (mp4Error) {
-            console.warn('Błąd przy tworzeniu MP4, używam statycznych obrazów', mp4Error);
+            console.warn('Błąd przy tworzeniu MP4, używam klatki 1', mp4Error);
 
-            // Fallback: użyj statycznych obrazów
-            const imageDataUrl = getFrameImageDataUrl(scheme.frames[0], gameFormat);
-            slide.addImage({
-              data: imageDataUrl,
-              x: 0.3,
-              y: 0.5,
-              w: 3.2,
-              h: 6.5,
-              border: { pt: 1, color: '999999' }
-            });
+            if (scheme.frames.length > 0) {
+              const imageDataUrl = (() => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 700;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+                drawFrameToCanvas(scheme.frames[0], gameFormat, canvas, ctx, schemeTeamColor, schemeOpponentColor);
+                return canvas.toDataURL('image/png');
+              })();
+
+              slide.addImage({
+                data: imageDataUrl,
+                x: leftPanelX,
+                y: leftMediaY,
+                w: leftPanelW,
+                h: leftMediaH,
+                border: { pt: 1, color: '9CA3AF' }
+              });
+            }
           }
-          
-          // Prawy panel - tekst
-          const rightX = 3.7;
-          const rightWidth = 9.3;
-          
-          // Tytuł - Nazwa Schematu
-          slide.addText(scheme.name, {
-            x: rightX,
-            y: 0.5,
-            w: rightWidth,
+
+          // Prawy panel - nazwa schematu i komentarze
+          const schemeName = scheme.name || 'Schemat bez nazwy';
+          slide.addText(schemeName, {
+            x: rightPanelX,
+            y: contentTop,
+            w: rightPanelW,
             h: 0.6,
-            fontSize: 28,
+            fontSize: 26,
             bold: true,
-            color: '1e40af'
+            color: '111827'
           });
-          
-          // Informacja o fazie
-          slide.addText(`Faza: ${phase}`, {
-            x: rightX,
-            y: 1.3,
-            w: rightWidth,
-            h: 0.4,
-            fontSize: 14,
-            color: '1f2937'
-          });
-          
-          // Informacja o subfazie
-          if (subPhase) {
-            slide.addText(`Subfaza: ${subPhase}`, {
-              x: rightX,
-              y: 1.75,
-              w: rightWidth,
-              h: 0.4,
-              fontSize: 14,
-              color: '1f2937'
-            });
-          }
-          
-          // Informacja o klatkach
-          slide.addText(`Liczba klatek: ${scheme.frames.length}`, {
-            x: rightX,
-            y: subPhase ? 2.2 : 1.75,
-            w: rightWidth,
-            h: 0.4,
-            fontSize: 12,
-            color: '6b7280'
-          });
-          
-          // Komentarz/Zadania
-          const commentY = subPhase ? 2.8 : 2.35;
-          slide.addText('Komentarz:', {
-            x: rightX,
-            y: commentY,
-            w: rightWidth,
+
+          const commentLabelY = contentTop + 0.85;
+          slide.addText('Komentarze/Zadania', {
+            x: rightPanelX,
+            y: commentLabelY,
+            w: rightPanelW,
             h: 0.35,
-            fontSize: 12,
+            fontSize: 14,
             bold: true,
-            color: '374151'
+            color: '1f2937'
           });
           
           // Usuń tagi HTML z komentarza
@@ -1689,14 +1838,14 @@ const FootballTacticsApp = () => {
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
             .trim();
-          
+
           slide.addText(plainComments || '(brak komentarza)', {
-            x: rightX,
-            y: commentY + 0.45,
-            w: rightWidth,
-            h: 3.8,
-            fontSize: 11,
-            color: '4b5563',
+            x: rightPanelX,
+            y: commentLabelY + 0.4,
+            w: rightPanelW,
+            h: slideHeight - (commentLabelY + 0.4) - contentBottom,
+            fontSize: 12,
+            color: '374151',
             valign: 'top',
             wrap: true
           });

@@ -1724,32 +1724,33 @@ const FootballTacticsApp = () => {
               fill: { color: isActivePhase ? activeFill : inactiveFill },
               line: { color: borderColor, width: 1 }
             });
-
-            const subPhases = phases[phaseKey] || [];
-            if (subPhases.length > 0) {
-              const subGap = 0.08;
-              const subCellW = (phaseCellW - (subPhases.length - 1) * subGap) / subPhases.length;
-
-              subPhases.forEach((subPhaseKey, subIdx) => {
-                const subX = phaseX + subIdx * (subCellW + subGap);
-                const isActiveSub = phaseKey === phase && subPhaseKey === subPhase;
-
-                slide.addText(subPhaseKey, {
-                  x: subX,
-                  y: subRowY,
-                  w: subCellW,
-                  h: subRowH,
-                  fontSize: 11,
-                  bold: true,
-                  align: 'center',
-                  valign: 'mid',
-                  color: '0F172A',
-                  fill: { color: isActiveSub ? activeFill : inactiveFill },
-                  line: { color: borderColor, width: 1 }
-                });
-              });
-            }
           });
+
+          // Wyświetl subfazy tylko dla wybranej fazy, na całej szerokości
+          const selectedPhaseSubfases = phases[phase] || [];
+          if (selectedPhaseSubfases.length > 0) {
+            const subGap = 0.08;
+            const subCellW = (slideWidth - (2 * marginX) - (selectedPhaseSubfases.length - 1) * subGap) / selectedPhaseSubfases.length;
+
+            selectedPhaseSubfases.forEach((subPhaseKey, subIdx) => {
+              const subX = marginX + subIdx * (subCellW + subGap);
+              const isActiveSub = subPhaseKey === subPhase;
+
+              slide.addText(subPhaseKey, {
+                x: subX,
+                y: subRowY,
+                w: subCellW,
+                h: subRowH,
+                fontSize: 11,
+                bold: true,
+                align: 'center',
+                valign: 'mid',
+                color: '0F172A',
+                fill: { color: isActiveSub ? activeFill : inactiveFill },
+                line: { color: borderColor, width: 1 }
+              });
+            });
+          }
           
           // Lewy panel - animacja jak w "Pobierz animacje" lub klatka 1
           const schemeTeamColor = scheme.teamColor || teamColor;

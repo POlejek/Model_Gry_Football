@@ -1694,67 +1694,70 @@ const FootballTacticsApp = () => {
         return;
       }
       
-      // Przejdź przez wszystkie schematy
-      for (const key of Object.keys(schemes[gameFormat])) {
-        const schemeList = schemes[gameFormat][key];
+      // Przejdź przez wszystkie schematy w kolejności faz i subfaz
+      for (const phase of phaseKeys) {
+        const subPhases = phases[phase] || [];
         
-        for (const scheme of schemeList) {
-          processedSchemes++;
-          
-          // Parsuj klucz na fazę i subfazę
-          const [phase, subPhase] = key.includes('-') ? key.split('-') : [key, ''];
-          
-          // Dodaj slajd
-          const slide = pres.addSlide();
+        // Jeśli faza ma subfazy
+        if (subPhases.length > 0) {
+          for (const subPhase of subPhases) {
+            const key = `${phase}-${subPhase}`;
+            const schemeList = schemes[gameFormat][key] || [];
+            
+            for (const scheme of schemeList) {
+              processedSchemes++;
+              
+              // Dodaj slajd
+              const slide = pres.addSlide();
 
-          phaseKeys.forEach((phaseKey, idx) => {
-            const phaseX = marginX + idx * (phaseCellW + phaseGap);
-            const isActivePhase = phaseKey === phase;
+              phaseKeys.forEach((phaseKey, idx) => {
+                const phaseX = marginX + idx * (phaseCellW + phaseGap);
+                const isActivePhase = phaseKey === phase;
 
-            slide.addText(phaseKey, {
-              x: phaseX,
-              y: topRowY,
-              w: phaseCellW,
-              h: topRowH,
-              fontSize: 14,
-              bold: true,
-              align: 'center',
-              valign: 'mid',
-              color: '0F172A',
-              fill: { color: isActivePhase ? activeFill : inactiveFill },
-              line: { color: borderColor, width: 1 }
-            });
-          });
-
-          // Wyświetl subfazy tylko dla wybranej fazy, na całej szerokości
-          const selectedPhaseSubfases = phases[phase] || [];
-          if (selectedPhaseSubfases.length > 0) {
-            const subGap = 0.08;
-            const subCellW = (slideWidth - (2 * marginX) - (selectedPhaseSubfases.length - 1) * subGap) / selectedPhaseSubfases.length;
-
-            selectedPhaseSubfases.forEach((subPhaseKey, subIdx) => {
-              const subX = marginX + subIdx * (subCellW + subGap);
-              const isActiveSub = subPhaseKey === subPhase;
-
-              slide.addText(subPhaseKey, {
-                x: subX,
-                y: subRowY,
-                w: subCellW,
-                h: subRowH,
-                fontSize: 11,
-                bold: true,
-                align: 'center',
-                valign: 'mid',
-                color: '0F172A',
-                fill: { color: isActiveSub ? activeFill : inactiveFill },
-                line: { color: borderColor, width: 1 }
+                slide.addText(phaseKey, {
+                  x: phaseX,
+                  y: topRowY,
+                  w: phaseCellW,
+                  h: topRowH,
+                  fontSize: 14,
+                  bold: true,
+                  align: 'center',
+                  valign: 'mid',
+                  color: '0F172A',
+                  fill: { color: isActivePhase ? activeFill : inactiveFill },
+                  line: { color: borderColor, width: 1 }
+                });
               });
-            });
-          }
-          
-          // Lewy panel - animacja jak w "Pobierz animacje" lub klatka 1
-          const schemeTeamColor = scheme.teamColor || teamColor;
-          const schemeOpponentColor = scheme.opponentColor || opponentColor;
+
+              // Wyświetl subfazy tylko dla wybranej fazy, na całej szerokości
+              const selectedPhaseSubfases = phases[phase] || [];
+              if (selectedPhaseSubfases.length > 0) {
+                const subGap = 0.08;
+                const subCellW = (slideWidth - (2 * marginX) - (selectedPhaseSubfases.length - 1) * subGap) / selectedPhaseSubfases.length;
+
+                selectedPhaseSubfases.forEach((subPhaseKey, subIdx) => {
+                  const subX = marginX + subIdx * (subCellW + subGap);
+                  const isActiveSub = subPhaseKey === subPhase;
+
+                  slide.addText(subPhaseKey, {
+                    x: subX,
+                    y: subRowY,
+                    w: subCellW,
+                    h: subRowH,
+                    fontSize: 11,
+                    bold: true,
+                    align: 'center',
+                    valign: 'mid',
+                    color: '0F172A',
+                    fill: { color: isActiveSub ? activeFill : inactiveFill },
+                    line: { color: borderColor, width: 1 }
+                  });
+                });
+              }
+              
+              // Lewy panel - animacja jak w "Pobierz animacje" lub klatka 1
+              const schemeTeamColor = scheme.teamColor || teamColor;
+              const schemeOpponentColor = scheme.opponentColor || opponentColor;
           const leftPanelX = marginX;
           const leftTitleH = 0.35;
           const leftMediaY = contentTop + leftTitleH + 0.15;
@@ -1850,6 +1853,137 @@ const FootballTacticsApp = () => {
             valign: 'top',
             wrap: true
           });
+            }
+          }
+        } else {
+          // Faza bez subfaz
+          const key = phase;
+          const schemeList = schemes[gameFormat][key] || [];
+          
+          for (const scheme of schemeList) {
+            processedSchemes++;
+            
+            // Dodaj slajd
+            const slide = pres.addSlide();
+
+            phaseKeys.forEach((phaseKey, idx) => {
+              const phaseX = marginX + idx * (phaseCellW + phaseGap);
+              const isActivePhase = phaseKey === phase;
+
+              slide.addText(phaseKey, {
+                x: phaseX,
+                y: topRowY,
+                w: phaseCellW,
+                h: topRowH,
+                fontSize: 14,
+                bold: true,
+                align: 'center',
+                valign: 'mid',
+                color: '0F172A',
+                fill: { color: isActivePhase ? activeFill : inactiveFill },
+                line: { color: borderColor, width: 1 }
+              });
+            });
+
+            // Lewy panel - animacja
+            const schemeTeamColor = scheme.teamColor || teamColor;
+            const schemeOpponentColor = scheme.opponentColor || opponentColor;
+            const leftPanelX = marginX;
+            const leftTitleH = 0.35;
+            const leftMediaY = contentTop + leftTitleH + 0.15;
+            const leftMediaH = contentHeight - leftTitleH - 0.15;
+
+            slide.addText('Animacja', {
+              x: leftPanelX,
+              y: contentTop,
+              w: leftPanelW,
+              h: leftTitleH,
+              fontSize: 18,
+              bold: true,
+              color: '111827'
+            });
+
+            try {
+              const mp4DataUrl = await generateAnimatedMp4FromFrames(
+                scheme.frames,
+                gameFormat,
+                schemeTeamColor,
+                schemeOpponentColor
+              );
+              slide.addMedia({
+                type: 'video',
+                data: mp4DataUrl,
+                x: leftPanelX,
+                y: leftMediaY,
+                w: leftPanelW,
+                h: leftMediaH
+              });
+            } catch (mp4Error) {
+              console.warn('Błąd przy tworzeniu MP4, używam klatki 1', mp4Error);
+
+              if (scheme.frames.length > 0) {
+                const imageDataUrl = (() => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 700;
+                  canvas.height = 1080;
+                  const ctx = canvas.getContext('2d');
+                  drawFrameToCanvas(scheme.frames[0], gameFormat, canvas, ctx, schemeTeamColor, schemeOpponentColor);
+                  return canvas.toDataURL('image/png');
+                })();
+
+                slide.addImage({
+                  data: imageDataUrl,
+                  x: leftPanelX,
+                  y: leftMediaY,
+                  w: leftPanelW,
+                  h: leftMediaH,
+                  border: { pt: 1, color: '9CA3AF' }
+                });
+              }
+            }
+
+            // Prawy panel - nazwa schematu i komentarze
+            const schemeName = scheme.name || 'Schemat bez nazwy';
+            slide.addText(schemeName, {
+              x: rightPanelX,
+              y: contentTop,
+              w: rightPanelW,
+              h: 0.6,
+              fontSize: 26,
+              bold: true,
+              color: '111827'
+            });
+
+            const commentLabelY = contentTop + 0.85;
+            slide.addText('Komentarze/Zadania', {
+              x: rightPanelX,
+              y: commentLabelY,
+              w: rightPanelW,
+              h: 0.35,
+              fontSize: 14,
+              bold: true,
+              color: '1f2937'
+            });
+            
+            // Usuń tagi HTML z komentarza
+            const plainComments = scheme.comments
+              .replace(/<[^>]*>/g, '')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .trim();
+
+            slide.addText(plainComments || '(brak komentarza)', {
+              x: rightPanelX,
+              y: commentLabelY + 0.4,
+              w: rightPanelW,
+              h: slideHeight - (commentLabelY + 0.4) - contentBottom,
+              fontSize: 12,
+              color: '374151',
+              valign: 'top',
+              wrap: true
+            });
+          }
         }
       }
       

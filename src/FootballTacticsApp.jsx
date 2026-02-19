@@ -294,6 +294,11 @@ const FootballTacticsApp = () => {
   };
 
   const [players, setPlayers] = useState(getInitialPlayers('11v11'));
+  const latestPlayersRef = useRef(players);
+
+  useEffect(() => {
+    latestPlayersRef.current = players;
+  }, [players]);
 
   // Obsługa skrótów klawiszowych
   useEffect(() => {
@@ -4515,12 +4520,16 @@ const FootballTacticsApp = () => {
         const dy = y - player.y;
         const angle = Math.atan2(dx, -dy); // -dy bo oś Y rośnie w dół
         
-        setPlayers(prev => ({
-          ...prev,
-          [selectedPlayer.type]: prev[selectedPlayer.type].map(p =>
-            p.id === selectedPlayer.id ? { ...p, rotation: angle } : p
-          )
-        }));
+        setPlayers(prev => {
+          const next = {
+            ...prev,
+            [selectedPlayer.type]: prev[selectedPlayer.type].map(p =>
+              p.id === selectedPlayer.id ? { ...p, rotation: angle } : p
+            )
+          };
+          latestPlayersRef.current = next;
+          return next;
+        });
       }
       return;
     }
@@ -4532,17 +4541,25 @@ const FootballTacticsApp = () => {
     const boundedY = Math.max(20, Math.min(y, canvas.height - 20));
 
     if (draggedPlayer.type === 'ball') {
-      setPlayers(prev => ({
-        ...prev,
-        ball: { x: boundedX, y: boundedY }
-      }));
+      setPlayers(prev => {
+        const next = {
+          ...prev,
+          ball: { x: boundedX, y: boundedY }
+        };
+        latestPlayersRef.current = next;
+        return next;
+      });
     } else {
-      setPlayers(prev => ({
-        ...prev,
-        [draggedPlayer.type]: prev[draggedPlayer.type].map(p =>
-          p.id === draggedPlayer.id ? { ...p, x: boundedX, y: boundedY } : p
-        )
-      }));
+      setPlayers(prev => {
+        const next = {
+          ...prev,
+          [draggedPlayer.type]: prev[draggedPlayer.type].map(p =>
+            p.id === draggedPlayer.id ? { ...p, x: boundedX, y: boundedY } : p
+          )
+        };
+        latestPlayersRef.current = next;
+        return next;
+      });
     }
   };
 
@@ -4633,6 +4650,18 @@ const FootballTacticsApp = () => {
         ...currentScheme,
         frames: currentScheme.frames.map((f, i) => 
           i === currentFrame ? { ...players, lines: lines, zones: zones } : f
+        )
+      };
+      updateCurrentScheme(updatedScheme);
+    }
+
+    // Zakończ przeciąganie zawodnika/piłki lub rotację i zapisz zmiany
+    if ((isDragging || isDraggingRotation) && currentScheme) {
+      const latestPlayers = latestPlayersRef.current;
+      const updatedScheme = {
+        ...currentScheme,
+        frames: currentScheme.frames.map((f, i) =>
+          i === currentFrame ? { ...latestPlayers, lines: lines, zones: zones } : f
         )
       };
       updateCurrentScheme(updatedScheme);

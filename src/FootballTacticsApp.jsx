@@ -587,21 +587,37 @@ const FootballTacticsApp = () => {
         };
 
         const drawWavyStraight = () => {
-          if (length === 0) return;
+          const lineLength = Math.hypot(dx, dy);
+          if (lineLength === 0) return;
 
           const amplitude = 6;
           const wavelength = 24;
-          const segments = Math.max(16, Math.ceil(length / 4));
-          const normalX = -dy / length;
-          const normalY = dx / length;
+          const straightTail = Math.min(22, lineLength * 0.35);
+          const fadeTail = Math.min(14, Math.max(6, straightTail * 0.7));
+          const tailStartDistance = Math.max(0, lineLength - straightTail);
+          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+          const tailStartT = tailStartDistance / lineLength;
+          const segments = Math.max(16, Math.ceil(lineLength / 4));
+          const normalX = -dy / lineLength;
+          const normalY = dx / lineLength;
 
           ctx.beginPath();
           for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
+            const rawT = i / segments;
+            const t = Math.min(rawT, tailStartT);
+            const distance = t * lineLength;
             const baseX = line.startX + dx * t;
             const baseY = line.startY + dy * t;
-            const phase = (t * length * Math.PI * 2) / wavelength;
-            const offset = Math.sin(phase) * amplitude;
+            const phase = (distance * Math.PI * 2) / wavelength;
+
+            let damping = 1;
+            if (distance >= tailStartDistance) {
+              damping = 0;
+            } else if (distance > fadeStartDistance) {
+              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+            }
+
+            const offset = Math.sin(phase) * amplitude * damping;
             const x = baseX + normalX * offset;
             const y = baseY + normalY * offset;
 
@@ -610,7 +626,14 @@ const FootballTacticsApp = () => {
             } else {
               ctx.lineTo(x, y);
             }
+
+            if (rawT >= tailStartT) break;
           }
+
+          const tailStartX = line.startX + dx * tailStartT;
+          const tailStartY = line.startY + dy * tailStartT;
+          ctx.lineTo(tailStartX, tailStartY);
+          ctx.lineTo(line.endX, line.endY);
           ctx.stroke();
         };
 
@@ -628,30 +651,65 @@ const FootballTacticsApp = () => {
         });
 
         const drawWavyCurve = (cp) => {
-          const samples = 50;
+          const arcSamples = 80;
+          const arcPoints = [];
           let curveLength = 0;
           let previousPoint = getQuadraticPoint(0, cp);
+          arcPoints.push({ t: 0, distance: 0, point: previousPoint });
 
-          for (let i = 1; i <= samples; i++) {
-            const point = getQuadraticPoint(i / samples, cp);
+          for (let i = 1; i <= arcSamples; i++) {
+            const t = i / arcSamples;
+            const point = getQuadraticPoint(t, cp);
             curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+            arcPoints.push({ t, distance: curveLength, point });
             previousPoint = point;
           }
 
+          const getTAtDistance = (targetDistance) => {
+            if (targetDistance <= 0) return 0;
+            if (targetDistance >= curveLength) return 1;
+
+            for (let i = 1; i < arcPoints.length; i++) {
+              const prev = arcPoints[i - 1];
+              const current = arcPoints[i];
+              if (targetDistance <= current.distance) {
+                const segmentDistance = current.distance - prev.distance || 1;
+                const ratio = (targetDistance - prev.distance) / segmentDistance;
+                return prev.t + (current.t - prev.t) * ratio;
+              }
+            }
+            return 1;
+          };
+
           const amplitude = 6;
           const wavelength = 24;
+          const straightTail = Math.min(24, curveLength * 0.35);
+          const fadeTail = Math.min(16, Math.max(6, straightTail * 0.7));
+          const tailStartDistance = Math.max(0, curveLength - straightTail);
+          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+          const tailStartT = getTAtDistance(tailStartDistance);
           const segments = Math.max(24, Math.ceil(curveLength / 4));
 
           ctx.beginPath();
           for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
+            const rawT = i / segments;
+            const t = Math.min(rawT, tailStartT);
             const point = getQuadraticPoint(t, cp);
             const tangent = getQuadraticTangent(t, cp);
             const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
             const normalX = -tangent.y / tangentLength;
             const normalY = tangent.x / tangentLength;
-            const phase = (t * curveLength * Math.PI * 2) / wavelength;
-            const offset = Math.sin(phase) * amplitude;
+            const distance = t * curveLength;
+            const phase = (distance * Math.PI * 2) / wavelength;
+
+            let damping = 1;
+            if (distance >= tailStartDistance) {
+              damping = 0;
+            } else if (distance > fadeStartDistance) {
+              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+            }
+
+            const offset = Math.sin(phase) * amplitude * damping;
             const x = point.x + normalX * offset;
             const y = point.y + normalY * offset;
 
@@ -660,11 +718,16 @@ const FootballTacticsApp = () => {
             } else {
               ctx.lineTo(x, y);
             }
+
+            if (rawT >= tailStartT) break;
           }
+
+          const tailPoint = getQuadraticPoint(tailStartT, cp);
+          ctx.lineTo(tailPoint.x, tailPoint.y);
+          ctx.lineTo(line.endX, line.endY);
           ctx.stroke();
 
-          const endTangent = getQuadraticTangent(0.98, cp);
-          return Math.atan2(endTangent.y, endTangent.x);
+          return Math.atan2(line.endY - tailPoint.y, line.endX - tailPoint.x);
         };
 
         switch (line.type) {
@@ -1327,22 +1390,37 @@ const FootballTacticsApp = () => {
         };
 
         const drawWavyStraight = () => {
-          const length = Math.hypot(dx, dy);
-          if (length === 0) return;
+          const lineLength = Math.hypot(dx, dy);
+          if (lineLength === 0) return;
 
           const amplitude = 6;
           const wavelength = 24;
-          const segments = Math.max(16, Math.ceil(length / 4));
-          const normalX = -dy / length;
-          const normalY = dx / length;
+          const straightTail = Math.min(22, lineLength * 0.35);
+          const fadeTail = Math.min(14, Math.max(6, straightTail * 0.7));
+          const tailStartDistance = Math.max(0, lineLength - straightTail);
+          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+          const tailStartT = tailStartDistance / lineLength;
+          const segments = Math.max(16, Math.ceil(lineLength / 4));
+          const normalX = -dy / lineLength;
+          const normalY = dx / lineLength;
 
           ctx.beginPath();
           for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
+            const rawT = i / segments;
+            const t = Math.min(rawT, tailStartT);
+            const distance = t * lineLength;
             const baseX = line.startX + dx * t;
             const baseY = line.startY + dy * t;
-            const phase = (t * length * Math.PI * 2) / wavelength;
-            const offset = Math.sin(phase) * amplitude;
+            const phase = (distance * Math.PI * 2) / wavelength;
+
+            let damping = 1;
+            if (distance >= tailStartDistance) {
+              damping = 0;
+            } else if (distance > fadeStartDistance) {
+              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+            }
+
+            const offset = Math.sin(phase) * amplitude * damping;
             const x = baseX + normalX * offset;
             const y = baseY + normalY * offset;
 
@@ -1351,7 +1429,14 @@ const FootballTacticsApp = () => {
             } else {
               ctx.lineTo(x, y);
             }
+
+            if (rawT >= tailStartT) break;
           }
+
+          const tailStartX = line.startX + dx * tailStartT;
+          const tailStartY = line.startY + dy * tailStartT;
+          ctx.lineTo(tailStartX, tailStartY);
+          ctx.lineTo(line.endX, line.endY);
           ctx.stroke();
         };
 
@@ -1369,30 +1454,65 @@ const FootballTacticsApp = () => {
         });
 
         const drawWavyCurve = (cp) => {
-          const samples = 50;
+          const arcSamples = 80;
+          const arcPoints = [];
           let curveLength = 0;
           let previousPoint = getQuadraticPoint(0, cp);
+          arcPoints.push({ t: 0, distance: 0, point: previousPoint });
 
-          for (let i = 1; i <= samples; i++) {
-            const point = getQuadraticPoint(i / samples, cp);
+          for (let i = 1; i <= arcSamples; i++) {
+            const t = i / arcSamples;
+            const point = getQuadraticPoint(t, cp);
             curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+            arcPoints.push({ t, distance: curveLength, point });
             previousPoint = point;
           }
 
+          const getTAtDistance = (targetDistance) => {
+            if (targetDistance <= 0) return 0;
+            if (targetDistance >= curveLength) return 1;
+
+            for (let i = 1; i < arcPoints.length; i++) {
+              const prev = arcPoints[i - 1];
+              const current = arcPoints[i];
+              if (targetDistance <= current.distance) {
+                const segmentDistance = current.distance - prev.distance || 1;
+                const ratio = (targetDistance - prev.distance) / segmentDistance;
+                return prev.t + (current.t - prev.t) * ratio;
+              }
+            }
+            return 1;
+          };
+
           const amplitude = 6;
           const wavelength = 24;
+          const straightTail = Math.min(24, curveLength * 0.35);
+          const fadeTail = Math.min(16, Math.max(6, straightTail * 0.7));
+          const tailStartDistance = Math.max(0, curveLength - straightTail);
+          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+          const tailStartT = getTAtDistance(tailStartDistance);
           const segments = Math.max(24, Math.ceil(curveLength / 4));
 
           ctx.beginPath();
           for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
+            const rawT = i / segments;
+            const t = Math.min(rawT, tailStartT);
             const point = getQuadraticPoint(t, cp);
             const tangent = getQuadraticTangent(t, cp);
             const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
             const normalX = -tangent.y / tangentLength;
             const normalY = tangent.x / tangentLength;
-            const phase = (t * curveLength * Math.PI * 2) / wavelength;
-            const offset = Math.sin(phase) * amplitude;
+            const distance = t * curveLength;
+            const phase = (distance * Math.PI * 2) / wavelength;
+
+            let damping = 1;
+            if (distance >= tailStartDistance) {
+              damping = 0;
+            } else if (distance > fadeStartDistance) {
+              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+            }
+
+            const offset = Math.sin(phase) * amplitude * damping;
             const x = point.x + normalX * offset;
             const y = point.y + normalY * offset;
 
@@ -1401,11 +1521,16 @@ const FootballTacticsApp = () => {
             } else {
               ctx.lineTo(x, y);
             }
+
+            if (rawT >= tailStartT) break;
           }
+
+          const tailPoint = getQuadraticPoint(tailStartT, cp);
+          ctx.lineTo(tailPoint.x, tailPoint.y);
+          ctx.lineTo(line.endX, line.endY);
           ctx.stroke();
 
-          const endTangent = getQuadraticTangent(0.98, cp);
-          return Math.atan2(endTangent.y, endTangent.x);
+          return Math.atan2(line.endY - tailPoint.y, line.endX - tailPoint.x);
         };
 
         switch (line.type) {
@@ -3452,21 +3577,37 @@ const FootballTacticsApp = () => {
     };
 
     const drawWavyStraight = () => {
-      if (length === 0) return;
+      const lineLength = Math.hypot(dx, dy);
+      if (lineLength === 0) return;
 
       const amplitude = 6;
       const wavelength = 24;
-      const segments = Math.max(16, Math.ceil(length / 4));
-      const normalX = -dy / length;
-      const normalY = dx / length;
+      const straightTail = Math.min(22, lineLength * 0.35);
+      const fadeTail = Math.min(14, Math.max(6, straightTail * 0.7));
+      const tailStartDistance = Math.max(0, lineLength - straightTail);
+      const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+      const tailStartT = tailStartDistance / lineLength;
+      const segments = Math.max(16, Math.ceil(lineLength / 4));
+      const normalX = -dy / lineLength;
+      const normalY = dx / lineLength;
 
       ctx.beginPath();
       for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
+        const rawT = i / segments;
+        const t = Math.min(rawT, tailStartT);
+        const distance = t * lineLength;
         const baseX = line.startX + dx * t;
         const baseY = line.startY + dy * t;
-        const phase = (t * length * Math.PI * 2) / wavelength;
-        const offset = Math.sin(phase) * amplitude;
+        const phase = (distance * Math.PI * 2) / wavelength;
+
+        let damping = 1;
+        if (distance >= tailStartDistance) {
+          damping = 0;
+        } else if (distance > fadeStartDistance) {
+          damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+        }
+
+        const offset = Math.sin(phase) * amplitude * damping;
         const x = baseX + normalX * offset;
         const y = baseY + normalY * offset;
 
@@ -3475,7 +3616,14 @@ const FootballTacticsApp = () => {
         } else {
           ctx.lineTo(x, y);
         }
+
+        if (rawT >= tailStartT) break;
       }
+
+      const tailStartX = line.startX + dx * tailStartT;
+      const tailStartY = line.startY + dy * tailStartT;
+      ctx.lineTo(tailStartX, tailStartY);
+      ctx.lineTo(line.endX, line.endY);
       ctx.stroke();
     };
 
@@ -3493,30 +3641,65 @@ const FootballTacticsApp = () => {
     });
 
     const drawWavyCurve = (cp) => {
-      const samples = 50;
+      const arcSamples = 80;
+      const arcPoints = [];
       let curveLength = 0;
       let previousPoint = getQuadraticPoint(0, cp);
+      arcPoints.push({ t: 0, distance: 0, point: previousPoint });
 
-      for (let i = 1; i <= samples; i++) {
-        const point = getQuadraticPoint(i / samples, cp);
+      for (let i = 1; i <= arcSamples; i++) {
+        const t = i / arcSamples;
+        const point = getQuadraticPoint(t, cp);
         curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+        arcPoints.push({ t, distance: curveLength, point });
         previousPoint = point;
       }
 
+      const getTAtDistance = (targetDistance) => {
+        if (targetDistance <= 0) return 0;
+        if (targetDistance >= curveLength) return 1;
+
+        for (let i = 1; i < arcPoints.length; i++) {
+          const prev = arcPoints[i - 1];
+          const current = arcPoints[i];
+          if (targetDistance <= current.distance) {
+            const segmentDistance = current.distance - prev.distance || 1;
+            const ratio = (targetDistance - prev.distance) / segmentDistance;
+            return prev.t + (current.t - prev.t) * ratio;
+          }
+        }
+        return 1;
+      };
+
       const amplitude = 6;
       const wavelength = 24;
+      const straightTail = Math.min(24, curveLength * 0.35);
+      const fadeTail = Math.min(16, Math.max(6, straightTail * 0.7));
+      const tailStartDistance = Math.max(0, curveLength - straightTail);
+      const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
+      const tailStartT = getTAtDistance(tailStartDistance);
       const segments = Math.max(24, Math.ceil(curveLength / 4));
 
       ctx.beginPath();
       for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
+        const rawT = i / segments;
+        const t = Math.min(rawT, tailStartT);
         const point = getQuadraticPoint(t, cp);
         const tangent = getQuadraticTangent(t, cp);
         const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
         const normalX = -tangent.y / tangentLength;
         const normalY = tangent.x / tangentLength;
-        const phase = (t * curveLength * Math.PI * 2) / wavelength;
-        const offset = Math.sin(phase) * amplitude;
+        const distance = t * curveLength;
+        const phase = (distance * Math.PI * 2) / wavelength;
+
+        let damping = 1;
+        if (distance >= tailStartDistance) {
+          damping = 0;
+        } else if (distance > fadeStartDistance) {
+          damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
+        }
+
+        const offset = Math.sin(phase) * amplitude * damping;
         const x = point.x + normalX * offset;
         const y = point.y + normalY * offset;
 
@@ -3525,11 +3708,16 @@ const FootballTacticsApp = () => {
         } else {
           ctx.lineTo(x, y);
         }
+
+        if (rawT >= tailStartT) break;
       }
+
+      const tailPoint = getQuadraticPoint(tailStartT, cp);
+      ctx.lineTo(tailPoint.x, tailPoint.y);
+      ctx.lineTo(line.endX, line.endY);
       ctx.stroke();
 
-      const endTangent = getQuadraticTangent(0.98, cp);
-      return Math.atan2(endTangent.y, endTangent.x);
+      return Math.atan2(line.endY - tailPoint.y, line.endX - tailPoint.x);
     };
 
     switch (line.type) {

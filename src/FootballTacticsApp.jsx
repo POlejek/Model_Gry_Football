@@ -78,7 +78,7 @@ const FootballTacticsApp = () => {
   const [teamColor, setTeamColor] = useState('#1a365d'); // Kolor drużyny
   const [opponentColor, setOpponentColor] = useState('#8b0000'); // Kolor przeciwnika
   const [isDrawingMode, setIsDrawingMode] = useState(false); // Tryb rysowania linii
-  const [lineType, setLineType] = useState('arrow-solid'); // Typ linii: arrow-solid, arrow-dashed, double-arrow-solid, line-dashed, line-solid, curve-*
+  const [lineType, setLineType] = useState('arrow-solid'); // Typ linii: arrow-solid, arrow-dashed, arrow-wavy, double-arrow-solid, line-dashed, line-solid, curve-*
   const [lineColor, setLineColor] = useState('#000000'); // Kolor linii
   const [currentLine, setCurrentLine] = useState(null); // Rysowana linia
   const [lines, setLines] = useState([]); // Wszystkie linie na bieżącej klatce
@@ -586,6 +586,87 @@ const FootballTacticsApp = () => {
           };
         };
 
+        const drawWavyStraight = () => {
+          if (length === 0) return;
+
+          const amplitude = 6;
+          const wavelength = 24;
+          const segments = Math.max(16, Math.ceil(length / 4));
+          const normalX = -dy / length;
+          const normalY = dx / length;
+
+          ctx.beginPath();
+          for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const baseX = line.startX + dx * t;
+            const baseY = line.startY + dy * t;
+            const phase = (t * length * Math.PI * 2) / wavelength;
+            const offset = Math.sin(phase) * amplitude;
+            const x = baseX + normalX * offset;
+            const y = baseY + normalY * offset;
+
+            if (i === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        };
+
+        const getQuadraticPoint = (t, cp) => {
+          const oneMinusT = 1 - t;
+          return {
+            x: oneMinusT * oneMinusT * line.startX + 2 * oneMinusT * t * cp.x + t * t * line.endX,
+            y: oneMinusT * oneMinusT * line.startY + 2 * oneMinusT * t * cp.y + t * t * line.endY
+          };
+        };
+
+        const getQuadraticTangent = (t, cp) => ({
+          x: 2 * (1 - t) * (cp.x - line.startX) + 2 * t * (line.endX - cp.x),
+          y: 2 * (1 - t) * (cp.y - line.startY) + 2 * t * (line.endY - cp.y)
+        });
+
+        const drawWavyCurve = (cp) => {
+          const samples = 50;
+          let curveLength = 0;
+          let previousPoint = getQuadraticPoint(0, cp);
+
+          for (let i = 1; i <= samples; i++) {
+            const point = getQuadraticPoint(i / samples, cp);
+            curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+            previousPoint = point;
+          }
+
+          const amplitude = 6;
+          const wavelength = 24;
+          const segments = Math.max(24, Math.ceil(curveLength / 4));
+
+          ctx.beginPath();
+          for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const point = getQuadraticPoint(t, cp);
+            const tangent = getQuadraticTangent(t, cp);
+            const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
+            const normalX = -tangent.y / tangentLength;
+            const normalY = tangent.x / tangentLength;
+            const phase = (t * curveLength * Math.PI * 2) / wavelength;
+            const offset = Math.sin(phase) * amplitude;
+            const x = point.x + normalX * offset;
+            const y = point.y + normalY * offset;
+
+            if (i === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+
+          const endTangent = getQuadraticTangent(0.98, cp);
+          return Math.atan2(endTangent.y, endTangent.x);
+        };
+
         switch (line.type) {
           case 'line-solid':
             ctx.beginPath();
@@ -618,6 +699,11 @@ const FootballTacticsApp = () => {
             ctx.lineTo(line.endX, line.endY);
             ctx.stroke();
             ctx.setLineDash([]);
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'arrow-wavy':
+            drawWavyStraight();
             drawArrowHead(line.endX, line.endY, angle);
             break;
 
@@ -673,6 +759,12 @@ const FootballTacticsApp = () => {
             const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
             const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
             drawArrowHead(line.endX, line.endY, curveAngle);
+            break;
+
+          case 'curve-arrow-wavy':
+            const cp3 = getControlPoint();
+            const wavyCurveAngle = drawWavyCurve(cp3);
+            drawArrowHead(line.endX, line.endY, wavyCurveAngle);
             break;
         }
 
@@ -1234,6 +1326,88 @@ const FootballTacticsApp = () => {
           };
         };
 
+        const drawWavyStraight = () => {
+          const length = Math.hypot(dx, dy);
+          if (length === 0) return;
+
+          const amplitude = 6;
+          const wavelength = 24;
+          const segments = Math.max(16, Math.ceil(length / 4));
+          const normalX = -dy / length;
+          const normalY = dx / length;
+
+          ctx.beginPath();
+          for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const baseX = line.startX + dx * t;
+            const baseY = line.startY + dy * t;
+            const phase = (t * length * Math.PI * 2) / wavelength;
+            const offset = Math.sin(phase) * amplitude;
+            const x = baseX + normalX * offset;
+            const y = baseY + normalY * offset;
+
+            if (i === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        };
+
+        const getQuadraticPoint = (t, cp) => {
+          const oneMinusT = 1 - t;
+          return {
+            x: oneMinusT * oneMinusT * line.startX + 2 * oneMinusT * t * cp.x + t * t * line.endX,
+            y: oneMinusT * oneMinusT * line.startY + 2 * oneMinusT * t * cp.y + t * t * line.endY
+          };
+        };
+
+        const getQuadraticTangent = (t, cp) => ({
+          x: 2 * (1 - t) * (cp.x - line.startX) + 2 * t * (line.endX - cp.x),
+          y: 2 * (1 - t) * (cp.y - line.startY) + 2 * t * (line.endY - cp.y)
+        });
+
+        const drawWavyCurve = (cp) => {
+          const samples = 50;
+          let curveLength = 0;
+          let previousPoint = getQuadraticPoint(0, cp);
+
+          for (let i = 1; i <= samples; i++) {
+            const point = getQuadraticPoint(i / samples, cp);
+            curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+            previousPoint = point;
+          }
+
+          const amplitude = 6;
+          const wavelength = 24;
+          const segments = Math.max(24, Math.ceil(curveLength / 4));
+
+          ctx.beginPath();
+          for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const point = getQuadraticPoint(t, cp);
+            const tangent = getQuadraticTangent(t, cp);
+            const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
+            const normalX = -tangent.y / tangentLength;
+            const normalY = tangent.x / tangentLength;
+            const phase = (t * curveLength * Math.PI * 2) / wavelength;
+            const offset = Math.sin(phase) * amplitude;
+            const x = point.x + normalX * offset;
+            const y = point.y + normalY * offset;
+
+            if (i === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+
+          const endTangent = getQuadraticTangent(0.98, cp);
+          return Math.atan2(endTangent.y, endTangent.x);
+        };
+
         switch (line.type) {
           case 'line-solid':
             ctx.beginPath();
@@ -1266,6 +1440,11 @@ const FootballTacticsApp = () => {
             ctx.lineTo(line.endX, line.endY);
             ctx.stroke();
             ctx.setLineDash([]);
+            drawArrowHead(line.endX, line.endY, angle);
+            break;
+
+          case 'arrow-wavy':
+            drawWavyStraight();
             drawArrowHead(line.endX, line.endY, angle);
             break;
 
@@ -1321,6 +1500,12 @@ const FootballTacticsApp = () => {
             const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
             const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
             drawArrowHead(line.endX, line.endY, curveAngle);
+            break;
+
+          case 'curve-arrow-wavy':
+            const cp3 = getControlPoint();
+            const wavyCurveAngle = drawWavyCurve(cp3);
+            drawArrowHead(line.endX, line.endY, wavyCurveAngle);
             break;
         }
 
@@ -3266,6 +3451,87 @@ const FootballTacticsApp = () => {
       };
     };
 
+    const drawWavyStraight = () => {
+      if (length === 0) return;
+
+      const amplitude = 6;
+      const wavelength = 24;
+      const segments = Math.max(16, Math.ceil(length / 4));
+      const normalX = -dy / length;
+      const normalY = dx / length;
+
+      ctx.beginPath();
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const baseX = line.startX + dx * t;
+        const baseY = line.startY + dy * t;
+        const phase = (t * length * Math.PI * 2) / wavelength;
+        const offset = Math.sin(phase) * amplitude;
+        const x = baseX + normalX * offset;
+        const y = baseY + normalY * offset;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+    };
+
+    const getQuadraticPoint = (t, cp) => {
+      const oneMinusT = 1 - t;
+      return {
+        x: oneMinusT * oneMinusT * line.startX + 2 * oneMinusT * t * cp.x + t * t * line.endX,
+        y: oneMinusT * oneMinusT * line.startY + 2 * oneMinusT * t * cp.y + t * t * line.endY
+      };
+    };
+
+    const getQuadraticTangent = (t, cp) => ({
+      x: 2 * (1 - t) * (cp.x - line.startX) + 2 * t * (line.endX - cp.x),
+      y: 2 * (1 - t) * (cp.y - line.startY) + 2 * t * (line.endY - cp.y)
+    });
+
+    const drawWavyCurve = (cp) => {
+      const samples = 50;
+      let curveLength = 0;
+      let previousPoint = getQuadraticPoint(0, cp);
+
+      for (let i = 1; i <= samples; i++) {
+        const point = getQuadraticPoint(i / samples, cp);
+        curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
+        previousPoint = point;
+      }
+
+      const amplitude = 6;
+      const wavelength = 24;
+      const segments = Math.max(24, Math.ceil(curveLength / 4));
+
+      ctx.beginPath();
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const point = getQuadraticPoint(t, cp);
+        const tangent = getQuadraticTangent(t, cp);
+        const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
+        const normalX = -tangent.y / tangentLength;
+        const normalY = tangent.x / tangentLength;
+        const phase = (t * curveLength * Math.PI * 2) / wavelength;
+        const offset = Math.sin(phase) * amplitude;
+        const x = point.x + normalX * offset;
+        const y = point.y + normalY * offset;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+
+      const endTangent = getQuadraticTangent(0.98, cp);
+      return Math.atan2(endTangent.y, endTangent.x);
+    };
+
     switch (line.type) {
       case 'line-solid':
         // Prosta ciągła bez grotów
@@ -3302,6 +3568,12 @@ const FootballTacticsApp = () => {
         ctx.lineTo(line.endX, line.endY);
         ctx.stroke();
         ctx.setLineDash([]);
+        drawArrowHead(line.endX, line.endY, angle);
+        break;
+
+      case 'arrow-wavy':
+        // Prosta falowana z grotem
+        drawWavyStraight();
         drawArrowHead(line.endX, line.endY, angle);
         break;
 
@@ -3414,6 +3686,23 @@ const FootballTacticsApp = () => {
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(cp3.x, cp3.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        break;
+
+      case 'curve-arrow-wavy':
+        // Linia krzywa falowana z grotem
+        const cp4 = getControlPoint();
+        const wavyCurveAngle = drawWavyCurve(cp4);
+        drawArrowHead(line.endX, line.endY, wavyCurveAngle);
+
+        if (isSelected) {
+          ctx.fillStyle = '#00ff00';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cp4.x, cp4.y, 8, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -4689,6 +4978,19 @@ const FootballTacticsApp = () => {
                   <polygon points="32,12 28,9 28,15" fill="currentColor" />
                 </svg>
               </button>
+
+              <button
+                onClick={() => setLineType('arrow-wavy')}
+                className={`px-3 py-2 rounded transition-all ${
+                  lineType === 'arrow-wavy' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
+                }`}
+                title="Prosta linia falowana z grotem"
+              >
+                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
+                  <path d="M4 12 C8 6, 12 18, 16 12 C20 6, 24 18, 28 12 C30 9, 31 11, 32 12" stroke="currentColor" strokeWidth="2" fill="none" />
+                  <polygon points="32,12 28,9 28,15" fill="currentColor" />
+                </svg>
+              </button>
               
               <button
                 onClick={() => setLineType('double-arrow-solid')}
@@ -4756,6 +5058,19 @@ const FootballTacticsApp = () => {
               >
                 <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
                   <path d="M4 12 Q 18 4, 32 12" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 2" />
+                  <polygon points="32,12 28,10 28,14" fill="currentColor" />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => setLineType('curve-arrow-wavy')}
+                className={`px-3 py-2 rounded transition-all ${
+                  lineType === 'curve-arrow-wavy' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
+                }`}
+                title="Linia krzywa falowana z grotem"
+              >
+                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
+                  <path d="M4 12 C9 4, 13 14, 18 8 C22 3, 26 16, 30 11 C31 10, 31.5 11, 32 12" stroke="currentColor" strokeWidth="2" fill="none" />
                   <polygon points="32,12 28,10 28,14" fill="currentColor" />
                 </svg>
               </button>

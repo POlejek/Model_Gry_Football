@@ -2660,13 +2660,19 @@ const FootballTacticsApp = () => {
       ...JSON.parse(JSON.stringify(players)),
       lines: [...lines]
     };
+    const insertAt = currentFrame + 1;
+    const newFrames = [
+      ...currentScheme.frames.slice(0, insertAt),
+      newFrame,
+      ...currentScheme.frames.slice(insertAt)
+    ];
     const updatedScheme = {
       ...currentScheme,
-      frames: [...currentScheme.frames, newFrame]
+      frames: newFrames
     };
-    
+
     updateCurrentScheme(updatedScheme);
-    setCurrentFrame(updatedScheme.frames.length - 1);
+    setCurrentFrame(insertAt);
   };
 
   const updateCurrentScheme = (updatedScheme) => {

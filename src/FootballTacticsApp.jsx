@@ -2786,6 +2786,12 @@ const FootballTacticsApp = () => {
         { x: 220, y: dy }, { x: 350, y: dy }, { x: 480, y: dy },
         { x: 130, y: my }, { x: 250, y: my }, { x: 350, y: my }, { x: 450, y: my }, { x: 570, y: my },
         { x: 265, y: fy }, { x: 435, y: fy }
+      ],
+      '1-3-4-3': [
+        { x: 350, y: gy },
+        { x: 220, y: dy }, { x: 350, y: dy }, { x: 480, y: dy },
+        { x: 175, y: my }, { x: 305, y: my }, { x: 395, y: my }, { x: 525, y: my },
+        { x: 155, y: fy }, { x: 350, y: fy }, { x: 545, y: fy }
       ]
     };
 
@@ -5228,7 +5234,7 @@ const FootballTacticsApp = () => {
                   </button>
                   {openFormationMenu === 'team' && (
                     <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
-                      {['1-4-4-2', '1-4-3-3', '1-3-5-2'].map((f) => (
+                      {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
                         <button
                           key={f}
                           onClick={() => applyFormation('team', f)}
@@ -5255,7 +5261,7 @@ const FootballTacticsApp = () => {
                   </button>
                   {openFormationMenu === 'opponent' && (
                     <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
-                      {['1-4-4-2', '1-4-3-3', '1-3-5-2'].map((f) => (
+                      {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
                         <button
                           key={f}
                           onClick={() => applyFormation('opponent', f)}

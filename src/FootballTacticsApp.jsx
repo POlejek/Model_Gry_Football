@@ -103,6 +103,7 @@ const FootballTacticsApp = () => {
   const [isDraggingPolygonVertex, setIsDraggingPolygonVertex] = useState(false); // Czy przeciągamy wierzchołek wielokąta
   const [draggedVertexIndex, setDraggedVertexIndex] = useState(null); // Indeks przeciąganego wierzchołka
   const [openColorPalette, setOpenColorPalette] = useState(null); // 'team', 'opponent', 'line', 'zone', 'player' lub null
+  const [openFormationMenu, setOpenFormationMenu] = useState(null); // 'team', 'opponent' lub null
   const [clipboard, setClipboard] = useState(null); // Schowek dla Ctrl+C/Ctrl+V: {type: 'line'|'zone', data: {...}}
   const [showCopyNotification, setShowCopyNotification] = useState(false); // Powiadomienie o skopiowaniu
 
@@ -191,6 +192,20 @@ const FootballTacticsApp = () => {
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [openColorPalette]);
+
+  // Zamknij menu formacji przy kliknięciu poza nim
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const clickedMenu = e.target.closest('.absolute.top-full');
+      if (openFormationMenu && !clickedMenu) {
+        setOpenFormationMenu(null);
+      }
+    };
+    if (openFormationMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openFormationMenu]);
 
   // Gdy zmieni się wybrany schemat, zamknij modal przenoszenia
   useEffect(() => {
@@ -2740,6 +2755,64 @@ const FootballTacticsApp = () => {
     setOpenColorPalette(null);
   };
 
+  const getFormationPositions = (formationName, teamType) => {
+    const isTeam = teamType === 'team';
+    const gy = isTeam ? 1030 : 50;
+    const dy = isTeam ? 900 : 180;
+    const my = isTeam ? 740 : 340;
+    const fy = isTeam ? 590 : 490;
+
+    const formations = {
+      '1-4-4-2': [
+        { x: 350, y: gy },
+        { x: 140, y: dy }, { x: 270, y: dy }, { x: 430, y: dy }, { x: 560, y: dy },
+        { x: 140, y: my }, { x: 275, y: my }, { x: 425, y: my }, { x: 560, y: my },
+        { x: 275, y: fy }, { x: 425, y: fy }
+      ],
+      '1-4-3-3': [
+        { x: 350, y: gy },
+        { x: 140, y: dy }, { x: 270, y: dy }, { x: 430, y: dy }, { x: 560, y: dy },
+        { x: 210, y: my }, { x: 350, y: my }, { x: 490, y: my },
+        { x: 155, y: fy }, { x: 350, y: fy }, { x: 545, y: fy }
+      ],
+      '1-3-5-2': [
+        { x: 350, y: gy },
+        { x: 220, y: dy }, { x: 350, y: dy }, { x: 480, y: dy },
+        { x: 130, y: my }, { x: 250, y: my }, { x: 350, y: my }, { x: 450, y: my }, { x: 570, y: my },
+        { x: 265, y: fy }, { x: 435, y: fy }
+      ]
+    };
+
+    return formations[formationName] || null;
+  };
+
+  const applyFormation = (teamType, formationName) => {
+    const positions = getFormationPositions(formationName, teamType);
+    if (!positions) return;
+
+    const newTeamPlayers = players[teamType].map((player, index) => ({
+      ...player,
+      x: positions[index].x,
+      y: positions[index].y
+    }));
+
+    setPlayers(prev => ({ ...prev, [teamType]: newTeamPlayers }));
+
+    if (currentScheme) {
+      const updatedScheme = {
+        ...currentScheme,
+        frames: currentScheme.frames.map((frame, idx) =>
+          idx === currentFrame
+            ? { ...frame, [teamType]: newTeamPlayers }
+            : frame
+        )
+      };
+      updateCurrentScheme(updatedScheme);
+    }
+
+    setOpenFormationMenu(null);
+  };
+
   const deleteScheme = (schemeId, key) => {
     const confirmDelete = window.confirm('Czy na pewno chcesz usunąć ten schemat? Tej czynności nie można cofnąć.');
     if (!confirmDelete) return;
@@ -5127,6 +5200,70 @@ const FootballTacticsApp = () => {
               )}
             </div>
           </div>
+
+          {gameFormat === '11v11' && (
+            <>
+              <div className="h-8 w-px bg-white/10"></div>
+
+              {/* Formacje drużyn */}
+              <div className="flex items-center gap-3">
+                {/* Formacja drużyny */}
+                <div className="flex items-center gap-2 relative">
+                  <span className="text-sm text-slate-300">Formacja:</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFormationMenu(openFormationMenu === 'team' ? null : 'team');
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 hover:bg-white/15 text-slate-300 border border-white/10 transition-all"
+                    title="Wybierz formację drużyny"
+                  >
+                    Drużyna ▾
+                  </button>
+                  {openFormationMenu === 'team' && (
+                    <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
+                      {['1-4-4-2', '1-4-3-3', '1-3-5-2'].map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => applyFormation('team', f)}
+                          className="px-4 py-2 rounded-lg text-sm font-mono font-medium text-slate-200 hover:bg-white/15 transition-all text-left whitespace-nowrap"
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Formacja przeciwnika */}
+                <div className="flex items-center gap-2 relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFormationMenu(openFormationMenu === 'opponent' ? null : 'opponent');
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 hover:bg-white/15 text-slate-300 border border-white/10 transition-all"
+                    title="Wybierz formację przeciwnika"
+                  >
+                    Przeciwnik ▾
+                  </button>
+                  {openFormationMenu === 'opponent' && (
+                    <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
+                      {['1-4-4-2', '1-4-3-3', '1-3-5-2'].map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => applyFormation('opponent', f)}
+                          className="px-4 py-2 rounded-lg text-sm font-mono font-medium text-slate-200 hover:bg-white/15 transition-all text-left whitespace-nowrap"
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Rozwijany panel dla Rysowania */}

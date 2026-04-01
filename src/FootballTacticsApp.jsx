@@ -2768,30 +2768,33 @@ const FootballTacticsApp = () => {
     const my = isTeam ? 740 : 340;
     const fy = isTeam ? 590 : 490;
 
+    // Numeracja wg Narodowego Modelu Gry PZPN:
+    // 1=GK, 2=Prawy obrońca, 3=Lewy obrońca, 4=Prawy CB, 5=Lewy CB,
+    // 6=CDM, 7=Prawy skrzydłowy, 8=CM, 9=ST, 10=CAM/drugi napastnik, 11=Lewy skrzydłowy
     const formations = {
       '1-4-4-2': [
-        { x: 350, y: gy },
-        { x: 140, y: dy }, { x: 270, y: dy }, { x: 430, y: dy }, { x: 560, y: dy },
-        { x: 140, y: my }, { x: 275, y: my }, { x: 425, y: my }, { x: 560, y: my },
-        { x: 275, y: fy }, { x: 425, y: fy }
+        { x: 350, y: gy, number: '1' },
+        { x: 140, y: dy, number: '3' }, { x: 270, y: dy, number: '5' }, { x: 430, y: dy, number: '4' }, { x: 560, y: dy, number: '2' },
+        { x: 140, y: my, number: '11' }, { x: 275, y: my, number: '8' }, { x: 425, y: my, number: '6' }, { x: 560, y: my, number: '7' },
+        { x: 275, y: fy, number: '10' }, { x: 425, y: fy, number: '9' }
       ],
       '1-4-3-3': [
-        { x: 350, y: gy },
-        { x: 140, y: dy }, { x: 270, y: dy }, { x: 430, y: dy }, { x: 560, y: dy },
-        { x: 210, y: my }, { x: 350, y: my }, { x: 490, y: my },
-        { x: 155, y: fy }, { x: 350, y: fy }, { x: 545, y: fy }
+        { x: 350, y: gy, number: '1' },
+        { x: 140, y: dy, number: '3' }, { x: 270, y: dy, number: '5' }, { x: 430, y: dy, number: '4' }, { x: 560, y: dy, number: '2' },
+        { x: 210, y: my, number: '10' }, { x: 350, y: my, number: '6' }, { x: 490, y: my, number: '8' },
+        { x: 155, y: fy, number: '11' }, { x: 350, y: fy, number: '9' }, { x: 545, y: fy, number: '7' }
       ],
       '1-3-5-2': [
-        { x: 350, y: gy },
-        { x: 220, y: dy }, { x: 350, y: dy }, { x: 480, y: dy },
-        { x: 130, y: my }, { x: 250, y: my }, { x: 350, y: my }, { x: 450, y: my }, { x: 570, y: my },
-        { x: 265, y: fy }, { x: 435, y: fy }
+        { x: 350, y: gy, number: '1' },
+        { x: 220, y: dy, number: '5' }, { x: 350, y: dy, number: '4' }, { x: 480, y: dy, number: '2' },
+        { x: 130, y: my, number: '3' }, { x: 250, y: my, number: '11' }, { x: 350, y: my, number: '6' }, { x: 450, y: my, number: '8' }, { x: 570, y: my, number: '7' },
+        { x: 265, y: fy, number: '10' }, { x: 435, y: fy, number: '9' }
       ],
       '1-3-4-3': [
-        { x: 350, y: gy },
-        { x: 220, y: dy }, { x: 350, y: dy }, { x: 480, y: dy },
-        { x: 175, y: my }, { x: 305, y: my }, { x: 395, y: my }, { x: 525, y: my },
-        { x: 155, y: fy }, { x: 350, y: fy }, { x: 545, y: fy }
+        { x: 350, y: gy, number: '1' },
+        { x: 220, y: dy, number: '5' }, { x: 350, y: dy, number: '4' }, { x: 480, y: dy, number: '2' },
+        { x: 175, y: my, number: '3' }, { x: 305, y: my, number: '6' }, { x: 395, y: my, number: '8' }, { x: 525, y: my, number: '7' },
+        { x: 155, y: fy, number: '11' }, { x: 350, y: fy, number: '9' }, { x: 545, y: fy, number: '10' }
       ]
     };
 
@@ -2805,7 +2808,8 @@ const FootballTacticsApp = () => {
     const newTeamPlayers = players[teamType].map((player, index) => ({
       ...player,
       x: positions[index].x,
-      y: positions[index].y
+      y: positions[index].y,
+      number: positions[index].number
     }));
 
     setPlayers(prev => ({ ...prev, [teamType]: newTeamPlayers }));

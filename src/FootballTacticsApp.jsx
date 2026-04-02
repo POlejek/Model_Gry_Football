@@ -105,6 +105,8 @@ const FootballTacticsApp = () => {
   const [openColorPalette, setOpenColorPalette] = useState(null); // 'team', 'opponent', 'line', 'zone', 'player' lub null
   const [openFormationMenu, setOpenFormationMenu] = useState(null); // 'team', 'opponent' lub null
   const [clipboard, setClipboard] = useState(null); // Schowek dla Ctrl+C/Ctrl+V: {type: 'line'|'zone', data: {...}}
+  const [pptSelectionMode, setPptSelectionMode] = useState(false); // Tryb wyboru schematów do PPT
+  const [selectedSchemesForPpt, setSelectedSchemesForPpt] = useState(new Set()); // ID zaznaczonych schematów
   const [showCopyNotification, setShowCopyNotification] = useState(false); // Powiadomienie o skopiowaniu
 
   // Paleta kolorów szybkiego wyboru
@@ -1984,7 +1986,7 @@ const FootballTacticsApp = () => {
   };
 
   // Eksport do PowerPoint
-  const exportToPowerPoint = async () => {
+  const exportToPowerPoint = async (schemeIdFilter = null) => {
     try {
       const pres = new PptxGenJs();
       pres.layout = 'LAYOUT_WIDE';
@@ -2016,9 +2018,10 @@ const FootballTacticsApp = () => {
       
       // Najpierw policz ile będzie schematów
       Object.keys(schemes[gameFormat]).forEach(key => {
-        schemeCount += schemes[gameFormat][key].length;
+        const list = schemes[gameFormat][key];
+        schemeCount += schemeIdFilter ? list.filter(s => schemeIdFilter.has(s.id)).length : list.length;
       });
-      
+
       if (schemeCount === 0) {
         alert('Brak schematów do eksportu!');
         return;
@@ -2032,11 +2035,11 @@ const FootballTacticsApp = () => {
         if (subPhases.length > 0) {
           for (const subPhase of subPhases) {
             const key = `${phase}-${subPhase}`;
-            const schemeList = schemes[gameFormat][key] || [];
-            
+            const schemeList = (schemes[gameFormat][key] || []).filter(s => !schemeIdFilter || schemeIdFilter.has(s.id));
+
             for (const scheme of schemeList) {
               processedSchemes++;
-              
+
               // Dodaj slajd
               const slide = pres.addSlide();
 
@@ -2188,11 +2191,11 @@ const FootballTacticsApp = () => {
         } else {
           // Faza bez subfaz
           const key = phase;
-          const schemeList = schemes[gameFormat][key] || [];
-          
+          const schemeList = (schemes[gameFormat][key] || []).filter(s => !schemeIdFilter || schemeIdFilter.has(s.id));
+
           for (const scheme of schemeList) {
             processedSchemes++;
-            
+
             // Dodaj slajd
             const slide = pres.addSlide();
 
@@ -6108,30 +6111,50 @@ const FootballTacticsApp = () => {
                           {schemes[gameFormat][`${phase}-${subPhase}`]?.map(scheme => (
                             <div
                               key={scheme.id}
-                              draggable
+                              draggable={!pptSelectionMode}
                               onDragStart={(e) => {
                                 e.dataTransfer.effectAllowed = 'move';
                                 e.dataTransfer.setData('schemeId', scheme.id);
                                 e.dataTransfer.setData('fromKey', `${phase}-${subPhase}`);
                               }}
-                              onClick={() => selectScheme(scheme)}
-                              className={`scheme-card p-2 rounded-lg bg-gradient-to-br cursor-move ${
-                                currentScheme?.id === scheme.id
+                              onClick={() => pptSelectionMode ? null : selectScheme(scheme)}
+                              className={`scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
+                                currentScheme?.id === scheme.id && !pptSelectionMode
                                   ? 'from-blue-600/30 to-purple-600/30 border border-blue-500/50'
+                                  : pptSelectionMode && selectedSchemesForPpt.has(scheme.id)
+                                  ? 'from-red-600/20 to-red-700/20 border border-red-500/50'
                                   : 'from-white/5 to-white/10 border border-white/10'
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="font-medium text-xs">{scheme.name}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteScheme(scheme.id, `${phase}-${subPhase}`);
-                                  }}
-                                  className="text-red-400 hover:text-red-300 transition-colors"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
+                                {pptSelectionMode ? (
+                                  <label className="flex items-center gap-2 cursor-pointer w-full" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSchemesForPpt.has(scheme.id)}
+                                      onChange={(e) => {
+                                        const next = new Set(selectedSchemesForPpt);
+                                        e.target.checked ? next.add(scheme.id) : next.delete(scheme.id);
+                                        setSelectedSchemesForPpt(next);
+                                      }}
+                                      className="w-3.5 h-3.5 accent-red-500"
+                                    />
+                                    <span className="font-medium text-xs">{scheme.name}</span>
+                                  </label>
+                                ) : (
+                                  <>
+                                    <span className="font-medium text-xs">{scheme.name}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteScheme(scheme.id, `${phase}-${subPhase}`);
+                                      }}
+                                      className="text-red-400 hover:text-red-300 transition-colors"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -6148,30 +6171,50 @@ const FootballTacticsApp = () => {
                   {schemes[gameFormat][phase]?.map(scheme => (
                     <div
                       key={scheme.id}
-                      draggable
+                      draggable={!pptSelectionMode}
                       onDragStart={(e) => {
                         e.dataTransfer.effectAllowed = 'move';
                         e.dataTransfer.setData('schemeId', scheme.id);
                         e.dataTransfer.setData('fromKey', phase);
                       }}
-                      onClick={() => selectScheme(scheme)}
-                      className={`scheme-card p-2 rounded-lg bg-gradient-to-br cursor-move ${
-                        currentScheme?.id === scheme.id
+                      onClick={() => pptSelectionMode ? null : selectScheme(scheme)}
+                      className={`scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
+                        currentScheme?.id === scheme.id && !pptSelectionMode
                           ? 'from-blue-600/30 to-purple-600/30 border border-blue-500/50'
+                          : pptSelectionMode && selectedSchemesForPpt.has(scheme.id)
+                          ? 'from-red-600/20 to-red-700/20 border border-red-500/50'
                           : 'from-white/5 to-white/10 border border-white/10'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-xs">{scheme.name}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteScheme(scheme.id, phase);
-                          }}
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        {pptSelectionMode ? (
+                          <label className="flex items-center gap-2 cursor-pointer w-full" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSchemesForPpt.has(scheme.id)}
+                              onChange={(e) => {
+                                const next = new Set(selectedSchemesForPpt);
+                                e.target.checked ? next.add(scheme.id) : next.delete(scheme.id);
+                                setSelectedSchemesForPpt(next);
+                              }}
+                              className="w-3.5 h-3.5 accent-red-500"
+                            />
+                            <span className="font-medium text-xs">{scheme.name}</span>
+                          </label>
+                        ) : (
+                          <>
+                            <span className="font-medium text-xs">{scheme.name}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteScheme(scheme.id, phase);
+                              }}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -6206,14 +6249,42 @@ const FootballTacticsApp = () => {
               <Download size={16} />
               JSON
             </button>
-            <button
-              onClick={exportToPowerPoint}
-              className="flex-1 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-300"
-              title="Eksportuj wszystkie schematy do PowerPoint"
-            >
-              <Download size={16} />
-              PPT
-            </button>
+            {pptSelectionMode ? (
+              <>
+                <button
+                  onClick={() => {
+                    exportToPowerPoint(selectedSchemesForPpt);
+                    setPptSelectionMode(false);
+                    setSelectedSchemesForPpt(new Set());
+                  }}
+                  disabled={selectedSchemesForPpt.size === 0}
+                  className="flex-1 px-4 py-2 bg-red-600/40 hover:bg-red-600/60 border border-red-500/60 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Pobierz zaznaczone schematy jako PPT"
+                >
+                  <Download size={16} />
+                  PPT ({selectedSchemesForPpt.size})
+                </button>
+                <button
+                  onClick={() => {
+                    setPptSelectionMode(false);
+                    setSelectedSchemesForPpt(new Set());
+                  }}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg text-sm text-slate-300 transition-all"
+                  title="Anuluj"
+                >
+                  ✕
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setPptSelectionMode(true)}
+                className="flex-1 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-300"
+                title="Wybierz schematy do eksportu PowerPoint"
+              >
+                <Download size={16} />
+                PPT
+              </button>
+            )}
             <button
               onClick={importData}
               className="flex-1 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-purple-300"

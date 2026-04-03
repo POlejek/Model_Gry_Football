@@ -107,6 +107,9 @@ const FootballTacticsApp = () => {
   const [clipboard, setClipboard] = useState(null); // Schowek dla Ctrl+C/Ctrl+V: {type: 'line'|'zone', data: {...}}
   const [pptSelectionMode, setPptSelectionMode] = useState(false); // Tryb wyboru schematów do PPT
   const [selectedSchemesForPpt, setSelectedSchemesForPpt] = useState(new Set()); // ID zaznaczonych schematów
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false); // Mobilny lewy panel
+  const [rightPanelOpen, setRightPanelOpen] = useState(false); // Mobilny prawy panel
+  const lastTapRef = useRef(0); // Do wykrywania double-tap na mobile
   const [showCopyNotification, setShowCopyNotification] = useState(false); // Powiadomienie o skopiowaniu
 
   // Paleta kolorów szybkiego wyboru
@@ -4220,15 +4223,20 @@ const FootballTacticsApp = () => {
     }
   }, [currentFrame, currentScheme]);
 
-  const handleCanvasMouseDown = (e) => {
+  const getCanvasCoords = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
-    // Przeskaluj współrzędne myszy do wewnętrznej rozdzielczości canvas
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const source = e.touches ? e.touches[0] : e;
+    return {
+      x: (source.clientX - rect.left) * scaleX,
+      y: (source.clientY - rect.top) * scaleY,
+    };
+  };
+
+  const handleCanvasMouseDown = (e) => {
+    const { x, y } = getCanvasCoords(e);
 
     // Tryb rysowania linii
     if (isDrawingMode && drawingTool === 'line') {
@@ -4449,14 +4457,7 @@ const FootballTacticsApp = () => {
   };
 
   const handleCanvasMouseMove = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    
-    // Przeskaluj współrzędne myszy do wewnętrznej rozdzielczości canvas
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const { x, y } = getCanvasCoords(e);
 
     // Rysowanie linii
     if (currentLine) {
@@ -4771,13 +4772,7 @@ const FootballTacticsApp = () => {
   };
 
   const handleCanvasDoubleClick = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const { x, y } = getCanvasCoords(e);
 
     const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[gameFormat] || 18;
@@ -4799,6 +4794,55 @@ const FootballTacticsApp = () => {
       }
     }
   };
+
+  // Touch event handlers dla canvas (rejestrowane przez useEffect jako non-passive)
+  const handleCanvasTouchStart = useRef(null);
+  const handleCanvasTouchMove = useRef(null);
+  const handleCanvasTouchEnd = useRef(null);
+
+  useEffect(() => {
+    handleCanvasTouchStart.current = (e) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        handleCanvasMouseDown(e);
+      }
+    };
+    handleCanvasTouchMove.current = (e) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        handleCanvasMouseMove(e);
+      }
+    };
+    handleCanvasTouchEnd.current = (e) => {
+      e.preventDefault();
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) {
+        // double-tap → otwórz edycję zawodnika
+        if (e.changedTouches.length > 0) {
+          handleCanvasDoubleClick({ touches: e.changedTouches });
+        }
+      }
+      lastTapRef.current = now;
+      handleCanvasMouseUp();
+    };
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const opts = { passive: false };
+    const onStart = (e) => handleCanvasTouchStart.current?.(e);
+    const onMove  = (e) => handleCanvasTouchMove.current?.(e);
+    const onEnd   = (e) => handleCanvasTouchEnd.current?.(e);
+    canvas.addEventListener('touchstart', onStart, opts);
+    canvas.addEventListener('touchmove',  onMove,  opts);
+    canvas.addEventListener('touchend',   onEnd,   opts);
+    return () => {
+      canvas.removeEventListener('touchstart', onStart, opts);
+      canvas.removeEventListener('touchmove',  onMove,  opts);
+      canvas.removeEventListener('touchend',   onEnd,   opts);
+    };
+  }, []);
 
   const savePlayerNumber = () => {
     if (!editingPlayerNumber || !newPlayerNumber.trim()) {
@@ -5082,8 +5126,8 @@ const FootballTacticsApp = () => {
         }
       `}</style>
 
-      {/* Górny pasek nawigacji */}
-      <div className="bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-6 py-3">
+      {/* Górny pasek nawigacji - ukryty na mobile (zastąpiony dolnym paskiem) */}
+      <div className="hidden md:block bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-6 py-3">
         <div className="flex items-center gap-4">
           {/* Logo/Tytuł */}
           <div className="flex items-center gap-3">
@@ -5855,10 +5899,24 @@ const FootballTacticsApp = () => {
       </div>
 
       {/* Wrapper dla 3 paneli */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+
+      {/* Overlay dla mobilnych drawerów */}
+      {(leftPanelOpen || rightPanelOpen) && (
+        <div
+          className="md:hidden absolute inset-0 z-30 bg-black/50"
+          onClick={() => { setLeftPanelOpen(false); setRightPanelOpen(false); }}
+        />
+      )}
 
       {/* Lewy panel - Fazy i Schematy */}
-      <div className="w-80 bg-slate-950/50 backdrop-blur-xl border-r border-white/10 flex flex-col">
+      <div className={`
+        absolute md:relative z-40 h-full
+        w-80 bg-slate-950/95 md:bg-slate-950/50 backdrop-blur-xl border-r border-white/10 flex flex-col
+        transition-transform duration-300
+        ${leftPanelOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0
+      `}>
         <div className="p-6 border-b border-white/10">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
             Model Gry
@@ -6333,12 +6391,12 @@ const FootballTacticsApp = () => {
                   setIsPlaying(false);
                   setInterpolationProgress(0);
                 }}
-                className="control-btn p-1 bg-white/10 hover:bg-white/20 rounded transition-all flex-shrink-0"
+                className="control-btn p-2 md:p-1 bg-white/10 hover:bg-white/20 rounded transition-all flex-shrink-0"
                 title="Od początku"
               >
-                <SkipBack size={16} />
+                <SkipBack size={20} className="md:w-4 md:h-4" />
               </button>
-              
+
               <button
                 onClick={() => {
                   if (!isPlaying && currentFrame === currentScheme.frames.length - 1) {
@@ -6348,11 +6406,11 @@ const FootballTacticsApp = () => {
                   }
                   setIsPlaying(!isPlaying);
                 }}
-                className="control-btn p-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded flex-shrink-0"
+                className="control-btn p-3 md:p-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded flex-shrink-0"
               >
-                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                {isPlaying ? <Pause size={20} className="md:w-4 md:h-4" /> : <Play size={20} className="md:w-4 md:h-4" />}
               </button>
-              
+
               <button
                 onClick={() => {
                   if (currentFrame < currentScheme.frames.length - 1) {
@@ -6362,10 +6420,10 @@ const FootballTacticsApp = () => {
                     setInterpolationProgress(0);
                   }
                 }}
-                className="control-btn p-1 bg-white/10 hover:bg-white/20 rounded flex-shrink-0"
+                className="control-btn p-2 md:p-1 bg-white/10 hover:bg-white/20 rounded flex-shrink-0"
                 disabled={currentFrame >= currentScheme.frames.length - 1}
               >
-                <SkipForward size={16} />
+                <SkipForward size={20} className="md:w-4 md:h-4" />
               </button>
 
               <div className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
@@ -6409,9 +6467,9 @@ const FootballTacticsApp = () => {
                         setInterpolationProgress(0);
                       }}
                       className={`cursor-pointer rounded flex-shrink-0 transition-all ${
-                        currentFrame === idx 
-                          ? 'border border-blue-400 bg-blue-400/40 w-6 h-6' 
-                          : 'border border-white/20 bg-white/5 hover:bg-white/10 w-5 h-5'
+                        currentFrame === idx
+                          ? 'border border-blue-400 bg-blue-400/40 w-9 h-9 md:w-6 md:h-6'
+                          : 'border border-white/20 bg-white/5 hover:bg-white/10 w-8 h-8 md:w-5 md:h-5'
                       }`}
                     >
                       <div className="flex items-center justify-center text-[8px] font-bold text-slate-300 w-full h-full">
@@ -6433,10 +6491,47 @@ const FootballTacticsApp = () => {
             </div>
           </div>
         )}
+        {/* Mobilna dolna nawigacja */}
+        <div className="flex md:hidden items-center justify-around bg-slate-950/90 border-t border-white/10 py-1" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <button
+            onClick={() => { setLeftPanelOpen(v => !v); setRightPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${leftPanelOpen ? 'text-blue-400' : 'text-slate-400'}`}
+          >
+            <span className="text-xl">☰</span>
+            <span className="text-[10px]">Fazy</span>
+          </button>
+          <button
+            onClick={() => { setIsDrawingMode(false); setLeftPanelOpen(false); setRightPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${!isDrawingMode ? 'text-blue-400' : 'text-slate-400'}`}
+          >
+            <span className="text-xl">🖱️</span>
+            <span className="text-[10px]">Ruch</span>
+          </button>
+          <button
+            onClick={() => { setIsDrawingMode(true); setLeftPanelOpen(false); setRightPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isDrawingMode ? 'text-blue-400' : 'text-slate-400'}`}
+          >
+            <span className="text-xl">✏️</span>
+            <span className="text-[10px]">Rysuj</span>
+          </button>
+          <button
+            onClick={() => { setRightPanelOpen(v => !v); setLeftPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${rightPanelOpen ? 'text-blue-400' : 'text-slate-400'}`}
+          >
+            <span className="text-xl">📋</span>
+            <span className="text-[10px]">Szczegóły</span>
+          </button>
+        </div>
       </div>
 
       {/* Prawy panel - Szczegóły schematu */}
-      <div className="w-96 bg-slate-950/50 backdrop-blur-xl border-l border-white/10 flex flex-col">
+      <div className={`
+        absolute md:relative right-0 z-40 h-full
+        w-80 md:w-96 bg-slate-950/95 md:bg-slate-950/50 backdrop-blur-xl border-l border-white/10 flex flex-col
+        transition-transform duration-300
+        ${rightPanelOpen ? 'translate-x-0' : 'translate-x-full'}
+        md:translate-x-0
+      `}>
         <div className="p-6 border-b border-white/10">
           <h2 className="text-xl font-bold mb-4">Szczegóły schematu</h2>
           

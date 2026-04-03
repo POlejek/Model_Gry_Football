@@ -11,4 +11,12 @@ body {
 #root {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
+}
+
+canvas {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
 }

@@ -4457,6 +4457,7 @@ const FootballTacticsApp = () => {
   };
 
   const handleCanvasMouseMove = (e) => {
+    const canvas = canvasRef.current;
     const { x, y } = getCanvasCoords(e);
 
     // Rysowanie linii
@@ -5328,10 +5329,12 @@ const FootballTacticsApp = () => {
             </>
           )}
         </div>
+      </div>
 
-        {/* Rozwijany panel dla Rysowania */}
-        {expandedPanel === 'draw' && isDrawingMode && (
-          <div className="mt-3 pt-3 border-t border-white/10">
+      {/* Rozwijany panel dla Rysowania - widoczny na mobile i desktop */}
+      {expandedPanel === 'draw' && isDrawingMode && (
+        <div className="bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 md:px-6 py-3 overflow-x-auto">
+          <div className="min-w-max">
             {/* Wybór narzędzia rysowania */}
             <div className="flex items-center gap-2 mb-4">
               <span className="text-sm text-slate-400 font-medium">Narzędzie:</span>
@@ -5682,11 +5685,13 @@ const FootballTacticsApp = () => {
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Rozwijany panel dla Przesuwania */}
-        {expandedPanel === 'move' && !isDrawingMode && (
-          <div className="mt-3 pt-3 border-t border-white/10">
+      {/* Rozwijany panel dla Przesuwania - widoczny na mobile i desktop */}
+      {expandedPanel === 'move' && !isDrawingMode && (
+        <div className="bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 md:px-6 py-3">
+          <div>
             <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
               <span className="text-sm text-slate-400">Tryb przesuwania zawodników, linii i stref aktywny</span>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -5895,8 +5900,8 @@ const FootballTacticsApp = () => {
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Wrapper dla 3 paneli */}
       <div className="flex flex-1 overflow-hidden relative">
@@ -6501,15 +6506,15 @@ const FootballTacticsApp = () => {
             <span className="text-[10px]">Fazy</span>
           </button>
           <button
-            onClick={() => { setIsDrawingMode(false); setLeftPanelOpen(false); setRightPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${!isDrawingMode ? 'text-blue-400' : 'text-slate-400'}`}
+            onClick={() => { setIsDrawingMode(false); setExpandedPanel(expandedPanel === 'move' ? null : 'move'); setLeftPanelOpen(false); setRightPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${!isDrawingMode && expandedPanel === 'move' ? 'text-blue-400' : 'text-slate-400'}`}
           >
             <span className="text-xl">🖱️</span>
             <span className="text-[10px]">Ruch</span>
           </button>
           <button
-            onClick={() => { setIsDrawingMode(true); setLeftPanelOpen(false); setRightPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isDrawingMode ? 'text-blue-400' : 'text-slate-400'}`}
+            onClick={() => { setIsDrawingMode(true); setExpandedPanel(expandedPanel === 'draw' ? null : 'draw'); setLeftPanelOpen(false); setRightPanelOpen(false); }}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isDrawingMode && expandedPanel === 'draw' ? 'text-blue-400' : 'text-slate-400'}`}
           >
             <span className="text-xl">✏️</span>
             <span className="text-[10px]">Rysuj</span>

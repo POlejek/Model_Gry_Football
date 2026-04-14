@@ -5128,7 +5128,7 @@ const FootballTacticsApp = () => {
       `}</style>
 
       {/* Górny pasek nawigacji - ukryty na mobile (zastąpiony dolnym paskiem) */}
-      <div className="hidden md:block bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-6 py-3">
+      <div className="hidden md:block bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-6 py-3 relative z-50">
         <div className="flex items-center gap-4">
           {/* Logo/Tytuł */}
           <div className="flex items-center gap-3">

@@ -111,6 +111,8 @@ const FootballTacticsApp = () => {
   const [rightPanelOpen, setRightPanelOpen] = useState(false); // Mobilny prawy panel
   const lastTapRef = useRef(0); // Do wykrywania double-tap na mobile
   const [showCopyNotification, setShowCopyNotification] = useState(false); // Powiadomienie o skopiowaniu
+  const [draggedFrameIdx, setDraggedFrameIdx] = useState(null); // Indeks przeciąganej klatki
+  const [dragOverFrameIdx, setDragOverFrameIdx] = useState(null); // Indeks klatki nad którą jest kursor
 
   // Paleta kolorów szybkiego wyboru
   const quickColorPalette = [
@@ -6463,7 +6465,50 @@ const FootballTacticsApp = () => {
               <div className="flex-1"></div>
               <div className="flex gap-1 items-flex-start flex-shrink-0 max-w-xs overflow-x-auto scrollbar-custom">
                 {currentScheme.frames.map((frame, idx) => (
-                  <div key={idx} className="flex flex-col gap-0.5 items-center flex-shrink-0">
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-0.5 items-center flex-shrink-0"
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedFrameIdx(idx);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setDragOverFrameIdx(idx);
+                    }}
+                    onDragLeave={() => setDragOverFrameIdx(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedFrameIdx === null || draggedFrameIdx === idx) {
+                        setDraggedFrameIdx(null);
+                        setDragOverFrameIdx(null);
+                        return;
+                      }
+                      const newFrames = [...currentScheme.frames];
+                      const [moved] = newFrames.splice(draggedFrameIdx, 1);
+                      newFrames.splice(idx, 0, moved);
+                      // Śledź aktualną klatkę po przesunięciu
+                      let newCurrentFrame = currentFrame;
+                      if (currentFrame === draggedFrameIdx) {
+                        newCurrentFrame = idx;
+                      } else if (draggedFrameIdx < currentFrame && idx >= currentFrame) {
+                        newCurrentFrame = currentFrame - 1;
+                      } else if (draggedFrameIdx > currentFrame && idx <= currentFrame) {
+                        newCurrentFrame = currentFrame + 1;
+                      }
+                      updateCurrentScheme({ ...currentScheme, frames: newFrames });
+                      setCurrentFrame(newCurrentFrame);
+                      setPlayers(newFrames[newCurrentFrame]);
+                      setDraggedFrameIdx(null);
+                      setDragOverFrameIdx(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedFrameIdx(null);
+                      setDragOverFrameIdx(null);
+                    }}
+                  >
                     <div
                       onClick={() => {
                         setCurrentFrame(idx);
@@ -6471,8 +6516,12 @@ const FootballTacticsApp = () => {
                         setIsPlaying(false);
                         setInterpolationProgress(0);
                       }}
-                      className={`cursor-pointer rounded flex-shrink-0 transition-all ${
-                        currentFrame === idx
+                      className={`cursor-grab active:cursor-grabbing rounded flex-shrink-0 transition-all ${
+                        draggedFrameIdx === idx
+                          ? 'opacity-30 scale-90'
+                          : dragOverFrameIdx === idx && draggedFrameIdx !== null
+                          ? 'border-2 border-yellow-400 bg-yellow-400/20 scale-110 w-9 h-9 md:w-6 md:h-6'
+                          : currentFrame === idx
                           ? 'border border-blue-400 bg-blue-400/40 w-9 h-9 md:w-6 md:h-6'
                           : 'border border-white/20 bg-white/5 hover:bg-white/10 w-8 h-8 md:w-5 md:h-5'
                       }`}

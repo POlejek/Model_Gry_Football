@@ -8,8 +8,6 @@ export default defineConfig({
     host: true,
     port: 3000
   },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-  }
+  // Testy: npm install -D vitest @vitest/ui jsdom && npx vitest run
+  // test: { environment: 'jsdom', globals: true }
 })

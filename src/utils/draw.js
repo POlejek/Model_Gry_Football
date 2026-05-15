@@ -1,6 +1,6 @@
 // Czyste funkcje rysowania canvas — nie zależą od stanu React
 
-export const drawField = (ctx) => {
+export const drawField = (ctx, gameFormat) => {
     const width = ctx.canvas.width;  // 700px
     const height = ctx.canvas.height;  // 1080px
     const margin = 20;
@@ -209,7 +209,7 @@ export const drawField = (ctx) => {
     ctx.setLineDash([]);
   };
 
-export const drawPlayer = (ctx, player, isTeam, playerColor = null) => {
+export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = "#1a365d", opponentColor = "#8b0000", gameFormat = "11v11") => {
     ctx.save();
     
     // Rozmiar zawodnika proporcjonalny do boiska
@@ -342,7 +342,7 @@ export const interpolatePlayers = (from, to, progress) => {
     };
   };
 
-export const drawBall = (ctx, ball) => {
+export const drawBall = (ctx, ball, gameFormat = "11v11") => {
     ctx.save();
     
     // Rozmiar pi\u0142ki proporcjonalny do formatu gry

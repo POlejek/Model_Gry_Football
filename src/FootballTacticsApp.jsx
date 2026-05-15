@@ -3047,7 +3047,7 @@ const FootballTacticsApp = () => {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    drawField(ctx);
+    drawField(ctx, gameFormat);
     
     // Rysuj strefy (pod liniami i zawodnikami)
     zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex));
@@ -3139,10 +3139,10 @@ const FootballTacticsApp = () => {
       });
     }
     
-    players.team.forEach(player => drawPlayer(ctx, player, true));
-    players.opponent.forEach(player => drawPlayer(ctx, player, false));
-    drawBall(ctx, players.ball);
-  }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer]);
+    players.team.forEach(player => drawPlayer(ctx, player, true, null, teamColor, opponentColor, gameFormat));
+    players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat));
+    drawBall(ctx, players.ball, gameFormat);
+  }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor]);
 
   useEffect(() => {
     let interval;

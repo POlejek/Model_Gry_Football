@@ -209,7 +209,7 @@ export const drawField = (ctx, gameFormat) => {
     ctx.setLineDash([]);
   };
 
-export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = "#1a365d", opponentColor = "#8b0000", gameFormat = "11v11") => {
+export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = "#1a365d", opponentColor = "#8b0000", gameFormat = "11v11", selectedPlayer = null) => {
     ctx.save();
     
     // Rozmiar zawodnika proporcjonalny do boiska
@@ -412,7 +412,7 @@ export const drawBall = (ctx, ball, gameFormat = "11v11") => {
 
   // Funkcja sprawdzająca czy punkt (px, py) jest blisko linii
 
-export const drawZone = (ctx, zone, isSelected = false) => {
+export const drawZone = (ctx, zone, isSelected = false, zoneColor = "#ff0000", zoneOpacity = 0.3) => {
     ctx.save();
     ctx.fillStyle = zone.color || zoneColor;
     ctx.globalAlpha = zone.opacity || zoneOpacity;

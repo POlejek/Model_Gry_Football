@@ -3050,9 +3050,9 @@ const FootballTacticsApp = () => {
     drawField(ctx, gameFormat);
     
     // Rysuj strefy (pod liniami i zawodnikami)
-    zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex));
+    zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex, zoneColor, zoneOpacity));
     if (currentZone) {
-      drawZone(ctx, currentZone, false);
+      drawZone(ctx, currentZone, false, zoneColor, zoneOpacity);
     }
     
     // Rysuj wierzchołki dla zaznaczonego wielokąta (do edycji)
@@ -3139,10 +3139,10 @@ const FootballTacticsApp = () => {
       });
     }
     
-    players.team.forEach(player => drawPlayer(ctx, player, true, null, teamColor, opponentColor, gameFormat));
-    players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat));
+    players.team.forEach(player => drawPlayer(ctx, player, true, null, teamColor, opponentColor, gameFormat, selectedPlayer));
+    players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     drawBall(ctx, players.ball, gameFormat);
-  }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor]);
+  }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
 
   useEffect(() => {
     let interval;

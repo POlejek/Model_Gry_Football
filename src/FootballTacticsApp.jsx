@@ -3,7 +3,7 @@ import { Plus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, C
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
-import { drawField, drawPlayer, drawPlayerPath, drawBall, drawZone, drawLine } from './utils/draw.js';
+import { drawField, drawPlayer, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers } from './utils/draw.js';
 import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 

@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Trash2, Plus, Minus } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
+import { drawField } from './utils/draw.js';
 
-// ── Stałe boiska ──────────────────────────────────────────────
+// ── Stałe boiska (takie same jak w FootballTacticsApp) ────────
 const FIELD_W = 700;
-const FIELD_H = 1050;
+const FIELD_H = 1080;
 
-// ── Rysowanie poszczególnych elementów na canvas ───────────────
+
 function drawGoal(ctx, item, selected) {
   const { x, y, rotation = 0, scale = 1 } = item;
   const w = 90 * scale, h = 16 * scale, depth = 20 * scale;
@@ -155,7 +156,7 @@ function drawPlayer(ctx, item, selected) {
 }
 
 function drawArrow(ctx, item, selected) {
-  const { x1, y1, x2, y2, color = '#ffffff', dashed = false } = item;
+  const { x1, y1, x2, y2, color = '#000000', dashed = false } = item;
   ctx.save();
   if (selected) { ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 10; }
   ctx.strokeStyle = color;
@@ -193,109 +194,6 @@ function drawItem(ctx, item, selected) {
 }
 
 // ── Rysowanie boiska treningowego ─────────────────────────────
-function drawField(ctx, fieldType) {
-  const W = FIELD_W, H = FIELD_H;
-  ctx.save();
-
-  // tło
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#166534');
-  grad.addColorStop(0.5, '#15803d');
-  grad.addColorStop(1, '#166534');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // pasy trawy
-  ctx.fillStyle = 'rgba(0,0,0,0.07)';
-  const stripeW = W / 8;
-  for (let i = 0; i < 8; i += 2) {
-    ctx.fillRect(i * stripeW, 0, stripeW, H);
-  }
-
-  // linie boiska
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = 2;
-
-  if (fieldType === 'full') {
-    // Boisko pełne
-    ctx.strokeRect(30, 30, W - 60, H - 60);
-    // Linia środkowa
-    ctx.beginPath();
-    ctx.moveTo(30, H / 2);
-    ctx.lineTo(W - 30, H / 2);
-    ctx.stroke();
-    // Koło środkowe
-    ctx.beginPath();
-    ctx.arc(W / 2, H / 2, 70, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath(); ctx.arc(W / 2, H / 2, 3, 0, Math.PI * 2); ctx.fill();
-    // Pola karne
-    const pw = 280, ph = 110;
-    ctx.strokeRect((W - pw) / 2, 30, pw, ph);
-    ctx.strokeRect((W - pw) / 2, H - 30 - ph, pw, ph);
-    // Pola bramkowe
-    const gw = 120, gh = 45;
-    ctx.strokeRect((W - gw) / 2, 30, gw, gh);
-    ctx.strokeRect((W - gw) / 2, H - 30 - gh, gw, gh);
-    // Bramki
-    ctx.lineWidth = 3;
-    ctx.strokeRect((W - 100) / 2, 10, 100, 25);
-    ctx.strokeRect((W - 100) / 2, H - 35, 100, 25);
-    ctx.lineWidth = 2;
-    // Łuki pól karnych
-    ctx.beginPath();
-    ctx.arc(W / 2, 30 + ph, 70, Math.PI * 1.17, Math.PI * 1.83);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(W / 2, H - 30 - ph, 70, Math.PI * 0.17, Math.PI * 0.83);
-    ctx.stroke();
-    // Punkty karne
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(W / 2, 30 + 80, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(W / 2, H - 30 - 80, 3, 0, Math.PI * 2); ctx.fill();
-  } else if (fieldType === 'half') {
-    // Połowa boiska
-    ctx.strokeRect(30, 30, W - 60, H / 2 - 10);
-    const pw = 280, ph = 110;
-    ctx.strokeRect((W - pw) / 2, 30, pw, ph);
-    const gw = 120, gh = 45;
-    ctx.strokeRect((W - gw) / 2, 30, gw, gh);
-    ctx.lineWidth = 3;
-    ctx.strokeRect((W - 100) / 2, 10, 100, 25);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(W / 2, 30 + ph, 70, Math.PI * 1.17, Math.PI * 1.83);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(W / 2, 30 + 80, 3, 0, Math.PI * 2); ctx.fill();
-    // linia środkowa u dołu
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.setLineDash([10, 6]);
-    ctx.beginPath();
-    ctx.moveTo(30, H / 2 - 10);
-    ctx.lineTo(W - 30, H / 2 - 10);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  } else {
-    // Ćwiartka boiska (pole karne)
-    ctx.strokeRect(30, 30, W - 60, H - 60);
-    const pw = Math.min(280, W - 60), ph = 110;
-    ctx.strokeRect(30, 30, pw, ph);
-    ctx.strokeRect(30, 30, 120, 45);
-    ctx.lineWidth = 3;
-    ctx.strokeRect(30, 10, 100, 25);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(30 + pw / 2, 30 + ph, 70, Math.PI * 1.17, Math.PI * 1.83);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(30 + pw / 2, 30 + 80, 3, 0, Math.PI * 2); ctx.fill();
-  }
-
-  ctx.restore();
-}
-
 // ── Paleta sprzętu ────────────────────────────────────────────
 const EQUIPMENT = [
   { type: 'player', label: 'Zawodnik A', team: 'A', color: '#1d4ed8', icon: '🔵' },
@@ -316,7 +214,6 @@ export default function TrainingDrillApp() {
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY }
   const [drawingArrow, setDrawingArrow] = useState(null); // {x1,y1,x2,y2}
   const [tool, setTool] = useState('select'); // 'select' | 'arrow' | 'dashed'
-  const [fieldType, setFieldType] = useState('full');
   const [teamAColor, setTeamAColor] = useState('#1d4ed8');
   const [teamBColor, setTeamBColor] = useState('#dc2626');
   const [nextId, setNextId] = useState(1);
@@ -329,7 +226,7 @@ export default function TrainingDrillApp() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, FIELD_W, FIELD_H);
-    drawField(ctx, fieldType);
+    drawField(ctx, '11v11');
     // rysuj strzałki pod innymi elementami
     items.filter(i => i.type === 'arrow').forEach(i => drawItem(ctx, i, i.id === selectedId));
     // rysuj sprzęt i zawodników
@@ -347,7 +244,7 @@ export default function TrainingDrillApp() {
       ctx.setLineDash([]);
       ctx.restore();
     }
-  }, [items, selectedId, fieldType, drawingArrow, tool]);
+  }, [items, selectedId, drawingArrow, tool]);
 
   // ── Koordynaty canvas ──────────────────────────────────────
   const getCoords = useCallback((e) => {
@@ -467,7 +364,7 @@ export default function TrainingDrillApp() {
           id, type: 'arrow',
           x1: drawingArrow.x1, y1: drawingArrow.y1, x2: x, y2: y,
           dashed: tool === 'dashed',
-          color: '#ffffff',
+          color: '#000000',
         }]);
         setSelectedId(id);
       }
@@ -493,21 +390,6 @@ export default function TrainingDrillApp() {
     <div className="flex flex-1 overflow-hidden">
       {/* ── Lewa paleta ── */}
       <div className="w-56 bg-slate-950/80 border-r border-white/10 flex flex-col overflow-y-auto">
-        <div className="p-3 border-b border-white/10">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Boisko</p>
-          <div className="flex flex-col gap-1">
-            {[['full', 'Pełne'], ['half', 'Połowa'], ['quarter', 'Pole karne']].map(([v, l]) => (
-              <button
-                key={v}
-                onClick={() => setFieldType(v)}
-                className={`px-3 py-1.5 rounded text-sm text-left transition-all ${fieldType === v ? 'bg-green-700 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="p-3 border-b border-white/10">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Narzędzia</p>
           <div className="flex flex-col gap-1">
@@ -627,7 +509,7 @@ export default function TrainingDrillApp() {
                 <p className="text-xs text-slate-400 mb-1">Kolor strzałki</p>
                 <input
                   type="color"
-                  value={selectedItem.color || '#ffffff'}
+                  value={selectedItem.color || '#000000'}
                   onChange={e => setItems(prev => prev.map(i => i.id === selectedId ? { ...i, color: e.target.value } : i))}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent"
                 />

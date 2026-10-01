@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 
@@ -7,6 +7,48 @@ const TABS = [
   { id: 'training', label: '🏃 Trening', title: 'Budowanie ćwiczeń treningowych' },
 ];
 const TAB_KEY = 'modelGryActiveTab';
+
+// Browser noise that is not an app error (fired by layout observers, harmless).
+const IGNORED_ERRORS = [/ResizeObserver loop/i];
+
+const describeError = (err) => {
+  if (!err) return 'Nieznany błąd';
+  if (typeof err === 'string') return err;
+  return [err.name, err.message].filter(Boolean).join(': ') || String(err);
+};
+
+// Keeps one tab's crash from blanking the whole app and shows what actually failed.
+class TabErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Błąd w zakładce', this.props.name, error, info?.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-red-950/60 border border-red-500/40 rounded-2xl p-5 text-sm text-red-100 space-y-3">
+          <p className="text-base font-semibold">Coś poszło nie tak w zakładce „{this.props.name}”.</p>
+          <p className="font-mono text-xs break-words bg-black/30 rounded p-2">{describeError(this.state.error)}</p>
+          <p className="text-red-200/80">Twoje dane są zapisane. Zrób zrzut ekranu tego komunikatu, jeśli zgłaszasz problem.</p>
+          <div className="flex gap-2">
+            <button onClick={() => this.setState({ error: null })} className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20">Spróbuj ponownie</button>
+            <button onClick={() => window.location.reload()} className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white">Odśwież stronę</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
 
 const readTab = () => {
   try {
@@ -19,6 +61,25 @@ const readTab = () => {
 
 export default function AppWrapper() {
   const [activeTab, setActiveTab] = useState(readTab);
+  const [runtimeError, setRuntimeError] = useState(null);
+
+  // Errors thrown outside React rendering (timers, animation, event handlers) would otherwise be
+  // invisible; surface them so a broken action is visible and can be reported precisely.
+  useEffect(() => {
+    const show = (err) => {
+      const text = describeError(err);
+      if (IGNORED_ERRORS.some(re => re.test(text))) return;
+      setRuntimeError(text);
+    };
+    const onError = (e) => show(e.error || e.message);
+    const onRejection = (e) => show(e.reason);
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
 
   const selectTab = (id) => {
     setActiveTab(id);
@@ -55,11 +116,22 @@ export default function AppWrapper() {
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'tactics' ? 'flex' : 'hidden'}`}>
-        <FootballTacticsApp embedded active={activeTab === 'tactics'} />
+        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
-        <TrainingDrillApp active={activeTab === 'training'} />
+        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} /></TabErrorBoundary>
       </div>
+
+      {runtimeError && (
+        <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[300] w-[min(92vw,36rem)] flex items-start gap-3 bg-red-950/95 border border-red-500/50 rounded-xl px-4 py-3 shadow-2xl text-sm text-red-100">
+          <span className="flex-shrink-0">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">Wystąpił błąd</p>
+            <p className="font-mono text-xs break-words mt-0.5">{runtimeError}</p>
+          </div>
+          <button onClick={() => setRuntimeError(null)} className="text-red-300 hover:text-white" aria-label="Zamknij">✕</button>
+        </div>
+      )}
     </div>
   );
 }

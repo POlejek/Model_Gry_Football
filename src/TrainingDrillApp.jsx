@@ -1979,7 +1979,7 @@ export default function TrainingDrillApp({ active = true }) {
                   {LINE_TYPES.find(t => t && t[0] === lineType)?.[2]}<ChevronDown size={12} />
                 </button>
                 {openColorPalette === 'linetype' && (
-                  <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-1.5 grid grid-cols-5 gap-1 z-50">
+                  <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-1.5 grid grid-cols-4 gap-1 z-50">
                     {LINE_TYPES.filter(Boolean).map(([type, title, icon]) => (
                       <button key={type} onClick={() => { setLineType(type); setOpenColorPalette(null); }} title={title} aria-label={title}
                         className={`${optClass(lineType === type)} w-11 h-10`}>

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
+  X, Layers, SlidersHorizontal,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -96,7 +97,6 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   const [lineColor, setLineColor] = useState('#000000'); // Kolor linii
   const [currentLine, setCurrentLine] = useState(null); // Rysowana linia
   const [lines, setLines] = useState([]); // Wszystkie linie na bieżącej klatce
-  const [expandedPanel, setExpandedPanel] = useState(null); // 'move' lub 'draw' - rozwinięty panel w górnym pasku
   const [selectedLineIndex, setSelectedLineIndex] = useState(null); // Indeks zaznaczonej linii
   const [isDraggingLine, setIsDraggingLine] = useState(false); // Czy przeciągamy linię
   const [isDraggingControlPoint, setIsDraggingControlPoint] = useState(false); // Czy przeciągamy punkt kontrolny krzywej
@@ -4169,6 +4169,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   }, []);
 
   const [modeHintVisible, setModeHintVisible] = useState(false);
+  const [isCoarsePointer] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches);
   useEffect(() => {
     if (tacticsTool === 'select') { setModeHintVisible(false); return undefined; }
     setModeHintVisible(true);
@@ -4180,7 +4181,9 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     : tacticsTool === 'line' ? 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie'
     : tacticsTool === 'zone' ? (zoneType === 'polygon'
       ? (polygonPoints.length
-        ? `Punkty: ${polygonPoints.length} · kliknij pierwszy punkt, aby zamknąć · Esc anuluje`
+        ? (isCoarsePointer
+          ? `Punkty: ${polygonPoints.length} · stuknij pierwszy punkt, aby zamknąć`
+          : `Punkty: ${polygonPoints.length} · kliknij pierwszy punkt, aby zamknąć · Esc anuluje`)
         : 'Klikaj kolejne wierzchołki strefy')
       : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie')
     : null;
@@ -4318,8 +4321,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         }
       `}</style>
 
-      {/* Pasek narzędzi (desktop) — tryby, opcje bieżącego trybu, drużyny, cofnij/ponów, stan zapisu */}
-      <div className="hidden md:flex items-center gap-1 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-3 py-1.5 relative z-50">
+      {/* Pasek narzędzi — tryby, opcje bieżącego trybu, drużyny, cofnij/ponów, stan zapisu (na telefonie wersja kompaktowa) */}
+      <div className="flex items-center gap-1 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-3 py-1.5 relative z-50">
         <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
           {[
             ['select', MousePointer2, 'Przesuwanie', 'Przesuwanie zawodników, piłki, linii i stref (V)'],
@@ -4337,14 +4340,14 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
         {tacticsTool === 'select' && (
           <>
-            <button className={TOOLBAR_BTN} onClick={copySelectedDrawing} disabled={!hasDrawingSelection} title="Kopiuj zaznaczoną linię lub strefę (Ctrl+C)">
-              <Copy size={14} /> Kopiuj
+            <button className={TOOLBAR_BTN} onClick={copySelectedDrawing} disabled={!hasDrawingSelection} title="Kopiuj zaznaczoną linię lub strefę (Ctrl+C)" aria-label="Kopiuj">
+              <Copy size={14} /> <span className="hidden sm:inline">Kopiuj</span>
             </button>
-            <button className={TOOLBAR_BTN} onClick={pasteDrawing} disabled={!clipboard} title="Wklej (Ctrl+V)">
-              <ClipboardPaste size={14} /> Wklej
+            <button className={TOOLBAR_BTN} onClick={pasteDrawing} disabled={!clipboard} title="Wklej (Ctrl+V)" aria-label="Wklej">
+              <ClipboardPaste size={14} /> <span className="hidden sm:inline">Wklej</span>
             </button>
-            <button className={TOOLBAR_BTN} onClick={deleteSelectedDrawing} disabled={!hasDrawingSelection} title="Usuń zaznaczoną linię lub strefę (Delete)">
-              <Trash2 size={14} /> Usuń
+            <button className={TOOLBAR_BTN} onClick={deleteSelectedDrawing} disabled={!hasDrawingSelection} title="Usuń zaznaczoną linię lub strefę (Delete)" aria-label="Usuń">
+              <Trash2 size={14} /> <span className="hidden sm:inline">Usuń</span>
             </button>
             {(lines.length > 0 || zones.length > 0) && (
               <div className="relative">
@@ -4369,6 +4372,23 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
         {tacticsTool === 'line' && (
           <>
+            <div className="relative md:hidden">
+              <button onClick={(e) => { e.stopPropagation(); setOpenColorPalette(openColorPalette === 'linetype' ? null : 'linetype'); }}
+                aria-label="Typ linii" className={`${optionBtnClass(true)} px-1.5 gap-0.5`}>
+                {LINE_TYPES.find(t => t && t[0] === lineType)?.[2]}<ChevronDown size={12} />
+              </button>
+              {openColorPalette === 'linetype' && (
+                <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-1.5 grid grid-cols-4 gap-1 z-50">
+                  {LINE_TYPES.filter(Boolean).map(([type, title, icon]) => (
+                    <button key={type} onClick={() => { setLineType(type); setOpenColorPalette(null); }} title={title} aria-label={title}
+                      className={`${optionBtnClass(lineType === type)} w-11 h-10`}>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="hidden md:contents">
             {LINE_TYPES.map((t, idx) => (t ? (
               <button key={t[0]} onClick={() => setLineType(t[0])} title={t[1]} aria-pressed={lineType === t[0]}
                 className={`${optionBtnClass(lineType === t[0])} w-9`}>
@@ -4376,12 +4396,38 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
               </button>
             ) : <div key={idx} className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />))}
             <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+            </div>
             {colorSwatch('line', lineColor, setLineColor, lineColorInputRef, 'Kolor linii', 'left')}
           </>
         )}
 
         {tacticsTool === 'zone' && (
           <>
+            <div className="relative md:hidden">
+              <button onClick={(e) => { e.stopPropagation(); setOpenColorPalette(openColorPalette === 'zonetype' ? null : 'zonetype'); }}
+                aria-label="Kształt i krycie strefy" className={`${optionBtnClass(true)} px-1.5 gap-0.5`}>
+                {ZONE_SHAPES.find(z => z[0] === zoneType)?.[2]}<ChevronDown size={12} />
+              </button>
+              {openColorPalette === 'zonetype' && (
+                <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50">
+                  <div className="flex gap-1">
+                    {ZONE_SHAPES.map(([type, title, icon]) => (
+                      <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); setCurrentZone(null); }} title={title} aria-label={title}
+                        className={`${optionBtnClass(zoneType === type)} w-12 h-10`}>
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                    Krycie
+                    <input type="range" min="0" max="1" step="0.1" value={zoneOpacity}
+                      onChange={(e) => setZoneOpacity(parseFloat(e.target.value))} className="w-28" />
+                    <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
+                  </label>
+                </div>
+              )}
+            </div>
+            <div className="hidden md:contents">
             {ZONE_SHAPES.map(([type, title, icon]) => (
               <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); setCurrentZone(null); }} title={title} aria-pressed={zoneType === type}
                 className={`${optionBtnClass(zoneType === type)} w-10`}>
@@ -4389,19 +4435,25 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
               </button>
             ))}
             <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+            </div>
             {colorSwatch('zone', zoneColor, setZoneColor, zoneColorInputRef, 'Kolor strefy', 'left')}
-            <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
+            <label className="ml-2 hidden md:flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
               Krycie
               <input type="range" min="0" max="1" step="0.1" value={zoneOpacity}
                 onChange={(e) => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
               <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
             </label>
+            {polygonPoints.length > 0 && (
+              <button className={TOOLBAR_BTN} onClick={() => setPolygonPoints([])} title="Anuluj rysowany wielokąt (Esc)" aria-label="Anuluj wielokąt">
+                <X size={14} /> <span className="hidden sm:inline">Anuluj</span>
+              </button>
+            )}
           </>
         )}
 
         <div className="flex-1" />
 
-        <div className="flex items-center gap-1.5">
+        <div className="hidden md:flex items-center gap-1.5">
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline">Drużyna</span>
           {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline ml-1">Przeciwnik</span>
@@ -4409,7 +4461,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         </div>
 
         {gameFormat === '11v11' && (
-          <div className="relative">
+          <div className="relative hidden md:block">
             <button className={TOOLBAR_BTN} title="Ustaw formację drużyny lub przeciwnika"
               onClick={(e) => { e.stopPropagation(); setOpenFormationMenu(openFormationMenu === 'formation' ? null : 'formation'); }}>
               Formacja <ChevronDown size={13} />
@@ -4432,594 +4484,22 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           </div>
         )}
 
-        <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+        <div className="hidden md:block w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
         <button className={TOOLBAR_BTN} onClick={undoScheme} disabled={!canUndoScheme} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
         <button className={TOOLBAR_BTN} onClick={redoScheme} disabled={!canRedoScheme} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
-        <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+        <div className="hidden md:block w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
         {currentScheme ? (
-          <span className="inline-flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Zmiany zapisują się automatycznie w pamięci tej przeglądarki">
+          <span className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Zmiany zapisują się automatycznie w pamięci tej przeglądarki">
             <Check size={13} className="text-emerald-400" />
             <span className="hidden min-[1400px]:inline">Zapisano automatycznie</span>
             <span className="min-[1400px]:hidden">Zapisano</span>
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-xs text-amber-300 whitespace-nowrap" title="Utwórz lub wybierz schemat w lewym panelu, aby zapisywać ustawienie">
+          <span className="hidden md:inline-flex items-center gap-1 text-xs text-amber-300 whitespace-nowrap" title="Utwórz lub wybierz schemat w lewym panelu, aby zapisywać ustawienie">
             <AlertTriangle size={13} /> Bez schematu
           </span>
         )}
       </div>
-
-      {/* Rozwijany panel dla Rysowania - widoczny na mobile i desktop */}
-      {expandedPanel === 'draw' && isDrawingMode && (
-        <div className="md:hidden bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 py-3 overflow-x-auto">
-          <div className="min-w-max">
-            {/* Wybór narzędzia rysowania */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm text-slate-400 font-medium">Narzędzie:</span>
-              <button
-                onClick={() => {
-                  setDrawingTool('line');
-                  setCurrentZone(null);
-                  setPolygonPoints([]);
-                }}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  drawingTool === 'line'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white/10 hover:bg-white/15 text-slate-300'
-                }`}
-              >
-                📏 Linie
-              </button>
-              <button
-                onClick={() => {
-                  setDrawingTool('zone');
-                  setCurrentLine(null);
-                }}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  drawingTool === 'zone'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white/10 hover:bg-white/15 text-slate-300'
-                }`}
-              >
-                🔷 Strefy
-              </button>
-            </div>
-
-            {/* Opcje linii */}
-            {drawingTool === 'line' && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-slate-400 font-medium">Typ linii:</span>
-                
-                {/* Linie z grotem */}
-              <button
-                onClick={() => setLineType('arrow-solid')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'arrow-solid' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Prosta linia ciągła z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <line x1="4" y1="12" x2="32" y2="12" stroke="currentColor" strokeWidth="2" />
-                  <polygon points="32,12 28,9 28,15" fill="currentColor" />
-                </svg>
-              </button>
-              
-              <button
-                onClick={() => setLineType('arrow-dashed')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'arrow-dashed' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Prosta linia przerywana z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <line x1="4" y1="12" x2="32" y2="12" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2" />
-                  <polygon points="32,12 28,9 28,15" fill="currentColor" />
-                </svg>
-              </button>
-
-              <button
-                onClick={() => setLineType('arrow-wavy')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'arrow-wavy' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Prosta linia falowana z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <path d="M4 12 C8 6, 12 18, 16 12 C20 6, 24 18, 28 12 C30 9, 31 11, 32 12" stroke="currentColor" strokeWidth="2" fill="none" />
-                  <polygon points="32,12 28,9 28,15" fill="currentColor" />
-                </svg>
-              </button>
-              
-              <button
-                onClick={() => setLineType('double-arrow-solid')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'double-arrow-solid' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Podwójna prosta linia ciągła z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <line x1="4" y1="10" x2="32" y2="10" stroke="currentColor" strokeWidth="2" />
-                  <line x1="4" y1="14" x2="32" y2="14" stroke="currentColor" strokeWidth="2" />
-                  <polygon points="32,12 28,9 28,15" fill="currentColor" />
-                </svg>
-              </button>
-
-              <div className="w-px h-8 bg-white/10"></div>
-              
-              {/* Linie bez grotów */}
-              <button
-                onClick={() => setLineType('line-dashed')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'line-dashed' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia przerywana bez grotów"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <line x1="4" y1="12" x2="36" y2="12" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2" />
-                </svg>
-              </button>
-              
-              <button
-                onClick={() => setLineType('line-solid')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'line-solid' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia ciągła bez grotów"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <line x1="4" y1="12" x2="36" y2="12" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              </button>
-
-              <div className="w-px h-8 bg-white/10"></div>
-              
-              {/* Linie krzywe */}
-              <button
-                onClick={() => setLineType('curve-arrow-solid')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'curve-arrow-solid' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia krzywa ciągła z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <path d="M4 12 Q 18 4, 32 12" stroke="currentColor" strokeWidth="2" fill="none" />
-                  <polygon points="32,12 28,10 28,14" fill="currentColor" />
-                </svg>
-              </button>
-              
-              <button
-                onClick={() => setLineType('curve-arrow-dashed')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'curve-arrow-dashed' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia krzywa przerywana z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <path d="M4 12 Q 18 4, 32 12" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 2" />
-                  <polygon points="32,12 28,10 28,14" fill="currentColor" />
-                </svg>
-              </button>
-
-              <button
-                onClick={() => setLineType('curve-arrow-wavy')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'curve-arrow-wavy' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia krzywa falowana z grotem"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <path d="M4 12 C9 4, 13 14, 18 8 C22 3, 26 16, 30 11 C31 10, 31.5 11, 32 12" stroke="currentColor" strokeWidth="2" fill="none" />
-                  <polygon points="32,12 28,10 28,14" fill="currentColor" />
-                </svg>
-              </button>
-              
-              <button
-                onClick={() => setLineType('curve-line')}
-                className={`px-3 py-2 rounded transition-all ${
-                  lineType === 'curve-line' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                }`}
-                title="Linia krzywa bez grotów"
-              >
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                  <path d="M4 12 Q 18 4, 36 12" stroke="currentColor" strokeWidth="2" fill="none" />
-                </svg>
-              </button>
-
-              <div className="w-px h-8 bg-white/10"></div>
-              
-              {/* Kolor linii */}
-              <div className="flex items-center gap-2 relative">
-                <span className="text-sm text-slate-400">Kolor:</span>
-                {/* Ukryty natywny color picker */}
-                <input
-                  ref={lineColorInputRef}
-                  type="color"
-                  value={lineColor}
-                  onChange={(e) => {
-                    setLineColor(e.target.value);
-                    setOpenColorPalette(null);
-                  }}
-                  className="hidden"
-                />
-                {/* Widoczny przycisk koloru */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenColorPalette(openColorPalette === 'line' ? null : 'line');
-                  }}
-                  className="w-8 h-8 rounded cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all"
-                  style={{ backgroundColor: lineColor }}
-                  title="Kolor linii"
-                />
-                {openColorPalette === 'line' && (
-                  <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 flex gap-1 shadow-xl z-50">
-                    {quickColorPalette.map((colorItem) => (
-                      <button
-                        key={colorItem.color}
-                        onClick={() => {
-                          setLineColor(colorItem.color);
-                          setOpenColorPalette(null);
-                        }}
-                        className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all"
-                        style={{ backgroundColor: colorItem.color }}
-                        title={colorItem.name}
-                      />
-                    ))}
-                    {/* Przycisk RGB */}
-                    <button
-                      onClick={() => lineColorInputRef.current?.click()}
-                      className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all bg-gradient-to-br from-red-500 via-green-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
-                      title="Wybór RGB"
-                    >
-                      RGB
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            )}
-
-            {/* Opcje stref */}
-            {drawingTool === 'zone' && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-slate-400 font-medium">Typ strefy:</span>
-                  
-                  {/* Prostokąt */}
-                  <button
-                    onClick={() => setZoneType('rectangle')}
-                    className={`p-3 rounded-lg transition-all ${
-                      zoneType === 'rectangle' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                    title="Prostokąt (kliknij i przeciągnij)"
-                  >
-                    <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                      <rect x="4" y="4" width="32" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                  </button>
-
-                  {/* Koło */}
-                  <button
-                    onClick={() => setZoneType('circle')}
-                    className={`p-3 rounded-lg transition-all ${
-                      zoneType === 'circle' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                    title="Koło (kliknij i przeciągnij)"
-                  >
-                    <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                      <circle cx="20" cy="12" r="8" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                  </button>
-
-                  {/* Wielokąt */}
-                  <button
-                    onClick={() => setZoneType('polygon')}
-                    className={`p-3 rounded-lg transition-all ${
-                      zoneType === 'polygon' ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                    title="Wielokąt (klikaj punkty, zamknij klikając pierwszy punkt)"
-                  >
-                    <svg width="40" height="24" viewBox="0 0 40 24" fill="none">
-                      <path d="M 20 4 L 35 10 L 30 20 L 10 20 L 5 10 Z" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                  </button>
-
-                  <div className="w-px h-8 bg-white/10"></div>
-                  
-                  {/* Kolor strefy */}
-                  <div className="flex items-center gap-2 relative">
-                    <span className="text-sm text-slate-400">Kolor:</span>
-                    {/* Ukryty natywny color picker */}
-                    <input
-                      ref={zoneColorInputRef}
-                      type="color"
-                      value={zoneColor}
-                      onChange={(e) => {
-                        setZoneColor(e.target.value);
-                        setOpenColorPalette(null);
-                      }}
-                      className="hidden"
-                    />
-                    {/* Widoczny przycisk koloru */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenColorPalette(openColorPalette === 'zone' ? null : 'zone');
-                      }}
-                      className="w-8 h-8 rounded cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all"
-                      style={{ backgroundColor: zoneColor }}
-                      title="Kolor strefy"
-                    />
-                    {openColorPalette === 'zone' && (
-                      <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 flex gap-1 shadow-xl z-50">
-                        {quickColorPalette.map((colorItem) => (
-                          <button
-                            key={colorItem.color}
-                            onClick={() => {
-                              setZoneColor(colorItem.color);
-                              setOpenColorPalette(null);
-                            }}
-                            className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all"
-                            style={{ backgroundColor: colorItem.color }}
-                            title={colorItem.name}
-                          />
-                        ))}
-                        {/* Przycisk RGB */}
-                        <button
-                          onClick={() => zoneColorInputRef.current?.click()}
-                          className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all bg-gradient-to-br from-red-500 via-green-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
-                          title="Wybór RGB"
-                        >
-                          RGB
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Przezroczystość */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">Przezroczystość:</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={zoneOpacity}
-                      onChange={(e) => setZoneOpacity(parseFloat(e.target.value))}
-                      className="w-24"
-                      title="Przezroczystość strefy"
-                    />
-                    <span className="text-xs text-slate-400 w-8">{Math.round(zoneOpacity * 100)}%</span>
-                  </div>
-                </div>
-
-                {/* Instrukcja dla wielokąta */}
-                {zoneType === 'polygon' && (
-                  <div className="text-xs text-slate-400 bg-blue-500/10 border border-blue-500/20 rounded-lg p-2">
-                    💡 Klikaj na boisku, aby dodać punkty wielokąta. Kliknij pierwszy punkt ponownie, aby zamknąć kształt.
-                    {polygonPoints.length > 0 && ` (Punktów: ${polygonPoints.length})`}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Rozwijany panel dla Przesuwania - widoczny na mobile i desktop */}
-      {expandedPanel === 'move' && !isDrawingMode && (
-        <div className="md:hidden bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 py-3">
-          <div>
-            <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
-              <span className="text-sm text-slate-400">Tryb przesuwania zawodników, linii i stref aktywny</span>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="font-mono bg-white/5 px-2 py-1 rounded">Delete</span>
-                <span>usuń</span>
-                <span className="mx-1">|</span>
-                <span className="font-mono bg-white/5 px-2 py-1 rounded">Ctrl+C</span>
-                <span>kopiuj</span>
-                <span className="mx-1">|</span>
-                <span className="font-mono bg-white/5 px-2 py-1 rounded">Ctrl+V</span>
-                <span>wklej</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              
-              {/* Przyciski dla zaznaczonej linii */}
-              {selectedLineIndex !== null && (
-                <>
-                  <button
-                    onClick={() => {
-                      setClipboard({
-                        type: 'line',
-                        data: { ...lines[selectedLineIndex] }
-                      });
-                      setShowCopyNotification(true);
-                      setTimeout(() => setShowCopyNotification(false), 2000);
-                    }}
-                    className="px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg text-sm text-blue-300 transition-all"
-                    title="Ctrl+C"
-                  >
-                    📋 Kopiuj linię
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newLines = lines.filter((_, index) => index !== selectedLineIndex);
-                      setLines(newLines);
-                      setSelectedLineIndex(null);
-                      if (currentScheme) {
-                        const updatedScheme = {
-                          ...currentScheme,
-                          frames: currentScheme.frames.map((f, i) => 
-                            i === currentFrame ? { ...players, lines: newLines, zones: zones } : f
-                          )
-                        };
-                        updateCurrentScheme(updatedScheme);
-                      }
-                    }}
-                    className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-all"
-                    title="Delete"
-                  >
-                    🗑️ Usuń linię
-                  </button>
-                </>
-              )}
-              
-              {/* Przyciski dla zaznaczonej strefy */}
-              {selectedZoneIndex !== null && (
-                <>
-                  <button
-                    onClick={() => {
-                      setClipboard({
-                        type: 'zone',
-                        data: { ...zones[selectedZoneIndex] }
-                      });
-                      setShowCopyNotification(true);
-                      setTimeout(() => setShowCopyNotification(false), 2000);
-                    }}
-                    className="px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg text-sm text-blue-300 transition-all"
-                    title="Ctrl+C"
-                  >
-                    📋 Kopiuj strefę
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newZones = zones.filter((_, index) => index !== selectedZoneIndex);
-                      setZones(newZones);
-                      setSelectedZoneIndex(null);
-                      if (currentScheme) {
-                        const updatedScheme = {
-                          ...currentScheme,
-                          frames: currentScheme.frames.map((f, i) => 
-                            i === currentFrame ? { ...players, lines: lines, zones: newZones } : f
-                          )
-                        };
-                        updateCurrentScheme(updatedScheme);
-                      }
-                    }}
-                    className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-all"
-                    title="Delete"
-                  >
-                    🗑️ Usuń strefę
-                  </button>
-                </>
-              )}
-              
-              {/* Przycisk wklej */}
-              {clipboard && (
-                <button
-                  onClick={() => {
-                    if (clipboard.type === 'line') {
-                      const newLine = {
-                        ...clipboard.data,
-                        startX: clipboard.data.startX + 20,
-                        startY: clipboard.data.startY + 20,
-                        endX: clipboard.data.endX + 20,
-                        endY: clipboard.data.endY + 20
-                      };
-                      
-                      if (newLine.controlX !== undefined && newLine.controlY !== undefined) {
-                        newLine.controlX += 20;
-                        newLine.controlY += 20;
-                      }
-                      
-                      const newLines = [...lines, newLine];
-                      setLines(newLines);
-                      setSelectedLineIndex(newLines.length - 1);
-                      setSelectedZoneIndex(null);
-                      
-                      if (currentScheme) {
-                        const updatedScheme = {
-                          ...currentScheme,
-                          frames: currentScheme.frames.map((f, i) => 
-                            i === currentFrame ? { ...players, lines: newLines, zones: zones } : f
-                          )
-                        };
-                        updateCurrentScheme(updatedScheme);
-                      }
-                    } else if (clipboard.type === 'zone') {
-                      const newZone = { ...clipboard.data };
-                      
-                      if (newZone.type === 'rectangle') {
-                        newZone.x += 20;
-                        newZone.y += 20;
-                      } else if (newZone.type === 'circle') {
-                        newZone.centerX += 20;
-                        newZone.centerY += 20;
-                      } else if (newZone.type === 'polygon' && newZone.points) {
-                        newZone.points = newZone.points.map(point => ({
-                          x: point.x + 20,
-                          y: point.y + 20
-                        }));
-                      }
-                      
-                      const newZones = [...zones, newZone];
-                      setZones(newZones);
-                      setSelectedZoneIndex(newZones.length - 1);
-                      setSelectedLineIndex(null);
-                      
-                      if (currentScheme) {
-                        const updatedScheme = {
-                          ...currentScheme,
-                          frames: currentScheme.frames.map((f, i) => 
-                            i === currentFrame ? { ...players, lines: lines, zones: newZones } : f
-                          )
-                        };
-                        updateCurrentScheme(updatedScheme);
-                      }
-                    }
-                  }}
-                  className="px-3 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg text-sm text-green-300 transition-all"
-                  title="Ctrl+V"
-                >
-                  📌 Wklej {clipboard.type === 'line' ? 'linię' : 'strefę'}
-                </button>
-              )}
-              
-              {lines.length > 0 && (
-                <button
-                  onClick={() => {
-                    setLines([]);
-                    setSelectedLineIndex(null);
-                    if (currentScheme) {
-                      const updatedScheme = {
-                        ...currentScheme,
-                        frames: currentScheme.frames.map((f, i) => 
-                          i === currentFrame ? { ...players, lines: [], zones: zones } : f
-                        )
-                      };
-                      updateCurrentScheme(updatedScheme);
-                    }
-                  }}
-                  className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-all"
-                >
-                  🗑️ Wyczyść wszystkie linie
-                </button>
-              )}
-              {zones.length > 0 && (
-                <button
-                  onClick={() => {
-                    setZones([]);
-                    setSelectedZoneIndex(null);
-                    if (currentScheme) {
-                      const updatedScheme = {
-                        ...currentScheme,
-                        frames: currentScheme.frames.map((f, i) => 
-                          i === currentFrame ? { ...players, lines: lines, zones: [] } : f
-                        )
-                      };
-                      updateCurrentScheme(updatedScheme);
-                    }
-                  }}
-                  className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-all"
-                >
-                  🗑️ Wyczyść wszystkie strefy
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Wrapper dla 3 paneli */}
       <div className="flex flex-1 overflow-hidden relative">
@@ -5490,7 +4970,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         )}
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
           {currentScheme && canvasHint && (
-            <div className="hidden md:block pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg whitespace-nowrap">
+            <div className={`${polygonPoints.length ? '' : 'hidden md:block'} pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-10 max-w-[92%] text-center px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg md:whitespace-nowrap`}>
               {canvasHint}
             </div>
           )}
@@ -5568,7 +5048,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
               <div className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
                 {currentFrame + 1} / {currentScheme.frames.length}
               </div>
-              <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden flex-shrink-0">
+              <div className="hidden sm:block w-20 h-1.5 bg-white/10 rounded-full overflow-hidden flex-shrink-0">
                 <div
                   className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300"
                   style={{ width: `${((currentFrame + interpolationProgress) / currentScheme.frames.length) * 100}%` }}
@@ -5577,10 +5057,12 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
               <button
                 onClick={addFrame}
+                title="Dodaj klatkę (kopia bieżącej)"
+                aria-label="Dodaj klatkę"
                 className="control-btn px-2 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded font-medium flex items-center gap-1 whitespace-nowrap text-xs flex-shrink-0"
               >
                 <Plus size={14} />
-                Dodaj klatkę
+                <span className="hidden sm:inline">Dodaj klatkę</span>
               </button>
               <button
                 onClick={() => deleteFrame(currentFrame)}
@@ -5589,17 +5071,17 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
                 title="Usuń bieżącą klatkę"
               >
                 <Minus size={14} />
-                Usuń klatkę
+                <span className="hidden sm:inline">Usuń klatkę</span>
               </button>
               
               <button
                 onClick={exportAnimationToMP4}
                 className="control-btn px-2 py-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed rounded font-medium flex items-center gap-1 whitespace-nowrap text-xs flex-shrink-0"
-                title="Pobierz animację jako MP4 (zwolnione tempo, z liniami ruchu)"
+                title="Pobierz animację jako MP4 (zwolnione tempo, z liniami ruchu)" aria-label="Pobierz animację"
                 disabled={!currentScheme || currentScheme.frames.length < 2}
               >
                 <Download size={14} />
-                Pobierz animację
+                <span className="hidden sm:inline">Pobierz animację</span>
               </button>
               
               {/* Podgląd klatek - po prawej */}
@@ -5687,36 +5169,18 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           </div>
         )}
         {/* Mobilna dolna nawigacja */}
-        <div className="flex md:hidden items-center justify-around bg-slate-950/90 border-t border-white/10 py-1" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <button
-            onClick={() => { setLeftPanelOpen(v => !v); setRightPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${leftPanelOpen ? 'text-blue-400' : 'text-slate-400'}`}
-          >
-            <span className="text-xl">☰</span>
-            <span className="text-[10px]">Fazy</span>
-          </button>
-          <button
-            onClick={() => { setIsDrawingMode(false); setExpandedPanel(expandedPanel === 'move' ? null : 'move'); setLeftPanelOpen(false); setRightPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${!isDrawingMode && expandedPanel === 'move' ? 'text-blue-400' : 'text-slate-400'}`}
-          >
-            <span className="text-xl">🖱️</span>
-            <span className="text-[10px]">Ruch</span>
-          </button>
-          <button
-            onClick={() => { setIsDrawingMode(true); setExpandedPanel(expandedPanel === 'draw' ? null : 'draw'); setLeftPanelOpen(false); setRightPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${isDrawingMode && expandedPanel === 'draw' ? 'text-blue-400' : 'text-slate-400'}`}
-          >
-            <span className="text-xl">✏️</span>
-            <span className="text-[10px]">Rysuj</span>
-          </button>
-          <button
-            onClick={() => { setRightPanelOpen(v => !v); setLeftPanelOpen(false); }}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-lg transition-all ${rightPanelOpen ? 'text-blue-400' : 'text-slate-400'}`}
-          >
-            <span className="text-xl">📋</span>
-            <span className="text-[10px]">Szczegóły</span>
-          </button>
-        </div>
+        <nav className="md:hidden flex-shrink-0 grid grid-cols-2 bg-slate-950/95 border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          {[
+            ['left', <Layers size={20} />, 'Fazy i schematy', leftPanelOpen, () => { setLeftPanelOpen(v => !v); setRightPanelOpen(false); }],
+            ['right', <SlidersHorizontal size={20} />, 'Szczegóły', rightPanelOpen, () => { setRightPanelOpen(v => !v); setLeftPanelOpen(false); }],
+          ].map(([id, icon, label, active, onClick]) => (
+            <button key={id} onClick={onClick}
+              className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition-colors ${active ? 'text-blue-400' : 'text-slate-300'}`}>
+              {icon}
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {/* Prawy panel - Szczegóły schematu */}
@@ -5727,6 +5191,30 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         ${rightPanelOpen ? 'translate-x-0' : 'translate-x-full'}
         md:translate-x-0
       `}>
+        <div className="md:hidden p-4 border-b border-white/10 space-y-3">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Drużyny</p>
+          <div className="flex items-center gap-4 text-sm text-slate-300">
+            <span className="flex items-center gap-2">{colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'left')} Drużyna</span>
+            <span className="flex items-center gap-2">{colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'left')} Przeciwnik</span>
+          </div>
+          {gameFormat === '11v11' && (
+            <div className="grid grid-cols-2 gap-2">
+              {[['team', 'Formacja drużyny'], ['opponent', 'Formacja przeciwnika']].map(([side, label]) => (
+                <div key={side}>
+                  <p className="text-xs text-slate-400 mb-1">{label}</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
+                      <button key={f} onClick={() => applyFormation(side, f)}
+                        className="h-8 rounded-md text-xs font-mono bg-white/5 hover:bg-white/15 text-slate-200">
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="p-6 border-b border-white/10">
           <h2 className="text-xl font-bold mb-4">Szczegóły schematu</h2>
           

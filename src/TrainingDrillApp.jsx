@@ -4,7 +4,7 @@ import {
   Copy, ClipboardPaste, CopyPlus, Undo2, Redo2, Image as ImageIcon, Play, Pause, Keyboard, Search, Upload, Download,
   SlidersHorizontal, ChevronDown,
 } from 'lucide-react';
-import { drawField, drawLine, drawZone } from './utils/draw.js';
+import { drawField, drawLine, drawZone, drawPlayerLabel } from './utils/draw.js';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
@@ -401,10 +401,8 @@ function drawPlayerItem(ctx, item, selected) {
   ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.fill();
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.stroke();
   ctx.rotate(-rotation);
-  ctx.fillStyle = '#ffffff';
   ctx.font = `bold ${Math.max(9, Math.round(r * 0.7))}px Outfit, Arial, sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(label), 0, 0);
+  drawPlayerLabel(ctx, label, 0, 0, r, color);
   ctx.restore();
 }
 

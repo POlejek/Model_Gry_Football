@@ -209,6 +209,37 @@ export const drawField = (ctx, gameFormat) => {
     ctx.setLineDash([]);
   };
 
+const isLightColor = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.65;
+};
+
+// White text fits inside the player's circle. A longer label (e.g. a name) spills onto the light
+// pitch, where white is invisible, so it switches to dark text with a white halo that reads on both.
+// On a light circle (yellow, white) the text is dark too. Expects ctx.font to be set by the caller.
+export const drawPlayerLabel = (ctx, text, x, y, radius, circleColor) => {
+  const label = String(text ?? '');
+  if (!label) return;
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (ctx.measureText(label).width > radius * 1.7) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.strokeText(label, x, y);
+    ctx.fillStyle = '#0f172a';
+  } else {
+    ctx.fillStyle = isLightColor(circleColor) ? '#0f172a' : '#ffffff';
+  }
+  ctx.fillText(label, x, y);
+  ctx.restore();
+};
+
 export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = "#1a365d", opponentColor = "#8b0000", gameFormat = "11v11", selectedPlayer = null) => {
     ctx.save();
     
@@ -264,11 +295,8 @@ export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = 
     
     // Numer (obrócony z powrotem aby był zawsze poziomy)
     ctx.rotate(-(player.rotation || 0));
-    ctx.fillStyle = '#ffffff';
     ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(player.number, 0, 0);
+    drawPlayerLabel(ctx, player.number, 0, 0, playerRadius, color);
     ctx.rotate(player.rotation || 0);
     
     ctx.restore();

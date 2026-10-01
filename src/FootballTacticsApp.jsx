@@ -7,7 +7,7 @@ import {
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
-import { drawField, drawPlayer, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers } from './utils/draw.js';
+import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers } from './utils/draw.js';
 import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
@@ -879,11 +879,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 12px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(player.number, player.x, player.y);
+      drawPlayerLabel(ctx, player.number, player.x, player.y, playerRadius, playerColor);
 
       const arrowLength = playerRadius + 8;
       ctx.strokeStyle = playerColor;
@@ -910,11 +907,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 12px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(player.number, player.x, player.y);
+      drawPlayerLabel(ctx, player.number, player.x, player.y, playerRadius, playerColor);
 
       const arrowLength = playerRadius + 8;
       ctx.strokeStyle = playerColor;
@@ -1768,11 +1762,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       ctx.stroke();
       
       ctx.rotate(-(player.rotation || 0));
-      ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${fontSize}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(player.number, 0, 0);
+      drawPlayerLabel(ctx, player.number, 0, 0, playerRadius, playerColor);
       
       ctx.restore();
     });
@@ -1814,11 +1805,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       ctx.stroke();
       
       ctx.rotate(-(player.rotation || 0));
-      ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${fontSize}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(player.number, 0, 0);
+      drawPlayerLabel(ctx, player.number, 0, 0, playerRadius, playerColor);
       
       ctx.restore();
     });

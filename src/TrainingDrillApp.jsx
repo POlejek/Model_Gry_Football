@@ -570,13 +570,11 @@ function loadDraft() {
   return { ...normalizeDrill(), name: '', drillId: null };
 }
 
-// Built synchronously (not via async toBlob) so the click stays inside the user gesture and the
-// browser keeps the file name; a blob URL avoids Chrome's size limit on data-URL downloads.
-function downloadCanvas(canvas, fileName) {
-  const bin = atob(canvas.toDataURL('image/png').split(',')[1]);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+const DRILL_FORMAT = 'model-gry-training-drill';
+const LIBRARY_FORMAT = 'model-gry-training-library';
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
@@ -584,6 +582,45 @@ function downloadCanvas(canvas, fileName) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+const downloadJson = (data, fileName) =>
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), fileName);
+
+// Built synchronously (not via async toBlob) so the click stays inside the user gesture and the
+// browser keeps the file name; a blob URL avoids Chrome's size limit on data-URL downloads.
+function downloadCanvas(canvas, fileName) {
+  const bin = atob(canvas.toDataURL('image/png').split(',')[1]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  downloadBlob(new Blob([bytes], { type: 'image/png' }), fileName);
+}
+
+function toLibraryEntry(d, fallbackName) {
+  if (!d || !(Array.isArray(d.frames) || Array.isArray(d.items))) return null;
+  const n = normalizeDrill(d);
+  const now = new Date().toISOString();
+  return {
+    id: typeof d.id === 'string' ? d.id : null,
+    name: String(d.name || fallbackName || 'Ćwiczenie').trim(),
+    createdAt: d.createdAt || now,
+    updatedAt: d.updatedAt || now,
+    version: 2,
+    frames: n.frames, pitch: n.pitch, meta: n.meta, teamAColor: n.teamAColor, teamBColor: n.teamBColor,
+  };
+}
+
+// Accepts a single-drill file or a whole-library file; returns library entries.
+function parseDrillFile(data, fileName) {
+  const base = fileName.replace(/\.json$/i, '');
+  if (data?.format === LIBRARY_FORMAT && Array.isArray(data.drills)) {
+    return data.drills.map(d => toLibraryEntry(d, base)).filter(Boolean);
+  }
+  if (data?.format === DRILL_FORMAT) {
+    const entry = toLibraryEntry(data, base);
+    return entry ? [entry] : [];
+  }
+  return [];
 }
 
 function wrapText(ctx, text, maxWidth) {
@@ -1280,12 +1317,22 @@ export default function TrainingDrillApp() {
   };
 
   // ── Library ──────────────────────────────────────────────────────
-  const flash = (text) => { setLibraryMsg(text); setTimeout(() => setLibraryMsg(null), 2500); };
+  const flashTimerRef = useRef(null);
+  const flash = (text, tone = 'ok') => {
+    setLibraryMsg({ text, tone });
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setLibraryMsg(null), 5000);
+  };
 
   const persistLibrary = (list) => {
+    try {
+      localStorage.setItem('trainingDrillLibrary', JSON.stringify(list));
+    } catch {
+      flash('Brak miejsca w pamięci przeglądarki', 'warn');
+      return false;
+    }
     setSavedDrills(list);
-    try { localStorage.setItem('trainingDrillLibrary', JSON.stringify(list)); }
-    catch { flash('Brak miejsca w pamięci przeglądarki'); }
+    return true;
   };
 
   const snapshot = () => ({ version: 2, frames, pitch, meta, teamAColor, teamBColor });
@@ -1306,10 +1353,10 @@ export default function TrainingDrillApp() {
     if (asNew && savedDrills.some(d => d.id === currentDrillId && d.name === name)) name += ' (kopia)';
     const now = new Date().toISOString();
     if (currentDrillId && !asNew && savedDrills.some(d => d.id === currentDrillId)) {
-      persistLibrary(savedDrills.map(d => (d.id === currentDrillId ? { id: d.id, createdAt: d.createdAt, ...snapshot(), name, updatedAt: now } : d)));
+      if (!persistLibrary(savedDrills.map(d => (d.id === currentDrillId ? { id: d.id, createdAt: d.createdAt, ...snapshot(), name, updatedAt: now } : d)))) return;
     } else {
       const id = `drill-${Date.now()}`;
-      persistLibrary([{ id, name, createdAt: now, updatedAt: now, ...snapshot() }, ...savedDrills]);
+      if (!persistLibrary([{ id, name, createdAt: now, updatedAt: now, ...snapshot() }, ...savedDrills])) return;
       setCurrentDrillId(id);
     }
     setDrillName(name);
@@ -1339,31 +1386,54 @@ export default function TrainingDrillApp() {
   };
 
   const exportDrill = () => {
-    const data = { format: 'model-gry-training-drill', name: drillName.trim() || 'cwiczenie', ...snapshot() };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `${safeFileName(drillName)}.json`; a.click();
-    URL.revokeObjectURL(url);
+    const data = { format: DRILL_FORMAT, name: drillName.trim() || 'cwiczenie', ...snapshot() };
+    downloadJson(data, `${safeFileName(drillName)}.json`);
   };
 
-  const importDrill = (e) => {
-    const file = e.target.files?.[0];
+  const exportLibrary = () => {
+    if (!savedDrills.length) return;
+    const date = new Date().toISOString().slice(0, 10);
+    downloadJson(
+      { format: LIBRARY_FORMAT, version: 2, exportedAt: new Date().toISOString(), drills: savedDrills },
+      `biblioteka_cwiczen_${date}.json`,
+    );
+  };
+
+  const importFiles = async (e) => {
+    const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+    if (!files.length) return;
+
+    const incoming = [];
+    let badFiles = 0;
+    await Promise.all(files.map(async (file) => {
       try {
-        const d = JSON.parse(reader.result);
-        if (d.format !== 'model-gry-training-drill' || !(Array.isArray(d.frames) || Array.isArray(d.items))) throw new Error();
-        applyDrill(d);
-        setCurrentDrillId(null);
-        setDrillName(d.name || file.name.replace(/\.json$/i, ''));
-        flash('Wczytano z pliku — zapisz, aby dodać do biblioteki');
+        const drills = parseDrillFile(JSON.parse(await file.text()), file.name);
+        if (!drills.length) throw new Error();
+        incoming.push(...drills);
       } catch {
-        flash('Nieprawidłowy plik ćwiczenia');
+        badFiles++;
       }
-    };
-    reader.readAsText(file);
+    }));
+
+    let skipped = 0;
+    const added = [];
+    incoming.forEach((d, i) => {
+      const known = [...added, ...savedDrills];
+      if (d.id && known.some(x => x.id === d.id && x.updatedAt === d.updatedAt)) { skipped++; return; }
+      const idTaken = !d.id || known.some(x => x.id === d.id);
+      added.push({ ...d, id: idTaken ? `drill-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}` : d.id });
+    });
+    const list = [...added, ...savedDrills];
+
+    const parts = [`Zaimportowano: ${added.length}`];
+    if (skipped) parts.push(`pominięte duplikaty: ${skipped}`);
+    if (badFiles) parts.push(`błędne pliki: ${badFiles}`);
+    if (added.length && !persistLibrary(list)) parts.push('brak miejsca w pamięci przeglądarki');
+    flash(parts.join(' · '), badFiles ? 'warn' : 'ok');
+
+    if (added.length === 1) loadDrill(added[0]);
+    else if (added.length > 1) setShowLibrary(true);
   };
 
   const clearFrame = () => {
@@ -1486,14 +1556,24 @@ export default function TrainingDrillApp() {
               </button>
               <button onClick={newDrill} className={btn}>＋ Nowe</button>
               <button onClick={() => setShowMeta(true)} className={`${btn} col-span-2`}>📝 Opis ćwiczenia</button>
-              <button onClick={exportDrill} className={btn}>⬇ Eksport</button>
-              <button onClick={() => importInputRef.current?.click()} className={btn}>⬆ Import</button>
-              <input ref={importInputRef} type="file" accept=".json,application/json" onChange={importDrill} className="hidden" />
+              <button onClick={exportDrill} className={btn} title="Zapisz bieżące ćwiczenie do pliku .json">⬇ Eksport</button>
+              <button onClick={() => importInputRef.current?.click()} className={btn}
+                title="Wczytaj jeden lub wiele plików .json (ćwiczenia lub całe biblioteki)">
+                ⬆ Import
+              </button>
+              <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
             </div>
-            {libraryMsg && <p className="text-xs text-emerald-300 mt-2">{libraryMsg}</p>}
+            {libraryMsg && (
+              <p className={`text-xs mt-2 ${libraryMsg.tone === 'warn' ? 'text-amber-300' : 'text-emerald-300'}`}>{libraryMsg.text}</p>
+            )}
 
             {showLibrary && (
               <div className="mt-2 flex flex-col gap-1 max-h-60 overflow-y-auto">
+                {savedDrills.length > 0 && (
+                  <button onClick={exportLibrary} className={`${btn} mb-1`} title="Wszystkie ćwiczenia w jednym pliku .json">
+                    ⬇ Eksportuj całą bibliotekę ({savedDrills.length})
+                  </button>
+                )}
                 {savedDrills.length === 0 && <p className="text-xs text-slate-500">Brak zapisanych ćwiczeń.</p>}
                 {savedDrills.map(d => (
                   <div key={d.id}

@@ -125,3 +125,55 @@ export const isPointNearPolygonVertex = (px, py, zone, threshold = 10) => {
   };
 
   // Funkcja rysująca strefę
+
+// ── Resize handles for rectangle / circle zones ─────────────────────
+const rectBounds = (z) => ({
+  x0: Math.min(z.x, z.x + z.width), x1: Math.max(z.x, z.x + z.width),
+  y0: Math.min(z.y, z.y + z.height), y1: Math.max(z.y, z.y + z.height),
+});
+
+// Handle ids are compass directions; corners combine two (e.g. 'nw').
+export const getZoneHandles = (zone) => {
+  if (zone.type === 'rectangle') {
+    const { x0, x1, y0, y1 } = rectBounds(zone);
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    return [
+      { id: 'nw', x: x0, y: y0 }, { id: 'ne', x: x1, y: y0 }, { id: 'se', x: x1, y: y1 }, { id: 'sw', x: x0, y: y1 },
+      { id: 'n', x: mx, y: y0 }, { id: 'e', x: x1, y: my }, { id: 's', x: mx, y: y1 }, { id: 'w', x: x0, y: my },
+    ];
+  }
+  if (zone.type === 'circle') {
+    const { centerX: cx, centerY: cy, radius: r } = zone;
+    return [{ id: 'n', x: cx, y: cy - r }, { id: 'e', x: cx + r, y: cy }, { id: 's', x: cx, y: cy + r }, { id: 'w', x: cx - r, y: cy }];
+  }
+  return [];
+};
+
+export const hitZoneHandle = (px, py, zone, threshold = 10) =>
+  getZoneHandles(zone).find(h => Math.hypot(px - h.x, py - h.y) < threshold)?.id ?? null;
+
+export const zoneHandleCursor = (handle) => ({
+  nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+}[handle] || 'default');
+
+// Resizes from the zone as it was when the drag started; the opposite side stays put.
+export const resizeZone = (original, handle, px, py) => {
+  if (original.type === 'circle') {
+    return { ...original, radius: Math.max(10, Math.hypot(px - original.centerX, py - original.centerY)) };
+  }
+  let { x0, x1, y0, y1 } = rectBounds(original);
+  if (handle.includes('w')) x0 = px;
+  if (handle.includes('e')) x1 = px;
+  if (handle.includes('n')) y0 = py;
+  if (handle.includes('s')) y1 = py;
+  const nx0 = Math.min(x0, x1), ny0 = Math.min(y0, y1);
+  return { ...original, x: nx0, y: ny0, width: Math.max(10, Math.abs(x1 - x0)), height: Math.max(10, Math.abs(y1 - y0)) };
+};
+
+// "Free corners": the rectangle becomes a 4-point polygon whose vertices move independently.
+export const rectangleToPolygon = (zone) => {
+  const { x0, x1, y0, y1 } = rectBounds(zone);
+  const { x, y, width, height, ...rest } = zone;
+  return { ...rest, type: 'polygon', points: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] };
+};

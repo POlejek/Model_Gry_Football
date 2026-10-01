@@ -1,3 +1,4 @@
+import { getZoneHandles } from './geometry.js';
 // Czyste funkcje rysowania canvas — nie zależą od stanu React
 
 export const drawField = (ctx, gameFormat) => {
@@ -446,7 +447,24 @@ export const drawBall = (ctx, ball, gameFormat = "11v11") => {
 
   // Funkcja sprawdzająca czy punkt (px, py) jest blisko linii
 
-export const drawZone = (ctx, zone, isSelected = false, zoneColor = "#ff0000", zoneOpacity = 0.3) => {
+const drawZoneResizeHandles = (ctx, zone, scale) => {
+    const size = 8 * scale;
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#16a34a';
+    ctx.lineWidth = 2;
+    getZoneHandles(zone).forEach(h => {
+      ctx.beginPath();
+      ctx.rect(h.x - size / 2, h.y - size / 2, size, size);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  };
+
+export const drawZone = (ctx, zone, isSelected = false, zoneColor = "#ff0000", zoneOpacity = 0.3, handleScale = 1) => {
     ctx.save();
     ctx.fillStyle = zone.color || zoneColor;
     ctx.globalAlpha = zone.opacity || zoneOpacity;
@@ -495,6 +513,7 @@ export const drawZone = (ctx, zone, isSelected = false, zoneColor = "#ff0000", z
     }
 
     ctx.restore();
+    if (isSelected && handleScale > 0 && (zone.type === 'rectangle' || zone.type === 'circle')) drawZoneResizeHandles(ctx, zone, handleScale);
   };
 
 export const drawLine = (ctx, line, isSelected = false) => {

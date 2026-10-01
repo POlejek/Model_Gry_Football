@@ -8,7 +8,7 @@ import { drawField, drawLine, drawZone, drawPlayerLabel } from './utils/draw.js'
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
-  isPointInZone, isPointNearPolygonVertex,
+  isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 
 // ── Pitch ────────────────────────────────────────────────────────
@@ -477,7 +477,7 @@ function renderScene(ctx, { pitchImg, frame, prevFrame = null, selectedIds = [],
   ctx.clearRect(0, 0, w, h);
   ctx.drawImage(pitchImg, 0, 0, w, h);
 
-  frame.zones.forEach(z => withAlpha(ctx, z._alpha, () => drawZone(ctx, z, sel.has(z.id))));
+  frame.zones.forEach(z => withAlpha(ctx, z._alpha, () => drawZone(ctx, z, sel.has(z.id), undefined, undefined, sel.size === 1 ? ui : 0)));
 
   if (prevFrame) {
     const prev = new Map(prevFrame.items.map(i => [i.id, i]));
@@ -1194,6 +1194,8 @@ export default function TrainingDrillApp({ active = true }) {
     if (single?.kind === 'zones') {
       const vi = isPointNearPolygonVertex(x, y, single.obj, 10 * uiScale);
       if (vi !== null) { setDrag({ type: 'vertex', id: single.obj.id, index: vi }); return; }
+      const handle = hitZoneHandle(x, y, single.obj, 10 * uiScale);
+      if (handle) { setDrag({ type: 'zone-handle', id: single.obj.id, handle, origin: single.obj }); return; }
     }
 
     setColorPicker(null);
@@ -1219,6 +1221,7 @@ export default function TrainingDrillApp({ active = true }) {
     if (single?.kind === 'items' && isNearHandle(x, y, single.obj, uiScale)) c = 'grab';
     else if (single?.kind === 'lines' && (isPointNearLineEnd(x, y, single.obj) || isPointNearControlPoint(x, y, single.obj))) c = 'grab';
     else if (single?.kind === 'zones' && isPointNearPolygonVertex(x, y, single.obj) !== null) c = 'grab';
+    else if (single?.kind === 'zones' && hitZoneHandle(x, y, single.obj, 10 * uiScale)) c = zoneHandleCursor(hitZoneHandle(x, y, single.obj, 10 * uiScale));
     else if (hitAny(x, y)) c = 'move';
     if (c !== hoverCursor) setHoverCursor(c);
   };
@@ -1250,6 +1253,11 @@ export default function TrainingDrillApp({ active = true }) {
         break;
       case 'control':
         patchObj('current', 'lines', drag.id, { controlX: x, controlY: y });
+        break;
+      case 'zone-handle':
+        updateKind('current', 'zones', list => list.map(z => (
+          z.id === drag.id ? { ...resizeZone(drag.origin, drag.handle, x, y), id: z.id } : z
+        )));
         break;
       case 'vertex':
         updateKind('current', 'zones', list => list.map(z => (
@@ -1633,7 +1641,7 @@ export default function TrainingDrillApp({ active = true }) {
 
   const canvasCursor = isPlaying ? 'default'
     : isDrawingMode ? 'crosshair'
-    : drag ? (drag.type === 'marquee' ? 'crosshair' : 'grabbing')
+    : drag ? (drag.type === 'marquee' ? 'crosshair' : drag.type === 'zone-handle' ? zoneHandleCursor(drag.handle) : 'grabbing')
     : hoverCursor;
 
   const handleDrop = (e) => {
@@ -1769,6 +1777,17 @@ export default function TrainingDrillApp({ active = true }) {
                   onChange={e => patchObj('all', 'zones', single.obj.id, { opacity: parseFloat(e.target.value) })}
                   className="w-full" />
               </div>
+              <p className="text-xs text-slate-500">
+                {single.obj.type === 'polygon'
+                  ? 'Przeciągnij wierzchołek, aby zmienić kształt.'
+                  : 'Przeciągnij biały uchwyt, aby powiększyć lub zmniejszyć strefę.'}
+              </p>
+              {single.obj.type === 'rectangle' && (
+                <button onClick={() => { checkpoint(); updateFrames('all', f => ({ ...f, zones: f.zones.map(z => (z.id === single.obj.id && z.type === 'rectangle' ? rectangleToPolygon(z) : z)) })); }}
+                  className={`${btn} py-2 text-sm`} title="Zamienia prostokąt w wielokąt — każdy róg przesuniesz niezależnie">
+                  Swobodne rogi
+                </button>
+              )}
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń strefę</button>
             </div>
           ) : single?.kind === 'items' ? (

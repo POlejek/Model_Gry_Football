@@ -2,13 +2,16 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal,
+  X, Layers, SlidersHorizontal, Pentagon,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
 import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers, findMatchingPlayer } from './utils/draw.js';
-import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex } from './utils/geometry.js';
+import {
+  isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex,
+  hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
+} from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 
@@ -115,6 +118,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   const [isDraggingZone, setIsDraggingZone] = useState(false); // Czy przeciągamy strefę
   const [zoneDragOffset, setZoneDragOffset] = useState({ x: 0, y: 0 }); // Offset przy przeciąganiu strefy
   const [isDraggingPolygonVertex, setIsDraggingPolygonVertex] = useState(false); // Czy przeciągamy wierzchołek wielokąta
+  const [zoneHandleDrag, setZoneHandleDrag] = useState(null); // { handle, origin } — zmiana rozmiaru prostokąta/koła
   const [draggedVertexIndex, setDraggedVertexIndex] = useState(null); // Indeks przeciąganego wierzchołka
   const [openColorPalette, setOpenColorPalette] = useState(null); // 'team', 'opponent', 'line', 'zone', 'player' lub null
   const [openFormationMenu, setOpenFormationMenu] = useState(null); // 'team', 'opponent' lub null
@@ -3033,7 +3037,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     drawField(ctx, gameFormat);
     
     // Rysuj strefy (pod liniami i zawodnikami)
-    zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex, zoneColor, zoneOpacity));
+    zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex, zoneColor, zoneOpacity, isCoarsePointer ? 1.6 : 1));
     if (currentZone) {
       drawZone(ctx, currentZone, false, zoneColor, zoneOpacity);
     }
@@ -3310,6 +3314,15 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         }
       }
       
+      // Uchwyty zmiany rozmiaru zaznaczonego prostokąta/koła
+      if (selectedZoneIndex !== null && zones[selectedZoneIndex]) {
+        const handle = hitZoneHandle(x, y, zones[selectedZoneIndex], isCoarsePointer ? 18 : 10);
+        if (handle) {
+          setZoneHandleDrag({ handle, origin: zones[selectedZoneIndex] });
+          return;
+        }
+      }
+
       // Sprawdź czy kliknięto w zaznaczoną strefę (do przesuwania)
       if (selectedZoneIndex !== null && isPointInZone(x, y, zones[selectedZoneIndex])) {
         const zone = zones[selectedZoneIndex];
@@ -3497,6 +3510,14 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       return;
     }
 
+    // Zmiana rozmiaru prostokąta/koła za uchwyt
+    if (zoneHandleDrag && selectedZoneIndex !== null) {
+      const updatedZones = [...zones];
+      updatedZones[selectedZoneIndex] = resizeZone(zoneHandleDrag.origin, zoneHandleDrag.handle, x, y);
+      setZones(updatedZones);
+      return;
+    }
+
     // Edycja wierzchołka wielokąta
     if (isDraggingPolygonVertex && selectedZoneIndex !== null && draggedVertexIndex !== null) {
       const updatedZones = [...zones];
@@ -3571,6 +3592,13 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         });
       }
       return;
+    }
+
+    // Kursor zmiany rozmiaru nad uchwytem zaznaczonej strefy
+    if (!isDragging && !isDrawingMode && canvas) {
+      const zone = selectedZoneIndex !== null ? zones[selectedZoneIndex] : null;
+      const handle = zone ? hitZoneHandle(x, y, zone, 10) : null;
+      canvas.style.cursor = handle ? zoneHandleCursor(handle) : '';
     }
 
     // Obsługa przeciągania
@@ -3684,7 +3712,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     }
 
     // Zakończ przesuwanie strefy lub edycję wierzchołków i zapisz zmiany
-    if ((isDraggingZone || isDraggingPolygonVertex) && currentScheme) {
+    if ((isDraggingZone || isDraggingPolygonVertex || zoneHandleDrag) && currentScheme) {
       const updatedScheme = {
         ...currentScheme,
         frames: currentScheme.frames.map((f, i) => 
@@ -3714,6 +3742,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     setIsDraggingLineEnd(null);
     setIsDraggingZone(false);
     setIsDraggingPolygonVertex(false);
+    setZoneHandleDrag(null);
     setDraggedVertexIndex(null);
   };
 
@@ -4320,6 +4349,17 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
             <button className={TOOLBAR_BTN} onClick={deleteSelectedDrawing} disabled={!hasDrawingSelection} title="Usuń zaznaczoną linię lub strefę (Delete)" aria-label="Usuń">
               <Trash2 size={14} /> <span className="hidden sm:inline">Usuń</span>
             </button>
+            {selectedZoneIndex !== null && zones[selectedZoneIndex]?.type === 'rectangle' && (
+              <button className={TOOLBAR_BTN} aria-label="Swobodne rogi"
+                title="Zamienia prostokąt w wielokąt — każdy róg przesuniesz niezależnie"
+                onClick={() => {
+                  const newZones = zones.map((z, i) => (i === selectedZoneIndex ? rectangleToPolygon(z) : z));
+                  setZones(newZones);
+                  saveDrawingsToScheme(lines, newZones);
+                }}>
+                <Pentagon size={14} /> <span className="hidden sm:inline">Swobodne rogi</span>
+              </button>
+            )}
             {(lines.length > 0 || zones.length > 0) && (
               <div className="relative">
                 <button className={TOOLBAR_BTN} title="Więcej: wyczyść rysunki na tej klatce" aria-label="Więcej"

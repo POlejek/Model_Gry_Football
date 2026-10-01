@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
   Trash2, Plus, Minus, X, Save, MoreHorizontal, FolderOpen, FileText, MousePointer2, MoveUpRight, Square,
   Copy, ClipboardPaste, CopyPlus, Undo2, Redo2, Image as ImageIcon, Play, Pause, Keyboard, Search, Upload, Download,
+  SlidersHorizontal, ChevronDown,
 } from 'lucide-react';
 import { drawField, drawLine, drawZone } from './utils/draw.js';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
@@ -16,7 +17,10 @@ const FULL_H = 1080;
 const CROP_H = { full: 1080, half: 560, third: 387 };
 // Drills saved before the pitch option existed were vertical; new drills start horizontal (fits laptop screens).
 const LEGACY_PITCH = { type: 'full', orientation: 'vertical', width: 30, length: 40 };
-const NEW_PITCH = { ...LEGACY_PITCH, orientation: 'horizontal' };
+const newPitch = () => ({
+  ...LEGACY_PITCH,
+  orientation: typeof window !== 'undefined' && window.innerWidth < window.innerHeight ? 'vertical' : 'horizontal',
+});
 const PITCH_TYPES = [
   { id: 'full',   label: 'Całe' },
   { id: 'half',   label: 'Połowa' },
@@ -94,24 +98,24 @@ function getItemBounds(item) {
   return { hw: Math.max(10, hw * s), hh: Math.max(10, hh * s) };
 }
 
-function hitItem(x, y, item) {
+function hitItem(x, y, item, tol = 4) {
   const r = item.rotation || 0;
   const dx = x - item.x, dy = y - item.y;
   const lx = dx * Math.cos(r) + dy * Math.sin(r);
   const ly = -dx * Math.sin(r) + dy * Math.cos(r);
   const { hw, hh } = getItemBounds(item);
-  return Math.abs(lx) <= hw + 4 && Math.abs(ly) <= hh + 4;
+  return Math.abs(lx) <= hw + tol && Math.abs(ly) <= hh + tol;
 }
 
-function handlePos(item) {
+function handlePos(item, ui = 1) {
   const r = item.rotation || 0;
-  const d = getItemBounds(item).hh + 18;
+  const d = getItemBounds(item).hh + 18 * ui;
   return { x: item.x + Math.sin(r) * d, y: item.y - Math.cos(r) * d };
 }
 
-const isNearHandle = (x, y, item) => {
-  const p = handlePos(item);
-  return Math.hypot(x - p.x, y - p.y) < 14;
+const isNearHandle = (x, y, item, ui = 1) => {
+  const p = handlePos(item, ui);
+  return Math.hypot(x - p.x, y - p.y) < 14 * ui;
 };
 
 function transformObj(kind, o, fn, dRot = 0) {
@@ -446,14 +450,14 @@ function drawItem(ctx, item, selected) {
   }
 }
 
-function drawRotationHandle(ctx, item) {
-  const p = handlePos(item);
+function drawRotationHandle(ctx, item, ui = 1) {
+  const p = handlePos(item, ui);
   ctx.save();
   ctx.strokeStyle = 'rgba(96,165,250,0.7)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
   ctx.beginPath(); ctx.moveTo(item.x, item.y); ctx.lineTo(p.x, p.y); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = '#3b82f6'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, TWO_PI); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(p.x, p.y, 7 * ui, 0, TWO_PI); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
 
@@ -470,7 +474,7 @@ function withAlpha(ctx, alpha, fn) {
   ctx.save(); ctx.globalAlpha = alpha; fn(); ctx.restore();
 }
 
-function renderScene(ctx, { pitchImg, frame, prevFrame = null, selectedIds = [], w, h }) {
+function renderScene(ctx, { pitchImg, frame, prevFrame = null, selectedIds = [], w, h, ui = 1 }) {
   const sel = new Set(selectedIds);
   ctx.clearRect(0, 0, w, h);
   ctx.drawImage(pitchImg, 0, 0, w, h);
@@ -497,7 +501,7 @@ function renderScene(ctx, { pitchImg, frame, prevFrame = null, selectedIds = [],
   if (sel.size > 1) frame.items.forEach(i => { if (sel.has(i.id)) drawSelectionBox(ctx, i); });
   if (sel.size === 1) {
     const only = frame.items.find(i => sel.has(i.id));
-    if (only) drawRotationHandle(ctx, only);
+    if (only) drawRotationHandle(ctx, only, ui);
   }
 }
 
@@ -607,7 +611,7 @@ function loadDraft() {
     const d = JSON.parse(localStorage.getItem(DRAFT_KEY));
     if (d) return { ...normalizeDrill(d), name: d.name || '', drillId: d.drillId || null };
   } catch { /* ignore corrupt draft */ }
-  return { ...normalizeDrill({ pitch: NEW_PITCH }), name: '', drillId: null };
+  return { ...normalizeDrill({ pitch: newPitch() }), name: '', drillId: null };
 }
 
 const DRILL_FORMAT = 'model-gry-training-drill';
@@ -708,6 +712,27 @@ function ColorQuickPicker({ value, onChange, isOpen, onToggle, title }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function BottomSheet({ title, onClose, children }) {
+  return (
+    <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className="relative bg-slate-900 border-t border-white/15 rounded-t-2xl max-h-[78vh] flex flex-col shadow-2xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex-shrink-0 pt-2 pb-2 px-4 border-b border-white/10">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20" />
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">{title}</h2>
+            <button onClick={onClose} className="p-1.5 -mr-1.5 text-slate-400 hover:text-white" aria-label="Zamknij"><X size={18} /></button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">{children}</div>
+      </div>
     </div>
   );
 }
@@ -892,6 +917,13 @@ export default function TrainingDrillApp({ active = true }) {
   }, []);
 
   const displayScale = boxSize.w > 0 ? Math.min(boxSize.w / pitchSize.w, boxSize.h / pitchSize.h) : 0;
+  // >1 when the pitch is shown small (phones): enlarges handles and hit areas to finger size
+  const uiScale = displayScale ? clamp(0.9 / displayScale, 1, 3) : 1;
+  const lastTouchRef = useRef(0);
+  const [isCoarsePointer] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches);
+  const [mobileSheet, setMobileSheet] = useState(null); // 'equipment' | 'inspector' | 'drill'
+  const isTouchInput = () => Date.now() - lastTouchRef.current < 1000;
+  const hitTol = () => (isTouchInput() ? 10 * uiScale : 4);
 
   // ── Render ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -901,7 +933,7 @@ export default function TrainingDrillApp({ active = true }) {
     const prevFrame = !isPlaying && showPaths && currentFrame > 0 ? frames[currentFrame - 1] : null;
     renderScene(ctx, {
       pitchImg, frame: displayFrame, prevFrame,
-      selectedIds: isPlaying ? [] : selectedIds, w: pitchSize.w, h: pitchSize.h,
+      selectedIds: isPlaying ? [] : selectedIds, w: pitchSize.w, h: pitchSize.h, ui: uiScale,
     });
 
     if (currentZone) drawZone(ctx, currentZone, false);
@@ -1041,13 +1073,27 @@ export default function TrainingDrillApp({ active = true }) {
     return String(max + 1);
   };
 
+  // first spot on rings around the centre that is at least 45 px from every item
+  const freeSpot = () => {
+    const cx = pitchSize.w / 2, cy = pitchSize.h / 2;
+    const isFree = (x, y) => frame.items.every(i => Math.hypot(i.x - x, i.y - y) >= 45);
+    for (let r = 0; r <= 400; r += 50) {
+      const steps = r === 0 ? 1 : Math.round((2 * Math.PI * r) / 50);
+      for (let k = 0; k < steps; k++) {
+        const a = (k / steps) * 2 * Math.PI;
+        const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+        if (x > 30 && x < pitchSize.w - 30 && y > 30 && y < pitchSize.h - 30 && isFree(x, y)) return { x, y };
+      }
+    }
+    return { x: cx + (Math.random() - 0.5) * 80, y: cy + (Math.random() - 0.5) * 80 };
+  };
+
   const addItem = (eq, pos = null) => {
     checkpoint();
     const id = newId();
     const item = {
       id, type: eq.type, scale: 1, rotation: 0,
-      x: pos ? clamp(pos.x, 10, pitchSize.w - 10) : pitchSize.w / 2 + (Math.random() - 0.5) * 80,
-      y: pos ? clamp(pos.y, 10, pitchSize.h - 10) : pitchSize.h / 2 + (Math.random() - 0.5) * 80,
+      ...(pos ? { x: clamp(pos.x, 10, pitchSize.w - 10), y: clamp(pos.y, 10, pitchSize.h - 10) } : freeSpot()),
       color: eq.type === 'player' ? (eq.team === 'A' ? teamAColor : teamBColor) : eq.color,
     };
     if (eq.type === 'player') { item.team = eq.team; item.label = nextLabel(i => i.type === 'player' && i.team === eq.team); }
@@ -1103,8 +1149,9 @@ export default function TrainingDrillApp({ active = true }) {
   };
 
   const hitAny = (x, y) => {
-    for (let i = frame.items.length - 1; i >= 0; i--) if (hitItem(x, y, frame.items[i])) return frame.items[i];
-    for (let i = frame.lines.length - 1; i >= 0; i--) if (isPointNearLine(x, y, frame.lines[i])) return frame.lines[i];
+    const tol = hitTol();
+    for (let i = frame.items.length - 1; i >= 0; i--) if (hitItem(x, y, frame.items[i], tol)) return frame.items[i];
+    for (let i = frame.lines.length - 1; i >= 0; i--) if (isPointNearLine(x, y, frame.lines[i], 4 + tol)) return frame.lines[i];
     for (let i = frame.zones.length - 1; i >= 0; i--) if (isPointInZone(x, y, frame.zones[i])) return frame.zones[i];
     return null;
   };
@@ -1122,7 +1169,7 @@ export default function TrainingDrillApp({ active = true }) {
     }
     if (isDrawingMode && drawingTool === 'zone') {
       if (zoneType === 'polygon') {
-        if (polygonPoints.length >= 3 && Math.hypot(x - polygonPoints[0].x, y - polygonPoints[0].y) < 12) {
+        if (polygonPoints.length >= 3 && Math.hypot(x - polygonPoints[0].x, y - polygonPoints[0].y) < 12 * uiScale) {
           const zone = { id: newId(), type: 'polygon', points: polygonPoints, color: zoneColor, opacity: zoneOpacity };
           updateKind('current', 'zones', list => [...list, zone]);
           setPolygonPoints([]);
@@ -1137,17 +1184,17 @@ export default function TrainingDrillApp({ active = true }) {
       return;
     }
 
-    if (single?.kind === 'items' && isNearHandle(x, y, single.obj)) {
+    if (single?.kind === 'items' && isNearHandle(x, y, single.obj, uiScale)) {
       setDrag({ type: 'rotate', id: single.obj.id });
       return;
     }
     if (single?.kind === 'lines') {
-      const end = isPointNearLineEnd(x, y, single.obj);
+      const end = isPointNearLineEnd(x, y, single.obj, 12 * uiScale);
       if (end) { setDrag({ type: 'line-end', id: single.obj.id, end }); return; }
-      if (isPointNearControlPoint(x, y, single.obj)) { setDrag({ type: 'control', id: single.obj.id }); return; }
+      if (isPointNearControlPoint(x, y, single.obj, 10 * uiScale)) { setDrag({ type: 'control', id: single.obj.id }); return; }
     }
     if (single?.kind === 'zones') {
-      const vi = isPointNearPolygonVertex(x, y, single.obj);
+      const vi = isPointNearPolygonVertex(x, y, single.obj, 10 * uiScale);
       if (vi !== null) { setDrag({ type: 'vertex', id: single.obj.id, index: vi }); return; }
     }
 
@@ -1171,7 +1218,7 @@ export default function TrainingDrillApp({ active = true }) {
 
   const updateHoverCursor = (x, y) => {
     let c = 'default';
-    if (single?.kind === 'items' && isNearHandle(x, y, single.obj)) c = 'grab';
+    if (single?.kind === 'items' && isNearHandle(x, y, single.obj, uiScale)) c = 'grab';
     else if (single?.kind === 'lines' && (isPointNearLineEnd(x, y, single.obj) || isPointNearControlPoint(x, y, single.obj))) c = 'grab';
     else if (single?.kind === 'zones' && isPointNearPolygonVertex(x, y, single.obj) !== null) c = 'grab';
     else if (hitAny(x, y)) c = 'move';
@@ -1262,11 +1309,18 @@ export default function TrainingDrillApp({ active = true }) {
   const handleDoubleClick = (e) => {
     if (isPlaying || isDrawingMode) return;
     const { x, y, screenX, screenY } = getCoords(e);
-    const hit = frame.items.slice().reverse().find(i => hitItem(x, y, i));
+    const hit = frame.items.slice().reverse().find(i => hitItem(x, y, i, hitTol()));
     if (hit) { setSelectedIds([hit.id]); setColorPicker({ id: hit.id, screenX, screenY }); }
   };
 
+  // Browsers replay a tap as mousedown/mouseup; ignore those so a tap is not handled twice
+  // (e.g. a polygon point added twice).
+  const fromMouse = (fn) => (e) => { if (!isTouchInput()) fn(e); };
+  const touchMove = (e) => { lastTouchRef.current = Date.now(); handlePointerMove(e); };
+  const touchEnd = (e) => { lastTouchRef.current = Date.now(); handlePointerUp(e); };
+
   const handleTouchStart = (e) => {
+    lastTouchRef.current = Date.now();
     const now = Date.now();
     if (now - lastTapRef.current < 300 && e.touches.length === 1) {
       lastTapRef.current = 0;
@@ -1493,7 +1547,7 @@ export default function TrainingDrillApp({ active = true }) {
 
   const newDrill = () => {
     if (!confirmDiscard()) return;
-    const n = applyDrill({ pitch: NEW_PITCH });
+    const n = applyDrill({ pitch: newPitch() });
     setCurrentDrillId(null);
     setDrillName('');
     setSavedSig(drillSignature({ ...n, name: '' }));
@@ -1565,14 +1619,15 @@ export default function TrainingDrillApp({ active = true }) {
     return !q || d.name.toLowerCase().includes(q) || (d.meta?.category || '').toLowerCase().includes(q);
   });
 
+  const coarse = isCoarsePointer;
   const canvasHint = isPlaying ? null
-    : tool === 'line' ? 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie'
+    : tool === 'line' ? (coarse ? 'Przeciągnij palcem, aby narysować linię' : 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie')
     : tool === 'zone' ? (zoneType === 'polygon'
       ? (polygonPoints.length
-        ? `Punkty: ${polygonPoints.length} · kliknij zielony punkt, aby zamknąć · Esc anuluje`
-        : 'Klikaj kolejne wierzchołki strefy')
-      : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie')
-    : (!hasContent ? 'Kliknij sprzęt w lewym panelu albo przeciągnij go na boisko' : null);
+        ? (coarse ? `Punkty: ${polygonPoints.length} · stuknij zielony punkt, aby zamknąć` : `Punkty: ${polygonPoints.length} · kliknij zielony punkt, aby zamknąć · Esc anuluje`)
+        : (coarse ? 'Stukaj kolejne wierzchołki strefy' : 'Klikaj kolejne wierzchołki strefy'))
+      : (coarse ? 'Przeciągnij palcem, aby narysować strefę' : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie'))
+    : (!hasContent ? (coarse ? 'Stuknij „Sprzęt” na dole, aby dodać zawodników i sprzęt' : 'Kliknij sprzęt w lewym panelu albo przeciągnij go na boisko') : null);
 
   const saveStatus = isDirty
     ? { text: currentDrillId ? 'Niezapisane zmiany' : 'Nowe ćwiczenie · niezapisane', cls: 'text-amber-300', dot: true }
@@ -1600,34 +1655,20 @@ export default function TrainingDrillApp({ active = true }) {
     </button>
   );
 
-  return (
-    <div className="flex flex-1 overflow-hidden relative">
-      <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
 
-      {/* ── Floating color picker (double click) ── */}
-      {colorPicker && colorPickerItem && (
-        <div className="fixed z-50 bg-slate-800 border border-white/20 rounded-xl shadow-2xl p-3 flex flex-col gap-2"
-          style={{ left: colorPicker.screenX, top: colorPicker.screenY, transform: 'translate(-50%,12px)', minWidth: 150 }}>
-          <p className="text-xs font-semibold text-slate-300">Kolor elementu</p>
-          <input type="color" value={colorPickerItem.color || '#ffffff'}
-            onChange={e => patchObj('all', 'items', colorPicker.id, { color: e.target.value })}
-            className="w-full h-9 rounded cursor-pointer border border-white/20 bg-transparent" />
-          <button onClick={() => setColorPicker(null)}
-            className="text-xs text-slate-400 hover:text-white py-1 hover:bg-white/10 rounded transition-colors">
-            Zamknij
-          </button>
-        </div>
-      )}
+  const renderDrillHeader = () => (
+    <>
+      <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
+        placeholder="Nazwa ćwiczenia" aria-label="Nazwa ćwiczenia" className={`${inputCls} font-medium`} />
+      <p className={`mt-1 h-4 text-[11px] flex items-center gap-1.5 ${saveStatus.cls}`}>
+        {saveStatus.dot && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+        {saveStatus.text}
+      </p>
+    </>
+  );
 
-      {/* ── Left: drill + equipment palette ── */}
-      <aside className="w-52 flex-shrink-0 bg-slate-950/80 border-r border-white/10 flex flex-col min-h-0">
-        <div className="p-3 border-b border-white/10 flex-shrink-0">
-          <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
-            placeholder="Nazwa ćwiczenia" aria-label="Nazwa ćwiczenia" className={`${inputCls} font-medium`} />
-          <p className={`mt-1 h-4 text-[11px] flex items-center gap-1.5 ${saveStatus.cls}`}>
-            {saveStatus.dot && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
-            {saveStatus.text}
-          </p>
+  const renderDrillPanel = () => (
+    <>          {renderDrillHeader()}
           <div className="mt-2 flex gap-1">
             <button onClick={() => saveDrill(false)} title="Zapisz w bibliotece (Ctrl+S)"
               className="flex-1 h-8 inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
@@ -1659,185 +1700,32 @@ export default function TrainingDrillApp({ active = true }) {
               <FileText size={13} /> Opis
             </button>
           </div>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-          <p className="text-[11px] text-slate-500">Kliknij albo przeciągnij na boisko</p>
-          {EQUIPMENT_GROUPS.map(group => (
-            <div key={group.title}>
-              <p className={sectionTitle}>{group.title}</p>
-              <div className="grid grid-cols-2 gap-1">
-                {group.items.map(eq => (
-                  <button key={eq.label} draggable
-                    onDragStart={e => { e.dataTransfer.setData('text/plain', `drill-eq:${eq.label}`); e.dataTransfer.effectAllowed = 'copy'; }}
-                    onClick={() => addItem(eq)}
-                    title={`${eq.label} — kliknij, aby dodać na środek, lub przeciągnij na boisko`}
-                    className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-white/5 hover:bg-white/15 active:scale-95 transition text-slate-200 cursor-grab">
-                    {eq.type === 'player'
-                      ? <span className="w-4 h-4 rounded-full border-2 border-white/80" style={{ background: eq.team === 'A' ? teamAColor : teamBColor }} />
-                      : <span className="text-lg leading-none">{eq.icon}</span>}
-                    <span className="text-[11px] leading-tight text-center px-1">{eq.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      {/* ── Center: toolbar + canvas + timeline ── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30">
-        <div className="flex-shrink-0 flex items-center gap-1 flex-wrap px-2 py-1.5 border-b border-white/10 bg-slate-950/50 relative z-30">
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
-            <button className={segClass(tool === 'select')} onClick={() => setTool('select')} title="Zaznaczanie i przesuwanie (V)" aria-label="Zaznacz">
-              <MousePointer2 size={14} /> <span className="hidden min-[1300px]:inline">Zaznacz</span>
-            </button>
-            <button className={segClass(tool === 'line')} onClick={() => setTool('line')} title="Rysowanie linii i strzałek (L)" aria-label="Linie">
-              <MoveUpRight size={14} /> <span className="hidden min-[1300px]:inline">Linie</span>
-            </button>
-            <button className={segClass(tool === 'zone')} onClick={() => setTool('zone')} title="Rysowanie stref (S)" aria-label="Strefy">
-              <Square size={14} /> <span className="hidden min-[1300px]:inline">Strefy</span>
-            </button>
-          </div>
-          <ToolbarDivider />
-
-          {tool === 'select' && (
-            <>
-              <button className={tbBtn} onClick={copySelection} disabled={!selectedIds.length || isPlaying} title="Kopiuj (Ctrl+C)"><Copy size={14} /> Kopiuj</button>
-              <button className={tbBtn} onClick={paste} disabled={isPlaying} title="Wklej (Ctrl+V)"><ClipboardPaste size={14} /> Wklej</button>
-              <button className={tbBtn} onClick={duplicateSelection} disabled={!selectedIds.length || isPlaying} title="Duplikuj (Ctrl+D)"><CopyPlus size={14} /> Duplikuj</button>
-              <button className={tbBtn} onClick={deleteSelection} disabled={!selectedIds.length || isPlaying} title="Usuń (Delete)"><Trash2 size={14} /> Usuń</button>
             </>
-          )}
+  );
 
-          {tool === 'line' && (
-            <>
-              {LINE_TYPES.map((t, idx) => {
-                if (!t) return <ToolbarDivider key={idx} />;
-                const [type, title, icon] = t;
-                return (
-                  <button key={type} onClick={() => setLineType(type)} title={title} aria-pressed={lineType === type}
-                    className={`${optClass(lineType === type)} w-9`}>
-                    {icon}
-                  </button>
-                );
-              })}
-              <ToolbarDivider />
-              <ColorQuickPicker value={lineColor} onChange={setLineColor} title="Kolor linii"
-                isOpen={openColorPalette === 'line'}
-                onToggle={() => setOpenColorPalette(p => (p === 'line' ? null : 'line'))} />
-            </>
-          )}
-
-          {tool === 'zone' && (
-            <>
-              {ZONE_SHAPES.map(([type, title, icon]) => (
-                <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title} aria-pressed={zoneType === type}
-                  className={`${optClass(zoneType === type)} w-10`}>
-                  {icon}
-                </button>
-              ))}
-              <ToolbarDivider />
-              <ColorQuickPicker value={zoneColor} onChange={setZoneColor} title="Kolor strefy"
-                isOpen={openColorPalette === 'zone'}
-                onToggle={() => setOpenColorPalette(p => (p === 'zone' ? null : 'zone'))} />
-              <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
-                Krycie
-                <input type="range" min={0.05} max={1} step={0.05} value={zoneOpacity}
-                  onChange={e => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
-                <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
-              </label>
-            </>
-          )}
-
-          <div className="flex-1" />
-          <button className={tbBtn} onClick={undo} disabled={!canUndo} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
-          <button className={tbBtn} onClick={redo} disabled={!canRedo} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
-          <ToolbarDivider />
-          <button className={tbBtn} onClick={exportPng} title="Pobierz obraz boiska (PNG)" aria-label="Pobierz PNG"><ImageIcon size={14} /> <span className="hidden min-[1400px]:inline">PNG</span></button>
-          <button className={tbBtn} onClick={exportCard} title="Pobierz kartę ćwiczenia z opisem (PNG)" aria-label="Pobierz kartę ćwiczenia"><FileText size={14} /> <span className="hidden min-[1400px]:inline">Karta</span></button>
-        </div>
-
-        <div ref={canvasBoxRef} className="flex-1 min-h-0 m-3 flex items-center justify-center relative"
-          onDragOver={e => { if (!isPlaying) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
-          onDrop={handleDrop}>
-          <canvas
-            ref={canvasRef}
-            width={pitchSize.w}
-            height={pitchSize.h}
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onMouseLeave={handlePointerUp}
-            onDoubleClick={handleDoubleClick}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
-            className="rounded-xl shadow-2xl"
-            style={{
-              display: 'block', touchAction: 'none', cursor: canvasCursor,
-              width: displayScale ? pitchSize.w * displayScale : undefined,
-              height: displayScale ? pitchSize.h * displayScale : undefined,
-            }}
-          />
-          {canvasHint && (
-            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg whitespace-nowrap">
-              {canvasHint}
-            </div>
-          )}
-        </div>
-
-        {/* Timeline */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-white/10 bg-slate-950/60 overflow-x-auto">
-          <button onClick={isPlaying ? stop : play} disabled={frames.length < 2}
-            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title={frames.length < 2 ? 'Dodaj co najmniej 2 klatki, aby odtworzyć animację' : 'Odtwórz animację'}>
-            {isPlaying ? <><Pause size={14} /> Stop</> : <><Play size={14} /> Odtwórz</>}
+  const renderEquipment = (cols, onAdded) => EQUIPMENT_GROUPS.map(group => (
+    <div key={group.title}>
+      <p className={sectionTitle}>{group.title}</p>
+      <div className={`grid gap-1 ${cols === 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+        {group.items.map(eq => (
+          <button key={eq.label} draggable={cols !== 4}
+            onDragStart={e => { e.dataTransfer.setData('text/plain', `drill-eq:${eq.label}`); e.dataTransfer.effectAllowed = 'copy'; }}
+            onClick={() => { addItem(eq); onAdded?.(); }}
+            title={`${eq.label} — kliknij, aby dodać na środek, lub przeciągnij na boisko`}
+            className={`${cols === 4 ? 'h-16' : 'h-14'} flex flex-col items-center justify-center gap-1 rounded-md bg-white/5 hover:bg-white/15 active:scale-95 transition text-slate-200 cursor-grab`}>
+            {eq.type === 'player'
+              ? <span className="w-4 h-4 rounded-full border-2 border-white/80" style={{ background: eq.team === 'A' ? teamAColor : teamBColor }} />
+              : <span className="text-lg leading-none">{eq.icon}</span>}
+            <span className="text-[11px] leading-tight text-center px-1">{eq.label}</span>
           </button>
-          <select value={speed} onChange={e => setSpeed(Number(e.target.value))} title="Prędkość odtwarzania"
-            className="h-8 bg-white/10 border border-white/15 rounded-md text-xs text-white px-1">
-            {[0.5, 1, 1.5, 2].map(s => <option key={s} value={s} className="bg-slate-800">{s}×</option>)}
-          </select>
-          <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Odtwarzaj w kółko">
-            <input type="checkbox" checked={loop} onChange={e => setLoop(e.target.checked)} /> Pętla
-          </label>
-          <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Pokaż przerywaną ścieżkę z poprzedniej klatki">
-            <input type="checkbox" checked={showPaths} onChange={e => setShowPaths(e.target.checked)} /> Ścieżki
-          </label>
-          <ToolbarDivider />
-          <span className="text-xs text-slate-400 whitespace-nowrap">Klatki:</span>
-          {frames.map((_, i) => {
-            const active = isPlaying ? Math.floor(playhead) === i : currentFrame === i;
-            return (
-              <button key={i}
-                draggable
-                onDragStart={e => { e.dataTransfer.setData('text/plain', `frame:${i}`); setDraggedFrameIdx(i); }}
-                onDragOver={e => { e.preventDefault(); setDragOverFrameIdx(i); }}
-                onDragLeave={() => setDragOverFrameIdx(null)}
-                onDrop={e => { e.preventDefault(); if (draggedFrameIdx !== null) reorderFrames(draggedFrameIdx, i); setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
-                onDragEnd={() => { setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
-                onClick={() => goToFrame(i)}
-                title={`Klatka ${i + 1} — kliknij, aby edytować; przeciągnij, aby zmienić kolejność`}
-                className={`w-8 h-8 flex-shrink-0 rounded-md text-sm font-semibold transition-colors cursor-grab active:cursor-grabbing ${
-                  active ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                } ${dragOverFrameIdx === i && draggedFrameIdx !== i ? 'ring-2 ring-yellow-400' : ''} ${draggedFrameIdx === i ? 'opacity-40' : ''}`}>
-                {i + 1}
-              </button>
-            );
-          })}
-          <button onClick={addFrame} disabled={isPlaying} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Dodaj klatkę (kopia bieżącej)">
-            <Plus size={13} /> Klatka
-          </button>
-          <button onClick={deleteFrame} disabled={isPlaying || frames.length <= 1} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Usuń bieżącą klatkę">
-            <Minus size={13} /> Klatka
-          </button>
-        </div>
-      </main>
+        ))}
+      </div>
+    </div>
+  ));
 
-      {/* ── Right: inspector ── */}
-      <aside className="w-52 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col min-h-0">
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
-          <p className={sectionTitle}>{selectedIds.length ? 'Właściwości' : 'Ustawienia ćwiczenia'}</p>
+  const renderInspector = (withTitle = true) => (
+    <>
+          {withTitle && <p className={sectionTitle}>{selectedIds.length ? 'Właściwości' : 'Ustawienia ćwiczenia'}</p>}
 
           {selectedIds.length > 1 ? (
             <div className="flex flex-col gap-3">
@@ -2011,8 +1899,10 @@ export default function TrainingDrillApp({ active = true }) {
               </details>
             </div>
           )}
-        </div>
+            </>
+  );
 
+  const renderFrameFooter = () => (
         <div className="flex-shrink-0 border-t border-white/10 p-3 flex flex-col gap-1.5">
           <p className="text-[11px] text-slate-500 leading-snug">
             Klatka {currentFrame + 1}/{frames.length} · {frame.items.length} el. · {frame.lines.length} lin. · {frame.zones.length} str.
@@ -2024,7 +1914,298 @@ export default function TrainingDrillApp({ active = true }) {
             </button>
           )}
         </div>
+  );
+
+  return (
+    <div className="flex flex-1 overflow-hidden relative">
+      <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
+
+      {/* ── Floating color picker (double click) ── */}
+      {colorPicker && colorPickerItem && (
+        <div className="fixed z-50 bg-slate-800 border border-white/20 rounded-xl shadow-2xl p-3 flex flex-col gap-2"
+          style={{ left: clamp(colorPicker.screenX, 90, window.innerWidth - 90), top: Math.min(colorPicker.screenY, window.innerHeight - 160), transform: 'translate(-50%,12px)', minWidth: 150 }}>
+          <p className="text-xs font-semibold text-slate-300">Kolor elementu</p>
+          <input type="color" value={colorPickerItem.color || '#ffffff'}
+            onChange={e => patchObj('all', 'items', colorPicker.id, { color: e.target.value })}
+            className="w-full h-9 rounded cursor-pointer border border-white/20 bg-transparent" />
+          <button onClick={() => setColorPicker(null)}
+            className="text-xs text-slate-400 hover:text-white py-1 hover:bg-white/10 rounded transition-colors">
+            Zamknij
+          </button>
+        </div>
+      )}
+
+      {/* ── Left: drill + equipment palette (desktop) ── */}
+      <aside className="hidden lg:flex w-52 flex-shrink-0 bg-slate-950/80 border-r border-white/10 flex-col min-h-0">
+        <div className="p-3 border-b border-white/10 flex-shrink-0">
+          {renderDrillPanel()}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+          <p className="text-[11px] text-slate-500">Kliknij albo przeciągnij na boisko</p>
+          {renderEquipment(2)}
+        </div>
       </aside>
+
+      {/* ── Center: toolbar + canvas + timeline ── */}
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30">
+        <div className="flex-shrink-0 flex items-center gap-1 flex-nowrap lg:flex-wrap px-2 py-1.5 border-b border-white/10 bg-slate-950/50 relative z-30">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
+            <button className={segClass(tool === 'select')} onClick={() => setTool('select')} title="Zaznaczanie i przesuwanie (V)" aria-label="Zaznacz">
+              <MousePointer2 size={14} /> <span className="hidden min-[1300px]:inline">Zaznacz</span>
+            </button>
+            <button className={segClass(tool === 'line')} onClick={() => setTool('line')} title="Rysowanie linii i strzałek (L)" aria-label="Linie">
+              <MoveUpRight size={14} /> <span className="hidden min-[1300px]:inline">Linie</span>
+            </button>
+            <button className={segClass(tool === 'zone')} onClick={() => setTool('zone')} title="Rysowanie stref (S)" aria-label="Strefy">
+              <Square size={14} /> <span className="hidden min-[1300px]:inline">Strefy</span>
+            </button>
+          </div>
+          <ToolbarDivider />
+
+          {tool === 'select' && (
+            <>
+              <button className={`${tbBtn} hidden sm:inline-flex`} onClick={copySelection} disabled={!selectedIds.length || isPlaying} title="Kopiuj (Ctrl+C)" aria-label="Kopiuj"><Copy size={14} /> <span className="hidden xl:inline">Kopiuj</span></button>
+              <button className={`${tbBtn} hidden sm:inline-flex`} onClick={paste} disabled={isPlaying} title="Wklej (Ctrl+V)" aria-label="Wklej"><ClipboardPaste size={14} /> <span className="hidden xl:inline">Wklej</span></button>
+              <button className={tbBtn} onClick={duplicateSelection} disabled={!selectedIds.length || isPlaying} title="Duplikuj (Ctrl+D)" aria-label="Duplikuj"><CopyPlus size={14} /> <span className="hidden xl:inline">Duplikuj</span></button>
+              <button className={tbBtn} onClick={deleteSelection} disabled={!selectedIds.length || isPlaying} title="Usuń (Delete)" aria-label="Usuń"><Trash2 size={14} /> <span className="hidden xl:inline">Usuń</span></button>
+            </>
+          )}
+
+          {tool === 'line' && (
+            <>
+              <div className="relative lg:hidden" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setOpenColorPalette(p => (p === 'linetype' ? null : 'linetype'))} aria-label="Typ linii"
+                  className={`${optClass(true)} px-1.5 gap-0.5`}>
+                  {LINE_TYPES.find(t => t && t[0] === lineType)?.[2]}<ChevronDown size={12} />
+                </button>
+                {openColorPalette === 'linetype' && (
+                  <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-1.5 grid grid-cols-5 gap-1 z-50">
+                    {LINE_TYPES.filter(Boolean).map(([type, title, icon]) => (
+                      <button key={type} onClick={() => { setLineType(type); setOpenColorPalette(null); }} title={title} aria-label={title}
+                        className={`${optClass(lineType === type)} w-11 h-10`}>
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="hidden lg:contents">
+              {LINE_TYPES.map((t, idx) => {
+                if (!t) return <ToolbarDivider key={idx} />;
+                const [type, title, icon] = t;
+                return (
+                  <button key={type} onClick={() => setLineType(type)} title={title} aria-pressed={lineType === type}
+                    className={`${optClass(lineType === type)} w-9`}>
+                    {icon}
+                  </button>
+                );
+              })}
+              <ToolbarDivider />
+              </div>
+              <ColorQuickPicker value={lineColor} onChange={setLineColor} title="Kolor linii"
+                isOpen={openColorPalette === 'line'}
+                onToggle={() => setOpenColorPalette(p => (p === 'line' ? null : 'line'))} />
+            </>
+          )}
+
+          {tool === 'zone' && (
+            <>
+              <div className="relative lg:hidden" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setOpenColorPalette(p => (p === 'zonetype' ? null : 'zonetype'))} aria-label="Kształt i krycie strefy"
+                  className={`${optClass(true)} px-1.5 gap-0.5`}>
+                  {ZONE_SHAPES.find(z => z[0] === zoneType)?.[2]}<ChevronDown size={12} />
+                </button>
+                {openColorPalette === 'zonetype' && (
+                  <div className="absolute top-full mt-1 left-0 w-max bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50">
+                    <div className="flex gap-1">
+                      {ZONE_SHAPES.map(([type, title, icon]) => (
+                        <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title} aria-label={title}
+                          className={`${optClass(zoneType === type)} w-12 h-10`}>
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                      Krycie
+                      <input type="range" min={0.05} max={1} step={0.05} value={zoneOpacity}
+                        onChange={e => setZoneOpacity(parseFloat(e.target.value))} className="w-28" />
+                      <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+              <div className="hidden lg:contents">
+              {ZONE_SHAPES.map(([type, title, icon]) => (
+                <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title} aria-pressed={zoneType === type}
+                  className={`${optClass(zoneType === type)} w-10`}>
+                  {icon}
+                </button>
+              ))}
+              <ToolbarDivider />
+              </div>
+              <ColorQuickPicker value={zoneColor} onChange={setZoneColor} title="Kolor strefy"
+                isOpen={openColorPalette === 'zone'}
+                onToggle={() => setOpenColorPalette(p => (p === 'zone' ? null : 'zone'))} />
+              <label className="ml-2 hidden lg:flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
+                Krycie
+                <input type="range" min={0.05} max={1} step={0.05} value={zoneOpacity}
+                  onChange={e => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
+                <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
+              </label>
+              {polygonPoints.length > 0 && (
+                <button className={tbBtn} onClick={() => setPolygonPoints([])} title="Anuluj rysowany wielokąt (Esc)">
+                  <X size={14} /> <span className="hidden sm:inline">Anuluj</span>
+                </button>
+              )}
+            </>
+          )}
+
+          <div className="flex-1" />
+          <button className={tbBtn} onClick={undo} disabled={!canUndo} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
+          <button className={tbBtn} onClick={redo} disabled={!canRedo} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
+          <div className="hidden lg:block"><ToolbarDivider /></div>
+          <button className={`${tbBtn} hidden lg:inline-flex`} onClick={exportPng} title="Pobierz obraz boiska (PNG)" aria-label="Pobierz PNG"><ImageIcon size={14} /> <span className="hidden min-[1400px]:inline">PNG</span></button>
+          <button className={`${tbBtn} hidden lg:inline-flex`} onClick={exportCard} title="Pobierz kartę ćwiczenia z opisem (PNG)" aria-label="Pobierz kartę ćwiczenia"><FileText size={14} /> <span className="hidden min-[1400px]:inline">Karta</span></button>
+        </div>
+
+        <div ref={canvasBoxRef} className="flex-1 min-h-0 m-2 lg:m-3 flex items-center justify-center relative"
+          onDragOver={e => { if (!isPlaying) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+          onDrop={handleDrop}>
+          <canvas
+            ref={canvasRef}
+            width={pitchSize.w}
+            height={pitchSize.h}
+            onMouseDown={fromMouse(handlePointerDown)}
+            onMouseMove={fromMouse(handlePointerMove)}
+            onMouseUp={fromMouse(handlePointerUp)}
+            onMouseLeave={fromMouse(handlePointerUp)}
+            onDoubleClick={fromMouse(handleDoubleClick)}
+            onTouchStart={handleTouchStart}
+            onTouchMove={touchMove}
+            onTouchEnd={touchEnd}
+            className="rounded-xl shadow-2xl"
+            style={{
+              display: 'block', touchAction: 'none', cursor: canvasCursor,
+              width: displayScale ? pitchSize.w * displayScale : undefined,
+              height: displayScale ? pitchSize.h * displayScale : undefined,
+            }}
+          />
+          {canvasHint && (
+            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 max-w-[92%] text-center px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg lg:whitespace-nowrap">
+              {canvasHint}
+            </div>
+          )}
+        </div>
+
+        {/* Timeline */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-white/10 bg-slate-950/60 overflow-x-auto">
+          <button onClick={isPlaying ? stop : play} disabled={frames.length < 2}
+            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={frames.length < 2 ? 'Dodaj co najmniej 2 klatki, aby odtworzyć animację' : 'Odtwórz animację'}>
+            {isPlaying ? <><Pause size={14} /> Stop</> : <><Play size={14} /> Odtwórz</>}
+          </button>
+          <select value={speed} onChange={e => setSpeed(Number(e.target.value))} title="Prędkość odtwarzania"
+            className="hidden sm:block h-8 bg-white/10 border border-white/15 rounded-md text-xs text-white px-1">
+            {[0.5, 1, 1.5, 2].map(s => <option key={s} value={s} className="bg-slate-800">{s}×</option>)}
+          </select>
+          <label className="hidden sm:flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Odtwarzaj w kółko">
+            <input type="checkbox" checked={loop} onChange={e => setLoop(e.target.checked)} /> Pętla
+          </label>
+          <label className="hidden sm:flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Pokaż przerywaną ścieżkę z poprzedniej klatki">
+            <input type="checkbox" checked={showPaths} onChange={e => setShowPaths(e.target.checked)} /> Ścieżki
+          </label>
+          <div className="hidden sm:block"><ToolbarDivider /></div>
+          <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap">Klatki:</span>
+          {frames.map((_, i) => {
+            const active = isPlaying ? Math.floor(playhead) === i : currentFrame === i;
+            return (
+              <button key={i}
+                draggable
+                onDragStart={e => { e.dataTransfer.setData('text/plain', `frame:${i}`); setDraggedFrameIdx(i); }}
+                onDragOver={e => { e.preventDefault(); setDragOverFrameIdx(i); }}
+                onDragLeave={() => setDragOverFrameIdx(null)}
+                onDrop={e => { e.preventDefault(); if (draggedFrameIdx !== null) reorderFrames(draggedFrameIdx, i); setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
+                onDragEnd={() => { setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
+                onClick={() => goToFrame(i)}
+                title={`Klatka ${i + 1} — kliknij, aby edytować; przeciągnij, aby zmienić kolejność`}
+                className={`w-8 h-8 flex-shrink-0 rounded-md text-sm font-semibold transition-colors cursor-grab active:cursor-grabbing ${
+                  active ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                } ${dragOverFrameIdx === i && draggedFrameIdx !== i ? 'ring-2 ring-yellow-400' : ''} ${draggedFrameIdx === i ? 'opacity-40' : ''}`}>
+                {i + 1}
+              </button>
+            );
+          })}
+          <button onClick={addFrame} disabled={isPlaying} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Dodaj klatkę (kopia bieżącej)" aria-label="Dodaj klatkę">
+            <Plus size={13} /> <span className="hidden sm:inline">Klatka</span>
+          </button>
+          <button onClick={deleteFrame} disabled={isPlaying || frames.length <= 1} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Usuń bieżącą klatkę" aria-label="Usuń klatkę">
+            <Minus size={13} /> <span className="hidden sm:inline">Klatka</span>
+          </button>
+        </div>
+
+        {/* Phone bottom navigation */}
+        <nav className="lg:hidden flex-shrink-0 grid grid-cols-3 bg-slate-950/95 border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          {[
+            ['equipment', <Plus size={20} />, 'Sprzęt', false],
+            ['inspector', <SlidersHorizontal size={20} />, selectedIds.length ? 'Właściwości' : 'Ustawienia', selectedIds.length > 0],
+            ['drill', <FolderOpen size={20} />, 'Ćwiczenie', isDirty && hasContent],
+          ].map(([id, icon, label, dot]) => (
+            <button key={id} onClick={() => setMobileSheet(m => (m === id ? null : id))}
+              className={`relative flex flex-col items-center gap-0.5 py-2 text-[11px] transition-colors ${mobileSheet === id ? 'text-blue-400' : 'text-slate-300'}`}>
+              {icon}
+              {label}
+              {dot && <span className={`absolute top-1.5 right-[calc(50%-18px)] w-2 h-2 rounded-full ${id === 'drill' ? 'bg-amber-400' : 'bg-blue-400'}`} />}
+            </button>
+          ))}
+        </nav>
+      </main>
+
+      {/* ── Right: inspector (desktop) ── */}
+      <aside className="hidden lg:flex w-52 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+          {renderInspector()}
+        </div>
+        {renderFrameFooter()}
+      </aside>
+
+      {/* ── Phone bottom sheets ── */}
+      {mobileSheet === 'equipment' && (
+        <BottomSheet title="Dodaj na boisko" onClose={() => setMobileSheet(null)}>
+          <p className="text-xs text-slate-500 mb-3">Stuknij element, aby dodać go na środek boiska, potem przeciągnij palcem.</p>
+          <div className="space-y-3">{renderEquipment(4, () => setMobileSheet(null))}</div>
+        </BottomSheet>
+      )}
+      {mobileSheet === 'inspector' && (
+        <BottomSheet title={selectedIds.length ? 'Właściwości' : 'Ustawienia ćwiczenia'} onClose={() => setMobileSheet(null)}>
+          <div className="flex flex-col gap-3">{renderInspector(false)}</div>
+          <div className="-mx-4 mt-4">{renderFrameFooter()}</div>
+        </BottomSheet>
+      )}
+      {mobileSheet === 'drill' && (
+        <BottomSheet title="Ćwiczenie" onClose={() => setMobileSheet(null)}>
+          {renderDrillHeader()}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button onClick={() => saveDrill(false)} className="col-span-2 h-11 inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white">
+              <Save size={16} /> Zapisz w bibliotece
+            </button>
+            {[
+              [<FolderOpen size={16} />, 'Biblioteka', () => { setMobileSheet(null); setShowLibrary(true); }],
+              [<FileText size={16} />, 'Opis ćwiczenia', () => { setMobileSheet(null); setShowMeta(true); }],
+              [<ImageIcon size={16} />, 'Obraz PNG', exportPng],
+              [<FileText size={16} />, 'Karta PNG', exportCard],
+              [<Plus size={16} />, 'Nowe ćwiczenie', () => { setMobileSheet(null); newDrill(); }],
+              [<CopyPlus size={16} />, 'Zapisz jako kopię', () => saveDrill(true), !currentDrillId],
+              [<Download size={16} />, 'Eksport .json', exportDrill],
+              [<Upload size={16} />, 'Import plików', () => importInputRef.current?.click()],
+            ].map(([icon, label, onClick, disabled]) => (
+              <button key={label} onClick={onClick} disabled={!!disabled}
+                className="h-11 inline-flex items-center justify-center gap-2 rounded-lg text-sm bg-white/5 hover:bg-white/10 text-slate-200 disabled:opacity-40">
+                {icon} {label}
+              </button>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
 
       {/* ── Library modal ── */}
       {showLibrary && (
@@ -2143,7 +2324,7 @@ export default function TrainingDrillApp({ active = true }) {
       {/* ── Toast ── */}
       {libraryMsg && (
         <div role="status" aria-live="polite"
-          className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-2xl text-sm border ${
+          className={`fixed bottom-32 lg:bottom-20 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] text-center px-4 py-2 rounded-lg shadow-2xl text-sm border ${
             libraryMsg.tone === 'warn' ? 'bg-amber-950/95 border-amber-500/40 text-amber-200' : 'bg-slate-900/95 border-emerald-500/40 text-emerald-200'}`}>
           {libraryMsg.text}
         </div>

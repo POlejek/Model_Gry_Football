@@ -3,7 +3,7 @@ import { Plus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, C
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 
-const FootballTacticsApp = () => {
+const FootballTacticsApp = ({ embedded = false }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -5021,7 +5021,7 @@ const FootballTacticsApp = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden">
+    <div className={`w-full text-white flex flex-col overflow-hidden ${embedded ? 'flex-1' : 'h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'}`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
         

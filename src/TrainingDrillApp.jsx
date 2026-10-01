@@ -198,6 +198,17 @@ export default function TrainingDrillApp() {
   const [playerCountB, setPlayerCountB] = useState(0);
   const [colorPicker, setColorPicker] = useState(null);
 
+  // Library / save-load
+  const [drillName, setDrillName] = useState('');
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [savedDrills, setSavedDrills] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('trainingDrillLibrary')) || []; }
+    catch { return []; }
+  });
+  const [currentDrillId, setCurrentDrillId] = useState(null);
+  const [libraryMsg, setLibraryMsg] = useState(null);
+  const importInputRef = useRef(null);
+
   // Drawing mode
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawingTool, setDrawingTool] = useState('line');
@@ -338,6 +349,97 @@ export default function TrainingDrillApp() {
     setSelectedId(null);
     setColorPicker(null);
   }, [selectedId, selectedLineIndex, selectedZoneIndex, items]);
+
+  // ── Library: save / load ─────────────────────────────────────────
+  const flash = (text) => { setLibraryMsg(text); setTimeout(() => setLibraryMsg(null), 2000); };
+
+  const persistLibrary = (list) => {
+    setSavedDrills(list);
+    try { localStorage.setItem('trainingDrillLibrary', JSON.stringify(list)); }
+    catch { flash('Brak miejsca w pamięci przeglądarki'); }
+  };
+
+  const snapshot = () => ({ items, lines, zones, teamAColor, teamBColor, nextId, playerCountA, playerCountB });
+
+  const resetSelection = () => {
+    setSelectedId(null); setSelectedLineIndex(null); setSelectedZoneIndex(null);
+    setCurrentLine(null); setCurrentZone(null); setPolygonPoints([]); setColorPicker(null);
+  };
+
+  const applyDrill = (d) => {
+    setItems(d.items || []); setLines(d.lines || []); setZones(d.zones || []);
+    setTeamAColor(d.teamAColor || '#1d4ed8'); setTeamBColor(d.teamBColor || '#dc2626');
+    const maxId = (d.items || []).reduce((m, i) => Math.max(m, i.id), 0);
+    setNextId(Math.max(d.nextId || 1, maxId + 1));
+    setPlayerCountA(d.playerCountA || 0); setPlayerCountB(d.playerCountB || 0);
+    resetSelection();
+  };
+
+  const saveDrill = (asNew = false) => {
+    let name = drillName.trim() || `Ćwiczenie ${savedDrills.length + 1}`;
+    if (asNew && savedDrills.some(d => d.id === currentDrillId && d.name === name)) name += ' (kopia)';
+    const now = new Date().toISOString();
+    if (currentDrillId && !asNew && savedDrills.some(d => d.id === currentDrillId)) {
+      persistLibrary(savedDrills.map(d => d.id === currentDrillId ? { ...d, ...snapshot(), name, updatedAt: now } : d));
+    } else {
+      const id = `drill-${Date.now()}`;
+      persistLibrary([{ id, name, createdAt: now, updatedAt: now, ...snapshot() }, ...savedDrills]);
+      setCurrentDrillId(id);
+    }
+    setDrillName(name);
+    flash('Zapisano');
+  };
+
+  const loadDrill = (d) => {
+    applyDrill(d);
+    setCurrentDrillId(d.id);
+    setDrillName(d.name);
+    setShowLibrary(false);
+  };
+
+  const deleteDrill = (id) => {
+    if (!window.confirm('Usunąć to ćwiczenie z biblioteki?')) return;
+    persistLibrary(savedDrills.filter(d => d.id !== id));
+    if (id === currentDrillId) setCurrentDrillId(null);
+  };
+
+  const newDrill = () => {
+    if ((items.length || lines.length || zones.length) && !window.confirm('Rozpocząć nowe ćwiczenie? Niezapisane zmiany zostaną utracone.')) return;
+    applyDrill({});
+    setCurrentDrillId(null);
+    setDrillName('');
+  };
+
+  const exportDrill = () => {
+    const name = drillName.trim() || 'cwiczenie';
+    const data = { format: 'model-gry-training-drill', version: 1, name, ...snapshot() };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name.replace(/[^\p{L}\p{N}_-]+/gu, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importDrill = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result);
+        if (d.format !== 'model-gry-training-drill' || !Array.isArray(d.items)) throw new Error();
+        applyDrill(d);
+        setCurrentDrillId(null);
+        setDrillName(d.name || file.name.replace(/\.json$/i, ''));
+        flash('Wczytano z pliku — zapisz, aby dodać do biblioteki');
+      } catch {
+        flash('Nieprawidłowy plik ćwiczenia');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // ── Mouse down ───────────────────────────────────────────────────
   const handleMouseDown = (e) => {
@@ -555,6 +657,7 @@ export default function TrainingDrillApp() {
   // ── Keyboard ─────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
       if (e.key === 'Escape') {
         setSelectedId(null); setSelectedLineIndex(null); setSelectedZoneIndex(null);
@@ -725,6 +828,65 @@ export default function TrainingDrillApp() {
 
         {/* ── Left panel ── */}
         <div className="w-56 bg-slate-950/80 border-r border-white/10 flex flex-col overflow-y-auto">
+          {/* Drill library */}
+          <div className="p-3 border-b border-white/10">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ćwiczenie</p>
+            <input
+              type="text"
+              value={drillName}
+              onChange={e => setDrillName(e.target.value)}
+              placeholder="Nazwa ćwiczenia"
+              className="w-full px-2 py-1 mb-2 bg-white/10 border border-white/20 rounded text-sm text-white placeholder-slate-500"
+            />
+            <div className="grid grid-cols-2 gap-1">
+              <button onClick={() => saveDrill(false)}
+                className="px-2 py-1.5 rounded text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-all">
+                💾 Zapisz
+              </button>
+              <button onClick={() => saveDrill(true)} disabled={!currentDrillId}
+                className="px-2 py-1.5 rounded text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                Zapisz jako…
+              </button>
+              <button onClick={() => setShowLibrary(s => !s)}
+                className={`px-2 py-1.5 rounded text-xs transition-all ${showLibrary ? 'bg-blue-600 text-white' : 'bg-white/5 hover:bg-white/10 text-slate-300'}`}>
+                📂 Wczytaj ({savedDrills.length})
+              </button>
+              <button onClick={newDrill}
+                className="px-2 py-1.5 rounded text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-all">
+                ＋ Nowe
+              </button>
+              <button onClick={exportDrill}
+                className="px-2 py-1.5 rounded text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-all">
+                ⬇ Eksport
+              </button>
+              <button onClick={() => importInputRef.current?.click()}
+                className="px-2 py-1.5 rounded text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-all">
+                ⬆ Import
+              </button>
+              <input ref={importInputRef} type="file" accept=".json,application/json" onChange={importDrill} className="hidden" />
+            </div>
+            {libraryMsg && <p className="text-xs text-emerald-300 mt-2">{libraryMsg}</p>}
+
+            {showLibrary && (
+              <div className="mt-2 flex flex-col gap-1 max-h-60 overflow-y-auto">
+                {savedDrills.length === 0 && <p className="text-xs text-slate-500">Brak zapisanych ćwiczeń.</p>}
+                {savedDrills.map(d => (
+                  <div key={d.id}
+                    className={`flex items-center gap-1 rounded px-2 py-1.5 text-sm ${d.id === currentDrillId ? 'bg-blue-600/30 ring-1 ring-blue-500' : 'bg-white/5 hover:bg-white/10'}`}>
+                    <button onClick={() => loadDrill(d)} className="flex-1 text-left min-w-0">
+                      <p className="text-slate-200 truncate">{d.name}</p>
+                      <p className="text-[10px] text-slate-500">{new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</p>
+                    </button>
+                    <button onClick={() => deleteDrill(d.id)} title="Usuń"
+                      className="p-1 text-slate-500 hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Mode toggle */}
           <div className="p-3 border-b border-white/10">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tryb</p>

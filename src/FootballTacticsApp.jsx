@@ -1,14 +1,23 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import {
+  Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
+  MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
+} from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
 import { drawField, drawPlayer, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers } from './utils/draw.js';
 import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
+import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 
 
-const FootballTacticsApp = ({ embedded = false }) => {
+const TOOLBAR_BTN = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
+const MENU_ITEM = 'w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none';
+const optionBtnClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justify-center transition-colors ${
+  active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
+
+const FootballTacticsApp = ({ embedded = false, active = true }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -316,6 +325,7 @@ const FootballTacticsApp = ({ embedded = false }) => {
   // Obsługa skrótów klawiszowych
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (!active) return;
       // Ignoruj skróty gdy użytkownik jest w polu tekstowym
       const isInputFocused = e.target.tagName === 'INPUT' || 
                             e.target.tagName === 'TEXTAREA' || 
@@ -456,7 +466,7 @@ const FootballTacticsApp = ({ embedded = false }) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLineIndex, selectedZoneIndex, lines, zones, clipboard, currentScheme, currentFrame, players]);
+  }, [active, selectedLineIndex, selectedZoneIndex, lines, zones, clipboard, currentScheme, currentFrame, players]);
 
   // Helper: Rysuj klatkę na podanym canvas
   const drawFrameToCanvas = (frameData, format, canvas, ctx, tColor = '#1a365d', oColor = '#8b0000') => {
@@ -3984,6 +3994,221 @@ const FootballTacticsApp = ({ embedded = false }) => {
     setIsPlaying(false);
   };
 
+
+  // ── Drawing actions shared by the toolbar and keyboard shortcuts ──
+  const saveDrawingsToScheme = (newLines, newZones) => {
+    if (!currentScheme) return;
+    updateCurrentScheme({
+      ...currentScheme,
+      frames: currentScheme.frames.map((f, i) => (i === currentFrame ? { ...players, lines: newLines, zones: newZones } : f)),
+    });
+  };
+
+  const hasDrawingSelection = selectedLineIndex !== null || selectedZoneIndex !== null;
+
+  const copySelectedDrawing = () => {
+    if (selectedLineIndex !== null) setClipboard({ type: 'line', data: { ...lines[selectedLineIndex] } });
+    else if (selectedZoneIndex !== null) setClipboard({ type: 'zone', data: { ...zones[selectedZoneIndex] } });
+    else return;
+    setShowCopyNotification(true);
+    setTimeout(() => setShowCopyNotification(false), 2000);
+  };
+
+  const pasteDrawing = () => {
+    if (!clipboard) return;
+    if (clipboard.type === 'line') {
+      const d = clipboard.data;
+      const newLine = { ...d, startX: d.startX + 20, startY: d.startY + 20, endX: d.endX + 20, endY: d.endY + 20 };
+      if (d.controlX !== undefined && d.controlY !== undefined) { newLine.controlX = d.controlX + 20; newLine.controlY = d.controlY + 20; }
+      const newLines = [...lines, newLine];
+      setLines(newLines);
+      setSelectedLineIndex(newLines.length - 1);
+      setSelectedZoneIndex(null);
+      saveDrawingsToScheme(newLines, zones);
+    } else {
+      const newZone = { ...clipboard.data };
+      if (newZone.type === 'rectangle') { newZone.x += 20; newZone.y += 20; }
+      else if (newZone.type === 'circle') { newZone.centerX += 20; newZone.centerY += 20; }
+      else if (newZone.points) newZone.points = newZone.points.map(pt => ({ x: pt.x + 20, y: pt.y + 20 }));
+      const newZones = [...zones, newZone];
+      setZones(newZones);
+      setSelectedZoneIndex(newZones.length - 1);
+      setSelectedLineIndex(null);
+      saveDrawingsToScheme(lines, newZones);
+    }
+  };
+
+  const deleteSelectedDrawing = () => {
+    if (selectedLineIndex !== null) {
+      const newLines = lines.filter((_, i) => i !== selectedLineIndex);
+      setLines(newLines);
+      setSelectedLineIndex(null);
+      saveDrawingsToScheme(newLines, zones);
+    } else if (selectedZoneIndex !== null) {
+      const newZones = zones.filter((_, i) => i !== selectedZoneIndex);
+      setZones(newZones);
+      setSelectedZoneIndex(null);
+      saveDrawingsToScheme(lines, newZones);
+    }
+  };
+
+  const clearAllLines = () => { setLines([]); setSelectedLineIndex(null); saveDrawingsToScheme([], zones); };
+  const clearAllZones = () => { setZones([]); setSelectedZoneIndex(null); saveDrawingsToScheme(lines, []); };
+
+  // ── Tool switching (desktop toolbar; mobile keeps its expandable panels) ──
+  const tacticsTool = isDrawingMode ? drawingTool : 'select';
+  const setTacticsTool = (t) => {
+    setIsDrawingMode(t !== 'select');
+    if (t !== 'select') {
+      setDrawingTool(t);
+      setSelectedLineIndex(null);
+      setSelectedZoneIndex(null);
+    }
+    setCurrentLine(null);
+    setCurrentZone(null);
+    setPolygonPoints([]);
+  };
+
+  // ── Undo / redo for the open scheme ──
+  const schemeHistRef = useRef({ id: null, stack: [], index: -1 });
+  const [, setSchemeHistTick] = useState(0);
+  const schemeSnapshot = useMemo(() => (currentScheme ? JSON.stringify(currentScheme) : null), [currentScheme]);
+
+  const commitSchemeHistory = (snap) => {
+    const h = schemeHistRef.current;
+    if (!snap || h.stack[h.index] === snap) return;
+    h.stack = h.stack.slice(0, h.index + 1);
+    h.stack.push(snap);
+    if (h.stack.length > 100) h.stack.shift();
+    h.index = h.stack.length - 1;
+    setSchemeHistTick(t => t + 1);
+  };
+
+  useEffect(() => {
+    if (!currentScheme) {
+      schemeHistRef.current = { id: null, stack: [], index: -1 };
+      setSchemeHistTick(t => t + 1);
+      return undefined;
+    }
+    if (schemeHistRef.current.id !== currentScheme.id) {
+      schemeHistRef.current = { id: currentScheme.id, stack: [schemeSnapshot], index: 0 };
+      setSchemeHistTick(t => t + 1);
+      return undefined;
+    }
+    // debounced so typing in the name/comments becomes one undo step
+    const t = setTimeout(() => commitSchemeHistory(schemeSnapshot), 400);
+    return () => clearTimeout(t);
+  }, [schemeSnapshot]);
+
+  const applySchemeSnapshot = (snap) => {
+    const s = JSON.parse(snap);
+    updateCurrentScheme(s);
+    const frameIdx = Math.min(currentFrame, s.frames.length - 1);
+    setCurrentFrame(frameIdx);
+    setPlayers(s.frames[frameIdx]);
+    if (s.teamColor) setTeamColor(s.teamColor);
+    if (s.opponentColor) setOpponentColor(s.opponentColor);
+    setIsPlaying(false);
+    setSelectedLineIndex(null);
+    setSelectedZoneIndex(null);
+    setSelectedPlayer(null);
+  };
+
+  const undoScheme = () => {
+    commitSchemeHistory(schemeSnapshot);
+    const h = schemeHistRef.current;
+    if (h.index <= 0) return;
+    h.index--;
+    applySchemeSnapshot(h.stack[h.index]);
+    setSchemeHistTick(t => t + 1);
+  };
+
+  const redoScheme = () => {
+    const h = schemeHistRef.current;
+    if (h.index >= h.stack.length - 1) return;
+    h.index++;
+    applySchemeSnapshot(h.stack[h.index]);
+    setSchemeHistTick(t => t + 1);
+  };
+
+  const histState = schemeHistRef.current;
+  const canUndoScheme = !!currentScheme && (histState.index > 0 || (histState.index >= 0 && histState.stack[histState.index] !== schemeSnapshot));
+  const canRedoScheme = !!currentScheme && histState.index < histState.stack.length - 1;
+
+  // ── Extra shortcuts: tools, undo/redo, Esc, Mac keys (Backspace, Cmd+C/V) ──
+  const extraKeyHandlerRef = useRef(null);
+  extraKeyHandlerRef.current = (e) => {
+    if (!active) return;
+    const t = e.target;
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undoScheme(); return; }
+    if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redoScheme(); return; }
+    // Ctrl+C/V and Delete are handled by the original shortcut handler; add the Mac equivalents
+    if (e.metaKey && !e.ctrlKey && k === 'c') { copySelectedDrawing(); return; }
+    if (e.metaKey && !e.ctrlKey && k === 'v') { e.preventDefault(); pasteDrawing(); return; }
+    if (e.key === 'Backspace' && hasDrawingSelection) { e.preventDefault(); deleteSelectedDrawing(); return; }
+    if (e.key === 'Escape') {
+      if (polygonPoints.length || currentLine || currentZone) { setPolygonPoints([]); setCurrentLine(null); setCurrentZone(null); }
+      else if (isDrawingMode) setTacticsTool('select');
+      else { setSelectedLineIndex(null); setSelectedZoneIndex(null); setSelectedPlayer(null); }
+      return;
+    }
+    if (!mod && !e.altKey) {
+      if (k === 'v') setTacticsTool('select');
+      else if (k === 'l') setTacticsTool('line');
+      else if (k === 's') setTacticsTool('zone');
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e) => extraKeyHandlerRef.current(e);
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const [modeHintVisible, setModeHintVisible] = useState(false);
+  useEffect(() => {
+    if (tacticsTool === 'select') { setModeHintVisible(false); return undefined; }
+    setModeHintVisible(true);
+    const t = setTimeout(() => setModeHintVisible(false), 5000);
+    return () => clearTimeout(t);
+  }, [tacticsTool, zoneType]);
+
+  const canvasHint = isPlaying || (!modeHintVisible && !polygonPoints.length) ? null
+    : tacticsTool === 'line' ? 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie'
+    : tacticsTool === 'zone' ? (zoneType === 'polygon'
+      ? (polygonPoints.length
+        ? `Punkty: ${polygonPoints.length} · kliknij pierwszy punkt, aby zamknąć · Esc anuluje`
+        : 'Klikaj kolejne wierzchołki strefy')
+      : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie')
+    : null;
+
+
+  const colorSwatch = (kind, value, onPick, inputRef, title, align) => (
+    <div className="relative flex items-center">
+      <input ref={inputRef} type="color" value={value}
+        onChange={(e) => { onPick(e.target.value); setOpenColorPalette(null); }} className="hidden" />
+      <button onClick={(e) => { e.stopPropagation(); setOpenColorPalette(openColorPalette === kind ? null : kind); }}
+        className="w-7 h-7 rounded-md border-2 border-white/25 hover:border-white/50 transition-colors"
+        style={{ backgroundColor: value }} title={title} aria-label={title} />
+      {openColorPalette === kind && (
+        <div className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} bg-slate-900 border border-white/20 rounded-lg p-1.5 w-max grid grid-cols-6 gap-1 shadow-xl z-50`}>
+          {quickColorPalette.map((c) => (
+            <button key={c.color} onClick={() => { onPick(c.color); setOpenColorPalette(null); }}
+              className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-transform"
+              style={{ backgroundColor: c.color }} title={c.name} />
+          ))}
+          <button onClick={() => inputRef.current?.click()} title="Dowolny kolor"
+            className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-transform bg-gradient-to-br from-red-500 via-green-500 to-blue-500 text-white text-[8px] font-bold">
+            RGB
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />
@@ -4093,213 +4318,140 @@ const FootballTacticsApp = ({ embedded = false }) => {
         }
       `}</style>
 
-      {/* Górny pasek nawigacji - ukryty na mobile (zastąpiony dolnym paskiem) */}
-      <div className="hidden md:block bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-6 py-3 relative z-50">
-        <div className="flex items-center gap-4">
-          {/* Logo/Tytuł */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
-              <span className="text-xl font-bold">⚽</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white">Model Gry</h1>
-              <p className="text-xs text-slate-400">Taktyka Piłkarska</p>
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-white/10"></div>
-
-          {/* Przyciski Przesuwanie / Rysowanie */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setIsDrawingMode(false);
-                setExpandedPanel(expandedPanel === 'move' ? null : 'move');
-                setCurrentLine(null);
-              }}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
-                !isDrawingMode && expandedPanel === 'move'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white/10 hover:bg-white/15 text-slate-300'
-              }`}
-            >
-              🖱️ Przesuwanie
+      {/* Pasek narzędzi (desktop) — tryby, opcje bieżącego trybu, drużyny, cofnij/ponów, stan zapisu */}
+      <div className="hidden md:flex items-center gap-1 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-3 py-1.5 relative z-50">
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
+          {[
+            ['select', MousePointer2, 'Przesuwanie', 'Przesuwanie zawodników, piłki, linii i stref (V)'],
+            ['line', MoveUpRight, 'Linie', 'Rysowanie linii i strzałek (L)'],
+            ['zone', Square, 'Strefy', 'Rysowanie stref (S)'],
+          ].map(([t, Icon, label, title]) => (
+            <button key={t} onClick={() => setTacticsTool(t)} title={title} aria-label={label} aria-pressed={tacticsTool === t}
+              className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                tacticsTool === t ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
+              <Icon size={14} /> <span className="hidden min-[1300px]:inline">{label}</span>
             </button>
-            
-            <button
-              onClick={() => {
-                setIsDrawingMode(true);
-                setExpandedPanel(expandedPanel === 'draw' ? null : 'draw');
-              }}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${
-                isDrawingMode && expandedPanel === 'draw'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white/10 hover:bg-white/15 text-slate-300'
-              }`}
-            >
-              ✏️ Rysowanie
-            </button>
-          </div>
-
-          <div className="h-8 w-px bg-white/10"></div>
-
-          {/* Kolory drużyn */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 relative">
-              <span className="text-sm text-slate-300">Drużyna:</span>
-              {/* Ukryty natywny color picker */}
-              <input
-                ref={teamColorInputRef}
-                type="color"
-                value={teamColor}
-                onChange={(e) => handleTeamColorChange(e.target.value)}
-                className="hidden"
-              />
-              {/* Widoczny przycisk koloru */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenColorPalette(openColorPalette === 'team' ? null : 'team');
-                }}
-                className="w-8 h-8 rounded cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all"
-                style={{ backgroundColor: teamColor }}
-                title="Wybierz kolor drużyny"
-              />
-              {openColorPalette === 'team' && (
-                <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 flex gap-1 shadow-xl z-50">
-                  {quickColorPalette.map((colorItem) => (
-                    <button
-                      key={colorItem.color}
-                      onClick={() => handleTeamColorChange(colorItem.color)}
-                      className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all"
-                      style={{ backgroundColor: colorItem.color }}
-                      title={colorItem.name}
-                    />
-                  ))}
-                  {/* Przycisk RGB */}
-                  <button
-                    onClick={() => teamColorInputRef.current?.click()}
-                    className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all bg-gradient-to-br from-red-500 via-green-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
-                    title="Wybór RGB"
-                  >
-                    RGB
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 relative">
-              <span className="text-sm text-slate-300">Przeciwnik:</span>
-              {/* Ukryty natywny color picker */}
-              <input
-                ref={opponentColorInputRef}
-                type="color"
-                value={opponentColor}
-                onChange={(e) => handleOpponentColorChange(e.target.value)}
-                className="hidden"
-              />
-              {/* Widoczny przycisk koloru */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenColorPalette(openColorPalette === 'opponent' ? null : 'opponent');
-                }}
-                className="w-8 h-8 rounded cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all"
-                style={{ backgroundColor: opponentColor }}
-                title="Wybierz kolor przeciwnika"
-              />
-              {openColorPalette === 'opponent' && (
-                <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-2 flex gap-1 shadow-xl z-50">
-                  {quickColorPalette.map((colorItem) => (
-                    <button
-                      key={colorItem.color}
-                      onClick={() => handleOpponentColorChange(colorItem.color)}
-                      className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all"
-                      style={{ backgroundColor: colorItem.color }}
-                      title={colorItem.name}
-                    />
-                  ))}
-                  {/* Przycisk RGB */}
-                  <button
-                    onClick={() => opponentColorInputRef.current?.click()}
-                    className="w-7 h-7 rounded border-2 border-white/30 hover:scale-110 hover:border-white/60 transition-all bg-gradient-to-br from-red-500 via-green-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
-                    title="Wybór RGB"
-                  >
-                    RGB
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {gameFormat === '11v11' && (
-            <>
-              <div className="h-8 w-px bg-white/10"></div>
-
-              {/* Formacje drużyn */}
-              <div className="flex items-center gap-3">
-                {/* Formacja drużyny */}
-                <div className="flex items-center gap-2 relative">
-                  <span className="text-sm text-slate-300">Formacja:</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenFormationMenu(openFormationMenu === 'team' ? null : 'team');
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 hover:bg-white/15 text-slate-300 border border-white/10 transition-all"
-                    title="Wybierz formację drużyny"
-                  >
-                    Drużyna ▾
-                  </button>
-                  {openFormationMenu === 'team' && (
-                    <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
-                      {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
-                        <button
-                          key={f}
-                          onClick={() => applyFormation('team', f)}
-                          className="px-4 py-2 rounded-lg text-sm font-mono font-medium text-slate-200 hover:bg-white/15 transition-all text-left whitespace-nowrap"
-                        >
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Formacja przeciwnika */}
-                <div className="flex items-center gap-2 relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenFormationMenu(openFormationMenu === 'opponent' ? null : 'opponent');
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 hover:bg-white/15 text-slate-300 border border-white/10 transition-all"
-                    title="Wybierz formację przeciwnika"
-                  >
-                    Przeciwnik ▾
-                  </button>
-                  {openFormationMenu === 'opponent' && (
-                    <div className="absolute top-full mt-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex flex-col gap-1 shadow-xl z-50">
-                      {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
-                        <button
-                          key={f}
-                          onClick={() => applyFormation('opponent', f)}
-                          className="px-4 py-2 rounded-lg text-sm font-mono font-medium text-slate-200 hover:bg-white/15 transition-all text-left whitespace-nowrap"
-                        >
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+          ))}
         </div>
+        <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+
+        {tacticsTool === 'select' && (
+          <>
+            <button className={TOOLBAR_BTN} onClick={copySelectedDrawing} disabled={!hasDrawingSelection} title="Kopiuj zaznaczoną linię lub strefę (Ctrl+C)">
+              <Copy size={14} /> Kopiuj
+            </button>
+            <button className={TOOLBAR_BTN} onClick={pasteDrawing} disabled={!clipboard} title="Wklej (Ctrl+V)">
+              <ClipboardPaste size={14} /> Wklej
+            </button>
+            <button className={TOOLBAR_BTN} onClick={deleteSelectedDrawing} disabled={!hasDrawingSelection} title="Usuń zaznaczoną linię lub strefę (Delete)">
+              <Trash2 size={14} /> Usuń
+            </button>
+            {(lines.length > 0 || zones.length > 0) && (
+              <div className="relative">
+                <button className={TOOLBAR_BTN} title="Więcej: wyczyść rysunki na tej klatce" aria-label="Więcej"
+                  onClick={(e) => { e.stopPropagation(); setOpenFormationMenu(openFormationMenu === 'clear' ? null : 'clear'); }}>
+                  <MoreHorizontal size={15} />
+                </button>
+                {openFormationMenu === 'clear' && (
+                  <div className="absolute top-full mt-1 left-0 w-60 bg-slate-900 border border-white/15 rounded-lg shadow-2xl py-1 z-50">
+                    <button disabled={!lines.length} onClick={() => { clearAllLines(); setOpenFormationMenu(null); }} className={MENU_ITEM}>
+                      Usuń wszystkie linie na klatce ({lines.length})
+                    </button>
+                    <button disabled={!zones.length} onClick={() => { clearAllZones(); setOpenFormationMenu(null); }} className={MENU_ITEM}>
+                      Usuń wszystkie strefy na klatce ({zones.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {tacticsTool === 'line' && (
+          <>
+            {LINE_TYPES.map((t, idx) => (t ? (
+              <button key={t[0]} onClick={() => setLineType(t[0])} title={t[1]} aria-pressed={lineType === t[0]}
+                className={`${optionBtnClass(lineType === t[0])} w-9`}>
+                {t[2]}
+              </button>
+            ) : <div key={idx} className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />))}
+            <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+            {colorSwatch('line', lineColor, setLineColor, lineColorInputRef, 'Kolor linii', 'left')}
+          </>
+        )}
+
+        {tacticsTool === 'zone' && (
+          <>
+            {ZONE_SHAPES.map(([type, title, icon]) => (
+              <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); setCurrentZone(null); }} title={title} aria-pressed={zoneType === type}
+                className={`${optionBtnClass(zoneType === type)} w-10`}>
+                {icon}
+              </button>
+            ))}
+            <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+            {colorSwatch('zone', zoneColor, setZoneColor, zoneColorInputRef, 'Kolor strefy', 'left')}
+            <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
+              Krycie
+              <input type="range" min="0" max="1" step="0.1" value={zoneOpacity}
+                onChange={(e) => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
+              <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
+            </label>
+          </>
+        )}
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400 hidden min-[1500px]:inline">Drużyna</span>
+          {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
+          <span className="text-xs text-slate-400 hidden min-[1500px]:inline ml-1">Przeciwnik</span>
+          {colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'right')}
+        </div>
+
+        {gameFormat === '11v11' && (
+          <div className="relative">
+            <button className={TOOLBAR_BTN} title="Ustaw formację drużyny lub przeciwnika"
+              onClick={(e) => { e.stopPropagation(); setOpenFormationMenu(openFormationMenu === 'formation' ? null : 'formation'); }}>
+              Formacja <ChevronDown size={13} />
+            </button>
+            {openFormationMenu === 'formation' && (
+              <div className="absolute top-full mt-1 right-0 w-64 bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50 grid grid-cols-2 gap-2">
+                {[['team', 'Drużyna'], ['opponent', 'Przeciwnik']].map(([side, label]) => (
+                  <div key={side}>
+                    <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+                    {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
+                      <button key={f} onClick={() => { applyFormation(side, f); setOpenFormationMenu(null); }}
+                        className="w-full text-left px-2 py-1.5 rounded-md text-sm font-mono text-slate-200 hover:bg-white/10 transition-colors">
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+        <button className={TOOLBAR_BTN} onClick={undoScheme} disabled={!canUndoScheme} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
+        <button className={TOOLBAR_BTN} onClick={redoScheme} disabled={!canRedoScheme} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
+        <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+        {currentScheme ? (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Zmiany zapisują się automatycznie w pamięci tej przeglądarki">
+            <Check size={13} className="text-emerald-400" />
+            <span className="hidden min-[1400px]:inline">Zapisano automatycznie</span>
+            <span className="min-[1400px]:hidden">Zapisano</span>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-amber-300 whitespace-nowrap" title="Utwórz lub wybierz schemat w lewym panelu, aby zapisywać ustawienie">
+            <AlertTriangle size={13} /> Bez schematu
+          </span>
+        )}
       </div>
 
       {/* Rozwijany panel dla Rysowania - widoczny na mobile i desktop */}
       {expandedPanel === 'draw' && isDrawingMode && (
-        <div className="bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 md:px-6 py-3 overflow-x-auto">
+        <div className="md:hidden bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 py-3 overflow-x-auto">
           <div className="min-w-max">
             {/* Wybór narzędzia rysowania */}
             <div className="flex items-center gap-2 mb-4">
@@ -4656,7 +4808,7 @@ const FootballTacticsApp = ({ embedded = false }) => {
 
       {/* Rozwijany panel dla Przesuwania - widoczny na mobile i desktop */}
       {expandedPanel === 'move' && !isDrawingMode && (
-        <div className="bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 md:px-6 py-3">
+        <div className="md:hidden bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 py-3">
           <div>
             <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
               <span className="text-sm text-slate-400">Tryb przesuwania zawodników, linii i stref aktywny</span>
@@ -4888,14 +5040,9 @@ const FootballTacticsApp = ({ embedded = false }) => {
         ${leftPanelOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0
       `}>
-        <div className="p-6 border-b border-white/10">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-            Model Gry
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">Taktyka drużyny</p>
-          
+        <div className="px-4 py-3 border-b border-white/10">
           {/* Wybór formatu gry */}
-          <div className="mt-4">
+          <div>
             <label className="block text-xs font-medium text-slate-400 mb-2">Format gry</label>
             <div className="flex gap-2">
               {['7v7', '9v9', '11v11'].map(format => (
@@ -4918,7 +5065,7 @@ const FootballTacticsApp = ({ embedded = false }) => {
           </div>
 
           {/* Przyciski kontroli */}
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <button
               onClick={toggleAllPhases}
               className="flex-1 px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium rounded-lg transition-all"
@@ -5273,10 +5420,10 @@ const FootballTacticsApp = ({ embedded = false }) => {
             <button
               onClick={exportData}
               className="flex-1 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-green-300"
-              title="Eksportuj dane do pliku JSON"
+              title="Eksportuj wszystkie fazy i schematy do pliku .json (kopia zapasowa)"
             >
               <Download size={16} />
-              JSON
+              Eksport
             </button>
             {pptSelectionMode ? (
               <>
@@ -5329,7 +5476,24 @@ const FootballTacticsApp = ({ embedded = false }) => {
       {/* Środek - Boisko */}
       <div className="flex-1 flex flex-col bg-slate-900/30 overflow-hidden">
         
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        {!currentScheme && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-3 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-100">
+            <AlertTriangle size={14} className="text-amber-300 flex-shrink-0" />
+            <span className="whitespace-nowrap">
+              Bez schematu<span className="hidden sm:inline"> — zmiany na boisku nie są zapisywane</span>
+            </span>
+            <button onClick={createNewScheme}
+              className="h-7 px-3 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center gap-1 whitespace-nowrap flex-shrink-0">
+              <Plus size={13} /> Nowy schemat
+            </button>
+          </div>
+        )}
+        <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
+          {currentScheme && canvasHint && (
+            <div className="hidden md:block pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg whitespace-nowrap">
+              {canvasHint}
+            </div>
+          )}
           <div className="canvas-container rounded-2xl overflow-hidden" style={{ maxHeight: '100%', maxWidth: '100%', aspectRatio: '700/1080' }}>
             <canvas
               ref={canvasRef}
@@ -5363,7 +5527,7 @@ const FootballTacticsApp = ({ embedded = false }) => {
                   setInterpolationProgress(0);
                 }}
                 className="control-btn p-2 md:p-1 bg-white/10 hover:bg-white/20 rounded transition-all flex-shrink-0"
-                title="Od początku"
+                title="Do pierwszej klatki"
               >
                 <SkipBack size={20} className="md:w-4 md:h-4" />
               </button>
@@ -5378,6 +5542,8 @@ const FootballTacticsApp = ({ embedded = false }) => {
                   setIsPlaying(!isPlaying);
                 }}
                 className="control-btn p-3 md:p-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded flex-shrink-0"
+                title={isPlaying ? 'Pauza' : 'Odtwórz animację'}
+                aria-label={isPlaying ? 'Pauza' : 'Odtwórz animację'}
               >
                 {isPlaying ? <Pause size={20} className="md:w-4 md:h-4" /> : <Play size={20} className="md:w-4 md:h-4" />}
               </button>
@@ -5391,8 +5557,10 @@ const FootballTacticsApp = ({ embedded = false }) => {
                     setInterpolationProgress(0);
                   }
                 }}
-                className="control-btn p-2 md:p-1 bg-white/10 hover:bg-white/20 rounded flex-shrink-0"
+                className="control-btn p-2 md:p-1 bg-white/10 hover:bg-white/20 rounded flex-shrink-0 disabled:opacity-40"
                 disabled={currentFrame >= currentScheme.frames.length - 1}
+                title="Następna klatka"
+                aria-label="Następna klatka"
               >
                 <SkipForward size={20} className="md:w-4 md:h-4" />
               </button>
@@ -5412,7 +5580,16 @@ const FootballTacticsApp = ({ embedded = false }) => {
                 className="control-btn px-2 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded font-medium flex items-center gap-1 whitespace-nowrap text-xs flex-shrink-0"
               >
                 <Plus size={14} />
-                Klatkę
+                Dodaj klatkę
+              </button>
+              <button
+                onClick={() => deleteFrame(currentFrame)}
+                disabled={currentScheme.frames.length <= 1}
+                className="control-btn px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-medium flex items-center gap-1 whitespace-nowrap text-xs flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Usuń bieżącą klatkę"
+              >
+                <Minus size={14} />
+                Usuń klatkę
               </button>
               
               <button
@@ -5484,20 +5661,20 @@ const FootballTacticsApp = ({ embedded = false }) => {
                         draggedFrameIdx === idx
                           ? 'opacity-30 scale-90'
                           : dragOverFrameIdx === idx && draggedFrameIdx !== null
-                          ? 'border-2 border-yellow-400 bg-yellow-400/20 scale-110 w-9 h-9 md:w-6 md:h-6'
+                          ? 'border-2 border-yellow-400 bg-yellow-400/20 scale-110 w-9 h-9 md:w-7 md:h-7'
                           : currentFrame === idx
-                          ? 'border border-blue-400 bg-blue-400/40 w-9 h-9 md:w-6 md:h-6'
-                          : 'border border-white/20 bg-white/5 hover:bg-white/10 w-8 h-8 md:w-5 md:h-5'
+                          ? 'border border-blue-400 bg-blue-600 w-9 h-9 md:w-7 md:h-7'
+                          : 'border border-white/20 bg-white/5 hover:bg-white/10 w-8 h-8 md:w-7 md:h-7'
                       }`}
                     >
-                      <div className="flex items-center justify-center text-[8px] font-bold text-slate-300 w-full h-full">
+                      <div className="flex items-center justify-center text-xs font-semibold text-slate-100 w-full h-full" title={`Klatka ${idx + 1} — kliknij, aby edytować; przeciągnij, aby zmienić kolejność`}>
                         {idx + 1}
                       </div>
                     </div>
                     {currentFrame === idx && currentScheme.frames.length > 1 && (
                       <button
                         onClick={() => deleteFrame(idx)}
-                        className="p-0.5 bg-red-600 hover:bg-red-700 rounded transition-all"
+                        className="md:hidden p-0.5 bg-red-600 hover:bg-red-700 rounded transition-all"
                         title="Usuń klatkę"
                       >
                         <Trash2 size={10} />
@@ -5737,9 +5914,39 @@ const FootballTacticsApp = ({ embedded = false }) => {
               </div>
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-400">
-              <p className="mb-4">Wybierz lub utwórz schemat</p>
-              <p className="text-sm">aby rozpocząć projektowanie</p>
+            <div className="space-y-4 text-sm text-slate-400">
+              <p className="text-slate-300">Schemat to zapisane ustawienie zespołu: pozycje, animacja w klatkach, linie, strefy i komentarze.</p>
+              <ol className="space-y-2.5">
+                {[
+                  'Wybierz fazę gry w lewym panelu, np. Atak, a w niej Budowanie.',
+                  'Kliknij „Nowy schemat” albo wybierz istniejący z listy.',
+                  'Ustaw zawodników, narysuj linie i strefy, dodawaj kolejne klatki animacji.',
+                ].map((text, i) => (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="w-5 h-5 flex-shrink-0 rounded-full bg-blue-600/30 text-blue-200 text-xs font-semibold flex items-center justify-center">{i + 1}</span>
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ol>
+              <button onClick={createNewScheme}
+                className="w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                <Plus size={16} /> Nowy schemat w fazie „{selectedPhase}{phases[selectedPhase]?.length > 0 && selectedSubPhase ? ` – ${selectedSubPhase}` : ''}”
+              </button>
+              <div className="pt-3 border-t border-white/10">
+                <p className="flex items-center gap-1.5 text-slate-300 mb-2"><Keyboard size={14} /> Skróty klawiszowe</p>
+                <div className="space-y-1 text-xs">
+                  {[
+                    ['V / L / S', 'przesuwanie / linie / strefy'],
+                    ['Ctrl+Z / Y', 'cofnij / ponów'],
+                    ['Ctrl+C / V', 'kopiuj / wklej linię lub strefę'],
+                    ['Delete', 'usuń zaznaczoną linię lub strefę'],
+                    ['Esc', 'anuluj rysowanie / odznacz'],
+                    ['Dwuklik', 'numer i kolor zawodnika'],
+                  ].map(([k, d]) => (
+                    <p key={k}><kbd className="bg-white/10 px-1 rounded text-slate-300">{k}</kbd> {d}</p>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

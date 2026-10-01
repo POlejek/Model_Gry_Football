@@ -4,6 +4,7 @@ import {
   Copy, ClipboardPaste, CopyPlus, Undo2, Redo2, Image as ImageIcon, Play, Pause, Keyboard, Search, Upload, Download,
 } from 'lucide-react';
 import { drawField, drawLine, drawZone } from './utils/draw.js';
+import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex,
@@ -539,21 +540,6 @@ const quickColorPalette = [
   { name: 'Biały', color: '#FFFFFF' },
 ];
 
-const LINE_TYPES = [
-  ['arrow-solid', 'Prosta ciągła z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['arrow-dashed', 'Przerywana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['arrow-wavy', 'Falowana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 C8 5,12 17,16 11 C20 5,24 17,28 11 C30 8,31 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['double-arrow-solid', 'Podwójna z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="9" x2="32" y2="9" stroke="currentColor" strokeWidth="2"/><line x1="4" y1="13" x2="32" y2="13" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  null,
-  ['line-dashed', 'Przerywana bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/></svg>],
-  ['line-solid', 'Ciągła bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2"/></svg>],
-  null,
-  ['curve-arrow-solid', 'Krzywa ciągła z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-arrow-dashed', 'Krzywa przerywana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 2"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-arrow-wavy', 'Krzywa falowana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 C9 3,13 13,18 7 C22 2,26 15,30 10 C31 9,31.5 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-line', 'Krzywa bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 36 11" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-];
-
 const CATEGORIES = ['Rozgrzewka', 'Technika', 'Rondo', 'Gra pozycyjna', 'Małe gry', 'Finalizacja', 'Motoryka', 'Gra', 'Inne'];
 
 const DEFAULT_META = {
@@ -710,7 +696,7 @@ function ColorQuickPicker({ value, onChange, isOpen, onToggle, title }) {
         className="w-7 h-7 rounded-md border-2 border-white/25 hover:border-white/50 transition-colors"
         style={{ backgroundColor: value }} />
       {isOpen && (
-        <div className="absolute top-full mt-1 right-0 bg-slate-900 border border-white/20 rounded-lg p-1.5 grid grid-cols-6 gap-1 shadow-xl z-50">
+        <div className="absolute top-full mt-1 right-0 bg-slate-900 border border-white/20 rounded-lg p-1.5 w-max grid grid-cols-6 gap-1 shadow-xl z-50">
           {quickColorPalette.map(c => (
             <button key={c.color} onClick={() => { onChange(c.color); onToggle(); }}
               className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-transform"
@@ -739,7 +725,7 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
 // ── Main component ───────────────────────────────────────────────
-export default function TrainingDrillApp() {
+export default function TrainingDrillApp({ active = true }) {
   const [initial] = useState(loadDraft);
 
   const canvasRef = useRef(null);
@@ -1307,6 +1293,7 @@ export default function TrainingDrillApp() {
 
   // ── Keyboard ─────────────────────────────────────────────────────
   keyHandlerRef.current = (e) => {
+    if (!active) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
     if (mod && k === 's') { e.preventDefault(); saveDrill(false); return; }
@@ -1613,12 +1600,6 @@ export default function TrainingDrillApp() {
     </button>
   );
 
-  const zoneShapes = [
-    ['rectangle', 'Prostokąt', <svg width="30" height="17" viewBox="0 0 40 22"><rect x="4" y="3" width="32" height="16" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-    ['circle', 'Koło', <svg width="30" height="17" viewBox="0 0 40 22"><circle cx="20" cy="11" r="8" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-    ['polygon', 'Wielokąt', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M20 3 L35 9 L30 19 L10 19 L5 9 Z" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-  ];
-
   return (
     <div className="flex flex-1 overflow-hidden relative">
       <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
@@ -1750,7 +1731,7 @@ export default function TrainingDrillApp() {
 
           {tool === 'zone' && (
             <>
-              {zoneShapes.map(([type, title, icon]) => (
+              {ZONE_SHAPES.map(([type, title, icon]) => (
                 <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title} aria-pressed={zoneType === type}
                   className={`${optClass(zoneType === type)} w-10`}>
                   {icon}

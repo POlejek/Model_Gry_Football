@@ -1,5 +1,8 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Trash2, Plus, X } from 'lucide-react';
+import {
+  Trash2, Plus, Minus, X, Save, MoreHorizontal, FolderOpen, FileText, MousePointer2, MoveUpRight, Square,
+  Copy, ClipboardPaste, CopyPlus, Undo2, Redo2, Image as ImageIcon, Play, Pause, Keyboard, Search, Upload, Download,
+} from 'lucide-react';
 import { drawField, drawLine, drawZone } from './utils/draw.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
@@ -10,7 +13,9 @@ import {
 const FULL_W = 700;
 const FULL_H = 1080;
 const CROP_H = { full: 1080, half: 560, third: 387 };
-const DEFAULT_PITCH = { type: 'full', orientation: 'vertical', width: 30, length: 40 };
+// Drills saved before the pitch option existed were vertical; new drills start horizontal (fits laptop screens).
+const LEGACY_PITCH = { type: 'full', orientation: 'vertical', width: 30, length: 40 };
+const NEW_PITCH = { ...LEGACY_PITCH, orientation: 'horizontal' };
 const PITCH_TYPES = [
   { id: 'full',   label: 'Całe' },
   { id: 'half',   label: 'Połowa' },
@@ -535,18 +540,18 @@ const quickColorPalette = [
 ];
 
 const LINE_TYPES = [
-  ['arrow-solid', 'Prosta ciągła z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['arrow-dashed', 'Przerywana z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['arrow-wavy', 'Falowana z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M4 11 C8 5,12 17,16 11 C20 5,24 17,28 11 C30 8,31 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
-  ['double-arrow-solid', 'Podwójna z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><line x1="4" y1="9" x2="32" y2="9" stroke="currentColor" strokeWidth="2"/><line x1="4" y1="13" x2="32" y2="13" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
+  ['arrow-solid', 'Prosta ciągła z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
+  ['arrow-dashed', 'Przerywana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="32" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
+  ['arrow-wavy', 'Falowana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 C8 5,12 17,16 11 C20 5,24 17,28 11 C30 8,31 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
+  ['double-arrow-solid', 'Podwójna z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="9" x2="32" y2="9" stroke="currentColor" strokeWidth="2"/><line x1="4" y1="13" x2="32" y2="13" stroke="currentColor" strokeWidth="2"/><polygon points="32,11 28,8 28,14" fill="currentColor"/></svg>],
   null,
-  ['line-dashed', 'Przerywana bez grotów', <svg width="40" height="22" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/></svg>],
-  ['line-solid', 'Ciągła bez grotów', <svg width="40" height="22" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2"/></svg>],
+  ['line-dashed', 'Przerywana bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2"/></svg>],
+  ['line-solid', 'Ciągła bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><line x1="4" y1="11" x2="36" y2="11" stroke="currentColor" strokeWidth="2"/></svg>],
   null,
-  ['curve-arrow-solid', 'Krzywa ciągła z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-arrow-dashed', 'Krzywa przerywana z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 2"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-arrow-wavy', 'Krzywa falowana z grotem', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M4 11 C9 3,13 13,18 7 C22 2,26 15,30 10 C31 9,31.5 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
-  ['curve-line', 'Krzywa bez grotów', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 36 11" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
+  ['curve-arrow-solid', 'Krzywa ciągła z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
+  ['curve-arrow-dashed', 'Krzywa przerywana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 32 11" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 2"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
+  ['curve-arrow-wavy', 'Krzywa falowana z grotem', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 C9 3,13 13,18 7 C22 2,26 15,30 10 C31 9,31.5 10,32 11" stroke="currentColor" strokeWidth="2" fill="none"/><polygon points="32,11 28,9 28,13" fill="currentColor"/></svg>],
+  ['curve-line', 'Krzywa bez grotów', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M4 11 Q 18 3, 36 11" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
 ];
 
 const CATEGORIES = ['Rozgrzewka', 'Technika', 'Rondo', 'Gra pozycyjna', 'Małe gry', 'Finalizacja', 'Motoryka', 'Gra', 'Inne'];
@@ -565,6 +570,14 @@ const META_FIELDS = [
 ];
 
 const emptyFrame = () => ({ items: [], lines: [], zones: [] });
+const LIBRARY_KEY = 'trainingDrillLibrary';
+const readLibrary = () => {
+  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY)) || []; } catch { return []; }
+};
+const isEmptyScene = (frames) => frames.length === 1 && !frames[0].items.length && !frames[0].lines.length && !frames[0].zones.length;
+// Everything that "Zapisz" persists; compared to detect unsaved changes.
+const drillSignature = ({ frames, pitch, teamAColor, teamBColor, meta, name }) =>
+  JSON.stringify([makeSceneKey(frames, pitch, teamAColor, teamBColor), meta, (name || '').trim()]);
 const DRAFT_KEY = 'trainingDrillDraft';
 const makeSceneKey = (frames, pitch, a, b) => JSON.stringify({ frames, pitch, a, b });
 // ASCII only: browsers may drop a download name containing diacritics and save as "download"
@@ -595,7 +608,7 @@ function normalizeDrill(d = {}) {
   }));
   return {
     frames,
-    pitch: { ...DEFAULT_PITCH, ...(d.pitch || {}) },
+    pitch: { ...LEGACY_PITCH, ...(d.pitch || {}) },
     meta: { ...DEFAULT_META, ...(d.meta || {}) },
     teamAColor: d.teamAColor || '#1d4ed8',
     teamBColor: d.teamBColor || '#dc2626',
@@ -608,7 +621,7 @@ function loadDraft() {
     const d = JSON.parse(localStorage.getItem(DRAFT_KEY));
     if (d) return { ...normalizeDrill(d), name: d.name || '', drillId: d.drillId || null };
   } catch { /* ignore corrupt draft */ }
-  return { ...normalizeDrill(), name: '', drillId: null };
+  return { ...normalizeDrill({ pitch: NEW_PITCH }), name: '', drillId: null };
 }
 
 const DRILL_FORMAT = 'model-gry-training-drill';
@@ -691,21 +704,20 @@ function equipmentSummary(frames) {
 function ColorQuickPicker({ value, onChange, isOpen, onToggle, title }) {
   const inputRef = useRef(null);
   return (
-    <div className="flex items-center gap-1.5 relative" onClick={e => e.stopPropagation()}>
-      <span className="text-sm text-slate-400">Kolor:</span>
+    <div className="relative" onClick={e => e.stopPropagation()}>
       <input ref={inputRef} type="color" value={value} onChange={e => onChange(e.target.value)} className="hidden" />
       <button onClick={onToggle} title={title}
-        className="w-7 h-7 rounded border-2 border-white/20 hover:border-white/40 transition-all"
+        className="w-7 h-7 rounded-md border-2 border-white/25 hover:border-white/50 transition-colors"
         style={{ backgroundColor: value }} />
       {isOpen && (
-        <div className="absolute top-full mt-1 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-lg p-1.5 flex gap-1 shadow-xl z-50">
+        <div className="absolute top-full mt-1 right-0 bg-slate-900 border border-white/20 rounded-lg p-1.5 grid grid-cols-6 gap-1 shadow-xl z-50">
           {quickColorPalette.map(c => (
             <button key={c.color} onClick={() => { onChange(c.color); onToggle(); }}
-              className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-all"
+              className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-transform"
               style={{ backgroundColor: c.color }} title={c.name} />
           ))}
-          <button onClick={() => inputRef.current?.click()}
-            className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-all bg-gradient-to-br from-red-500 via-green-500 to-blue-500 flex items-center justify-center text-white text-[9px] font-bold">
+          <button onClick={() => inputRef.current?.click()} title="Dowolny kolor"
+            className="w-6 h-6 rounded border border-white/30 hover:scale-110 transition-transform bg-gradient-to-br from-red-500 via-green-500 to-blue-500 text-white text-[8px] font-bold">
             RGB
           </button>
         </div>
@@ -714,9 +726,17 @@ function ColorQuickPicker({ value, onChange, isOpen, onToggle, title }) {
   );
 }
 
-const btn = 'px-2 py-1.5 rounded text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed';
-const dangerBtn = 'flex items-center justify-center gap-2 px-3 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-lg text-sm text-red-300 transition-all';
-const sectionTitle = 'text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2';
+const btn = 'px-2 py-1.5 rounded-md text-xs bg-white/5 hover:bg-white/10 text-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+const tbBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
+const dangerBtn = 'flex items-center justify-center gap-2 px-3 py-2 bg-red-600/15 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-colors';
+const fieldLabel = 'text-xs text-slate-400 mb-1';
+const inputCls = 'w-full px-2 py-1.5 bg-white/10 border border-white/15 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400';
+const sectionTitle = 'text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2';
+const ToolbarDivider = () => <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />;
+const segClass = (active) => `h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+  active ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`;
+const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justify-center transition-colors ${
+  active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
 // ── Main component ───────────────────────────────────────────────
 export default function TrainingDrillApp() {
@@ -777,9 +797,13 @@ export default function TrainingDrillApp() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
   const [libraryMsg, setLibraryMsg] = useState(null);
-  const [savedDrills, setSavedDrills] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('trainingDrillLibrary')) || []; }
-    catch { return []; }
+  const [savedDrills, setSavedDrills] = useState(readLibrary);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [hoverCursor, setHoverCursor] = useState('default');
+  const [savedSig, setSavedSig] = useState(() => {
+    const entry = initial.drillId && readLibrary().find(d => d.id === initial.drillId);
+    if (entry) return drillSignature({ ...normalizeDrill(entry), name: entry.name });
+    return isEmptyScene(initial.frames) ? drillSignature(initial) : null;
   });
 
   const frame = frames[currentFrame] || frames[0];
@@ -1031,13 +1055,13 @@ export default function TrainingDrillApp() {
     return String(max + 1);
   };
 
-  const addItem = (eq) => {
+  const addItem = (eq, pos = null) => {
     checkpoint();
     const id = newId();
     const item = {
       id, type: eq.type, scale: 1, rotation: 0,
-      x: pitchSize.w / 2 + (Math.random() - 0.5) * 80,
-      y: pitchSize.h / 2 + (Math.random() - 0.5) * 80,
+      x: pos ? clamp(pos.x, 10, pitchSize.w - 10) : pitchSize.w / 2 + (Math.random() - 0.5) * 80,
+      y: pos ? clamp(pos.y, 10, pitchSize.h - 10) : pitchSize.h / 2 + (Math.random() - 0.5) * 80,
       color: eq.type === 'player' ? (eq.team === 'A' ? teamAColor : teamBColor) : eq.color,
     };
     if (eq.type === 'player') { item.team = eq.team; item.label = nextLabel(i => i.type === 'player' && i.team === eq.team); }
@@ -1159,10 +1183,22 @@ export default function TrainingDrillApp() {
     setDrag({ type: 'move', start: { x, y }, origin });
   };
 
+  const updateHoverCursor = (x, y) => {
+    let c = 'default';
+    if (single?.kind === 'items' && isNearHandle(x, y, single.obj)) c = 'grab';
+    else if (single?.kind === 'lines' && (isPointNearLineEnd(x, y, single.obj) || isPointNearControlPoint(x, y, single.obj))) c = 'grab';
+    else if (single?.kind === 'zones' && isPointNearPolygonVertex(x, y, single.obj) !== null) c = 'grab';
+    else if (hitAny(x, y)) c = 'move';
+    if (c !== hoverCursor) setHoverCursor(c);
+  };
+
   const handlePointerMove = (e) => {
     if (isPlaying) return;
-    if (!currentLine && !currentZone && !drag) return;
     const { x, y } = getCoords(e);
+    if (!currentLine && !currentZone && !drag) {
+      if (!isDrawingMode && !e.touches) updateHoverCursor(x, y);
+      return;
+    }
 
     if (currentLine) { setCurrentLine(l => ({ ...l, endX: x, endY: y })); return; }
     if (currentZone) {
@@ -1255,11 +1291,28 @@ export default function TrainingDrillApp() {
     handlePointerDown(e);
   };
 
+  const tool = isDrawingMode ? drawingTool : 'select';
+  const setTool = (t) => {
+    if (isPlaying) stop();
+    setIsDrawingMode(t !== 'select');
+    if (t !== 'select') { setDrawingTool(t); setSelectedIds([]); setColorPicker(null); }
+    setCurrentLine(null); setCurrentZone(null); setPolygonPoints([]);
+  };
+
+  const nudgeSelection = (dx, dy) => {
+    const ids = new Set(selectedIds);
+    const move = (kind) => (o) => (ids.has(o.id) ? translateObj(kind, o, dx, dy) : o);
+    updateFrames('current', f => ({ items: f.items.map(move('items')), lines: f.lines.map(move('lines')), zones: f.zones.map(move('zones')) }));
+  };
+
   // ── Keyboard ─────────────────────────────────────────────────────
   keyHandlerRef.current = (e) => {
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
+    if (mod && k === 's') { e.preventDefault(); saveDrill(false); return; }
+    if (e.key === 'Escape' && (showMeta || showLibrary)) { setShowMeta(false); setShowLibrary(false); return; }
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (showMeta || showLibrary) return;
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (isPlaying) return;
@@ -1272,7 +1325,26 @@ export default function TrainingDrillApp() {
       return;
     }
     if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelection(); return; }
-    if (e.key === 'Escape') { clearInteraction(); setIsDrawingMode(false); setShowMeta(false); }
+    if (e.key.startsWith('Arrow') && selectedIds.length) {
+      e.preventDefault();
+      const step = e.shiftKey ? 10 : 1;
+      nudgeSelection(
+        e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0,
+        e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0,
+      );
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (polygonPoints.length) setPolygonPoints([]);
+      else if (isDrawingMode) setTool('select');
+      else clearInteraction();
+      return;
+    }
+    if (!mod && !e.altKey) {
+      if (k === 'v') setTool('select');
+      else if (k === 'l') setTool('line');
+      else if (k === 's') setTool('zone');
+    }
   };
 
   useEffect(() => {
@@ -1367,7 +1439,7 @@ export default function TrainingDrillApp() {
 
   const persistLibrary = (list) => {
     try {
-      localStorage.setItem('trainingDrillLibrary', JSON.stringify(list));
+      localStorage.setItem(LIBRARY_KEY, JSON.stringify(list));
     } catch {
       flash('Brak miejsca w pamięci przeglądarki', 'warn');
       return false;
@@ -1378,6 +1450,12 @@ export default function TrainingDrillApp() {
 
   const snapshot = () => ({ version: 2, frames, pitch, meta, teamAColor, teamBColor });
 
+  const currentSig = useMemo(
+    () => drillSignature({ frames, pitch, teamAColor, teamBColor, meta, name: drillName }),
+    [frames, pitch, teamAColor, teamBColor, meta, drillName],
+  );
+  const isDirty = currentSig !== savedSig;
+
   const applyDrill = (d) => {
     const n = normalizeDrill(d);
     setIsPlaying(false);
@@ -1387,6 +1465,7 @@ export default function TrainingDrillApp() {
     clearInteraction();
     histRef.current = { stack: [makeSceneKey(n.frames, n.pitch, n.teamAColor, n.teamBColor)], index: 0 };
     setHistTick(t => t + 1);
+    return n;
   };
 
   const saveDrill = (asNew = false) => {
@@ -1401,15 +1480,23 @@ export default function TrainingDrillApp() {
       setCurrentDrillId(id);
     }
     setDrillName(name);
-    flash('Zapisano');
+    setSavedSig(drillSignature({ frames, pitch, teamAColor, teamBColor, meta, name }));
+    flash(`Zapisano „${name}”`);
   };
 
+  const hasContent = !isEmptyScene(frames);
+  const confirmDiscard = () => !isDirty || !hasContent
+    || window.confirm('Bieżące ćwiczenie ma niezapisane zmiany. Kontynuować bez zapisywania?');
+
   const loadDrill = (d) => {
-    applyDrill(d);
+    const n = applyDrill(d);
     setCurrentDrillId(d.id);
     setDrillName(d.name);
+    setSavedSig(drillSignature({ ...n, name: d.name }));
     setShowLibrary(false);
   };
+
+  const openDrill = (d) => { if (confirmDiscard()) loadDrill(d); };
 
   const deleteDrill = (id) => {
     if (!window.confirm('Usunąć to ćwiczenie z biblioteki?')) return;
@@ -1417,13 +1504,12 @@ export default function TrainingDrillApp() {
     if (id === currentDrillId) setCurrentDrillId(null);
   };
 
-  const hasContent = frames.length > 1 || frame.items.length || frame.lines.length || frame.zones.length;
-
   const newDrill = () => {
-    if (hasContent && !window.confirm('Rozpocząć nowe ćwiczenie? Niezapisane zmiany zostaną utracone.')) return;
-    applyDrill({});
+    if (!confirmDiscard()) return;
+    const n = applyDrill({ pitch: NEW_PITCH });
     setCurrentDrillId(null);
     setDrillName('');
+    setSavedSig(drillSignature({ ...n, name: '' }));
   };
 
   const exportDrill = () => {
@@ -1473,8 +1559,8 @@ export default function TrainingDrillApp() {
     if (added.length && !persistLibrary(list)) parts.push('brak miejsca w pamięci przeglądarki');
     flash(parts.join(' · '), badFiles ? 'warn' : 'ok');
 
-    if (added.length === 1) loadDrill(added[0]);
-    else if (added.length > 1) setShowLibrary(true);
+    if (added.length === 1 && confirmDiscard()) loadDrill(added[0]);
+    else if (added.length) setShowLibrary(true);
   };
 
   const clearFrame = () => {
@@ -1487,359 +1573,331 @@ export default function TrainingDrillApp() {
   const colorPickerItem = colorPicker ? frame.items.find(i => i.id === colorPicker.id) : null;
 
   // ── UI ───────────────────────────────────────────────────────────
+  const filteredDrills = savedDrills.filter(d => {
+    const q = librarySearch.trim().toLowerCase();
+    return !q || d.name.toLowerCase().includes(q) || (d.meta?.category || '').toLowerCase().includes(q);
+  });
+
+  const canvasHint = isPlaying ? null
+    : tool === 'line' ? 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie'
+    : tool === 'zone' ? (zoneType === 'polygon'
+      ? (polygonPoints.length
+        ? `Punkty: ${polygonPoints.length} · kliknij zielony punkt, aby zamknąć · Esc anuluje`
+        : 'Klikaj kolejne wierzchołki strefy')
+      : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie')
+    : (!hasContent ? 'Kliknij sprzęt w lewym panelu albo przeciągnij go na boisko' : null);
+
+  const saveStatus = isDirty
+    ? { text: currentDrillId ? 'Niezapisane zmiany' : 'Nowe ćwiczenie · niezapisane', cls: 'text-amber-300', dot: true }
+    : { text: currentDrillId ? 'Zapisano w bibliotece' : 'Nowe ćwiczenie', cls: 'text-slate-500', dot: false };
+
+  const canvasCursor = isPlaying ? 'default'
+    : isDrawingMode ? 'crosshair'
+    : drag ? (drag.type === 'marquee' ? 'crosshair' : 'grabbing')
+    : hoverCursor;
+
+  const handleDrop = (e) => {
+    const label = e.dataTransfer.getData('text/plain').replace(/^drill-eq:/, '');
+    const eq = EQUIPMENT_GROUPS.flatMap(g => g.items).find(q => q.label === label);
+    if (!eq || isPlaying) return;
+    e.preventDefault();
+    const { x, y } = getCoords(e);
+    addItem(eq, { x, y });
+  };
+
+  const menuItem = (label, onClick, disabled = false) => (
+    <button disabled={disabled}
+      onClick={() => { setOpenColorPalette(null); onClick(); }}
+      className="w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none">
+      {label}
+    </button>
+  );
+
+  const zoneShapes = [
+    ['rectangle', 'Prostokąt', <svg width="30" height="17" viewBox="0 0 40 22"><rect x="4" y="3" width="32" height="16" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
+    ['circle', 'Koło', <svg width="30" height="17" viewBox="0 0 40 22"><circle cx="20" cy="11" r="8" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
+    ['polygon', 'Wielokąt', <svg width="30" height="17" viewBox="0 0 40 22"><path d="M20 3 L35 9 L30 19 L10 19 L5 9 Z" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
+  ];
+
   return (
-    <div className="flex flex-1 overflow-hidden flex-col relative">
+    <div className="flex flex-1 overflow-hidden relative">
+      <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
 
-      {/* ── Drawing toolbar ── */}
-      {isDrawingMode && (
-        <div className="flex-shrink-0 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 py-2 overflow-x-auto relative z-40">
-          <div className="min-w-max flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400 font-medium">Narzędzie:</span>
-              <button onClick={() => { setDrawingTool('line'); setCurrentZone(null); setPolygonPoints([]); }}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${drawingTool === 'line' ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/15 text-slate-300'}`}>
-                📏 Linie
-              </button>
-              <button onClick={() => { setDrawingTool('zone'); setCurrentLine(null); }}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${drawingTool === 'zone' ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/15 text-slate-300'}`}>
-                🔷 Strefy
-              </button>
-            </div>
-
-            {drawingTool === 'line' && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-sm text-slate-400 font-medium mr-1">Typ:</span>
-                {LINE_TYPES.map((t, idx) => {
-                  if (!t) return <div key={idx} className="w-px h-7 bg-white/15 mx-1" />;
-                  const [type, title, icon] = t;
-                  return (
-                    <button key={type} onClick={() => setLineType(type)} title={title}
-                      className={`px-2 py-1.5 rounded transition-all ${lineType === type ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'}`}>
-                      {icon}
-                    </button>
-                  );
-                })}
-                <div className="w-px h-7 bg-white/15 mx-1" />
-                <ColorQuickPicker value={lineColor} onChange={setLineColor} title="Kolor linii"
-                  isOpen={openColorPalette === 'line'}
-                  onToggle={() => setOpenColorPalette(p => (p === 'line' ? null : 'line'))} />
-              </div>
-            )}
-
-            {drawingTool === 'zone' && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-slate-400 font-medium">Typ:</span>
-                {[
-                  ['rectangle', 'Prostokąt', <svg width="40" height="22" viewBox="0 0 40 22"><rect x="4" y="3" width="32" height="16" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-                  ['circle', 'Koło', <svg width="40" height="22" viewBox="0 0 40 22"><circle cx="20" cy="11" r="8" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-                  ['polygon', 'Wielokąt', <svg width="40" height="22" viewBox="0 0 40 22"><path d="M20 3 L35 9 L30 19 L10 19 L5 9 Z" stroke="currentColor" strokeWidth="2" fill="none"/></svg>],
-                ].map(([type, title, icon]) => (
-                  <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title}
-                    className={`p-1.5 rounded-lg transition-all ${zoneType === type ? 'bg-white/20 ring-2 ring-blue-500' : 'bg-white/5 hover:bg-white/10'}`}>
-                    {icon}
-                  </button>
-                ))}
-                <div className="w-px h-7 bg-white/15 mx-1" />
-                <ColorQuickPicker value={zoneColor} onChange={setZoneColor} title="Kolor strefy"
-                  isOpen={openColorPalette === 'zone'}
-                  onToggle={() => setOpenColorPalette(p => (p === 'zone' ? null : 'zone'))} />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-slate-400">Przezroczystość:</span>
-                  <input type="range" min={0.05} max={1} step={0.05} value={zoneOpacity}
-                    onChange={e => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
-                  <span className="text-xs text-slate-400 w-8">{Math.round(zoneOpacity * 100)}%</span>
-                </div>
-                {zoneType === 'polygon' && (
-                  <span className="text-xs text-slate-400 bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1">
-                    💡 Klikaj punkty, zamknij klikając zielony punkt.
-                    {polygonPoints.length > 0 && ` (${polygonPoints.length} pkt)`}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+      {/* ── Floating color picker (double click) ── */}
+      {colorPicker && colorPickerItem && (
+        <div className="fixed z-50 bg-slate-800 border border-white/20 rounded-xl shadow-2xl p-3 flex flex-col gap-2"
+          style={{ left: colorPicker.screenX, top: colorPicker.screenY, transform: 'translate(-50%,12px)', minWidth: 150 }}>
+          <p className="text-xs font-semibold text-slate-300">Kolor elementu</p>
+          <input type="color" value={colorPickerItem.color || '#ffffff'}
+            onChange={e => patchObj('all', 'items', colorPicker.id, { color: e.target.value })}
+            className="w-full h-9 rounded cursor-pointer border border-white/20 bg-transparent" />
+          <button onClick={() => setColorPicker(null)}
+            className="text-xs text-slate-400 hover:text-white py-1 hover:bg-white/10 rounded transition-colors">
+            Zamknij
+          </button>
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* ── Floating color picker (double click) ── */}
-        {colorPicker && colorPickerItem && (
-          <div className="fixed z-50 bg-slate-800 border border-white/20 rounded-xl shadow-2xl p-3 flex flex-col gap-2"
-            style={{ left: colorPicker.screenX, top: colorPicker.screenY, transform: 'translate(-50%,12px)', minWidth: 150 }}>
-            <p className="text-xs font-semibold text-slate-300">Kolor elementu</p>
-            <input type="color" value={colorPickerItem.color || '#ffffff'}
-              onChange={e => patchObj('all', 'items', colorPicker.id, { color: e.target.value })}
-              className="w-full h-9 rounded cursor-pointer border border-white/20 bg-transparent" />
-            <button onClick={() => setColorPicker(null)}
-              className="text-xs text-slate-400 hover:text-white py-1 hover:bg-white/10 rounded transition-all">
-              Zamknij
+      {/* ── Left: drill + equipment palette ── */}
+      <aside className="w-52 flex-shrink-0 bg-slate-950/80 border-r border-white/10 flex flex-col min-h-0">
+        <div className="p-3 border-b border-white/10 flex-shrink-0">
+          <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
+            placeholder="Nazwa ćwiczenia" aria-label="Nazwa ćwiczenia" className={`${inputCls} font-medium`} />
+          <p className={`mt-1 h-4 text-[11px] flex items-center gap-1.5 ${saveStatus.cls}`}>
+            {saveStatus.dot && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+            {saveStatus.text}
+          </p>
+          <div className="mt-2 flex gap-1">
+            <button onClick={() => saveDrill(false)} title="Zapisz w bibliotece (Ctrl+S)"
+              className="flex-1 h-8 inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+              <Save size={14} /> Zapisz
+            </button>
+            <div className="relative" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setOpenColorPalette(p => (p === 'file' ? null : 'file'))}
+                title="Więcej: nowe ćwiczenie, kopia, eksport, import" aria-haspopup="menu" aria-expanded={openColorPalette === 'file'}
+                className={`h-8 w-8 inline-flex items-center justify-center rounded-md text-slate-300 transition-colors ${openColorPalette === 'file' ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'}`}>
+                <MoreHorizontal size={16} />
+              </button>
+              {openColorPalette === 'file' && (
+                <div role="menu" className="absolute left-0 top-full mt-1 w-60 bg-slate-900 border border-white/15 rounded-lg shadow-2xl py-1 z-50">
+                  {menuItem('Nowe ćwiczenie', newDrill)}
+                  {menuItem('Zapisz jako kopię', () => saveDrill(true), !currentDrillId)}
+                  <div className="my-1 border-t border-white/10" />
+                  {menuItem('Eksportuj ćwiczenie (.json)', exportDrill)}
+                  {menuItem(`Eksportuj bibliotekę (${savedDrills.length})`, exportLibrary, !savedDrills.length)}
+                  {menuItem('Importuj pliki…', () => importInputRef.current?.click())}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            <button onClick={() => setShowLibrary(true)} className={`${btn} inline-flex items-center justify-center gap-1`} title="Zapisane ćwiczenia">
+              <FolderOpen size={13} /> Biblioteka
+            </button>
+            <button onClick={() => setShowMeta(true)} className={`${btn} inline-flex items-center justify-center gap-1`} title="Cel, organizacja, punkty trenerskie…">
+              <FileText size={13} /> Opis
             </button>
           </div>
-        )}
+        </div>
 
-        {/* ── Left panel ── */}
-        <div className="w-56 flex-shrink-0 bg-slate-950/80 border-r border-white/10 flex flex-col overflow-y-auto">
-          <div className="p-3 border-b border-white/10">
-            <p className={sectionTitle}>Ćwiczenie</p>
-            <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
-              placeholder="Nazwa ćwiczenia"
-              className="w-full px-2 py-1 mb-2 bg-white/10 border border-white/20 rounded text-sm text-white placeholder-slate-500" />
-            <div className="grid grid-cols-2 gap-1">
-              <button onClick={() => saveDrill(false)}
-                className="px-2 py-1.5 rounded text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-all">
-                💾 Zapisz
-              </button>
-              <button onClick={() => saveDrill(true)} disabled={!currentDrillId} className={btn}>Zapisz jako…</button>
-              <button onClick={() => setShowLibrary(s => !s)}
-                className={showLibrary ? 'px-2 py-1.5 rounded text-xs bg-blue-600 text-white' : btn}>
-                📂 Wczytaj ({savedDrills.length})
-              </button>
-              <button onClick={newDrill} className={btn}>＋ Nowe</button>
-              <button onClick={() => setShowMeta(true)} className={`${btn} col-span-2`}>📝 Opis ćwiczenia</button>
-              <button onClick={exportDrill} className={btn} title="Zapisz bieżące ćwiczenie do pliku .json">⬇ Eksport</button>
-              <button onClick={() => importInputRef.current?.click()} className={btn}
-                title="Wczytaj jeden lub wiele plików .json (ćwiczenia lub całe biblioteki)">
-                ⬆ Import
-              </button>
-              <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" />
-            </div>
-            {libraryMsg && (
-              <p className={`text-xs mt-2 ${libraryMsg.tone === 'warn' ? 'text-amber-300' : 'text-emerald-300'}`}>{libraryMsg.text}</p>
-            )}
-
-            {showLibrary && (
-              <div className="mt-2 flex flex-col gap-1 max-h-60 overflow-y-auto">
-                {savedDrills.length > 0 && (
-                  <button onClick={exportLibrary} className={`${btn} mb-1`} title="Wszystkie ćwiczenia w jednym pliku .json">
-                    ⬇ Eksportuj całą bibliotekę ({savedDrills.length})
-                  </button>
-                )}
-                {savedDrills.length === 0 && <p className="text-xs text-slate-500">Brak zapisanych ćwiczeń.</p>}
-                {savedDrills.map(d => (
-                  <div key={d.id}
-                    className={`flex items-center gap-1 rounded px-2 py-1.5 text-sm ${d.id === currentDrillId ? 'bg-blue-600/30 ring-1 ring-blue-500' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <button onClick={() => loadDrill(d)} className="flex-1 text-left min-w-0">
-                      <p className="text-slate-200 truncate">{d.name}</p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {[d.meta?.category, new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })].filter(Boolean).join(' · ')}
-                      </p>
-                    </button>
-                    <button onClick={() => deleteDrill(d.id)} title="Usuń" className="p-1 text-slate-500 hover:text-red-400 transition-colors">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 border-b border-white/10">
-            <p className={sectionTitle}>Tryb</p>
-            <div className="flex gap-1">
-              <button onClick={() => { setIsDrawingMode(false); setCurrentLine(null); setCurrentZone(null); setPolygonPoints([]); }}
-                className={`flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all ${!isDrawingMode ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                ↖ Zaznacz
-              </button>
-              <button onClick={() => { if (isPlaying) stop(); setIsDrawingMode(true); setSelectedIds([]); }}
-                className={`flex-1 px-2 py-1.5 rounded text-sm font-medium transition-all ${isDrawingMode ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                ✏️ Rysuj
-              </button>
-            </div>
-          </div>
-
-          <div className="p-3 border-b border-white/10">
-            <p className={sectionTitle}>Boisko</p>
-            <div className="grid grid-cols-4 gap-1 mb-2">
-              {PITCH_TYPES.map(t => (
-                <button key={t.id} onClick={() => changePitch({ type: t.id })}
-                  className={`px-1 py-1.5 rounded text-[11px] transition-all ${pitch.type === t.id ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {[['vertical', '↕ Pionowo'], ['horizontal', '↔ Poziomo']].map(([o, l]) => (
-                <button key={o} onClick={() => changePitch({ orientation: o })}
-                  className={`px-2 py-1.5 rounded text-xs transition-all ${pitch.orientation === o ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                  {l}
-                </button>
-              ))}
-            </div>
-            {pitch.type === 'custom' && (
-              <div className="flex items-center gap-1 mt-2 text-xs text-slate-400">
-                {[['width', 'Szer.'], ['length', 'Dł.']].map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-1">
-                    {label}
-                    <input key={`${key}-${pitch[key]}`} type="number" min={5} max={120} defaultValue={pitch[key]}
-                      onBlur={e => changePitch({ [key]: e.target.value })}
-                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                      className="w-12 px-1 py-0.5 bg-white/10 border border-white/20 rounded text-white" />
-                  </label>
-                ))}
-                <span>m</span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 border-b border-white/10">
-            <p className={sectionTitle}>Kolory drużyn</p>
-            <div className="flex flex-col gap-2">
-              {[['A', teamAColor, setTeamAColor], ['B', teamBColor, setTeamBColor]].map(([team, color, setColor]) => (
-                <div key={team} className="flex items-center gap-2">
-                  <input type="color" value={color}
-                    onChange={e => {
-                      const c = e.target.value;
-                      setColor(c);
-                      updateKind('all', 'items', list => list.map(i => (i.type === 'player' && i.team === team ? { ...i, color: c } : i)));
-                    }}
-                    className="w-7 h-7 rounded cursor-pointer border border-white/20 bg-transparent" />
-                  <span className="text-sm text-slate-300">Drużyna {team}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+          <p className="text-[11px] text-slate-500">Kliknij albo przeciągnij na boisko</p>
           {EQUIPMENT_GROUPS.map(group => (
-            <div key={group.title} className="p-3 border-b border-white/10">
+            <div key={group.title}>
               <p className={sectionTitle}>{group.title}</p>
-              <div className="flex flex-col gap-1">
+              <div className="grid grid-cols-2 gap-1">
                 {group.items.map(eq => (
-                  <button key={eq.label} onClick={() => addItem(eq)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded text-sm text-slate-200 bg-white/5 hover:bg-white/15 transition-all text-left active:scale-95">
-                    <span className="text-base w-5 text-center">{eq.icon}</span>
-                    <span>{eq.label}</span>
-                    <Plus size={12} className="ml-auto text-slate-500" />
+                  <button key={eq.label} draggable
+                    onDragStart={e => { e.dataTransfer.setData('text/plain', `drill-eq:${eq.label}`); e.dataTransfer.effectAllowed = 'copy'; }}
+                    onClick={() => addItem(eq)}
+                    title={`${eq.label} — kliknij, aby dodać na środek, lub przeciągnij na boisko`}
+                    className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-white/5 hover:bg-white/15 active:scale-95 transition text-slate-200 cursor-grab">
+                    {eq.type === 'player'
+                      ? <span className="w-4 h-4 rounded-full border-2 border-white/80" style={{ background: eq.team === 'A' ? teamAColor : teamBColor }} />
+                      : <span className="text-lg leading-none">{eq.icon}</span>}
+                    <span className="text-[11px] leading-tight text-center px-1">{eq.label}</span>
                   </button>
                 ))}
               </div>
             </div>
           ))}
         </div>
+      </aside>
 
-        {/* ── Center: actions + canvas + timeline ── */}
-        <div className="flex-1 flex flex-col bg-slate-900/30 overflow-hidden min-w-0">
-          <div className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-white/10 overflow-x-auto">
-            <button onClick={undo} disabled={!canUndo} className={btn} title="Cofnij (Ctrl+Z)">↶ Cofnij</button>
-            <button onClick={redo} disabled={!canRedo} className={btn} title="Ponów (Ctrl+Y)">↷ Ponów</button>
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            <button onClick={copySelection} disabled={!selectedIds.length} className={btn} title="Kopiuj (Ctrl+C)">Kopiuj</button>
-            <button onClick={paste} disabled={isPlaying} className={btn} title="Wklej (Ctrl+V)">Wklej</button>
-            <button onClick={duplicateSelection} disabled={!selectedIds.length} className={btn} title="Duplikuj (Ctrl+D)">⧉ Duplikuj</button>
-            <button onClick={deleteSelection} disabled={!selectedIds.length} className={btn} title="Usuń (Delete)">🗑 Usuń</button>
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            <button onClick={exportPng} className={btn} title="Zapisz obraz boiska">🖼 PNG</button>
-            <button onClick={exportCard} className={btn} title="Obraz z opisem ćwiczenia">📄 Karta PNG</button>
-          </div>
-
-          <div ref={canvasBoxRef} className="flex-1 min-h-0 m-4 flex items-center justify-center">
-            <canvas
-              ref={canvasRef}
-              width={pitchSize.w}
-              height={pitchSize.h}
-              onMouseDown={handlePointerDown}
-              onMouseMove={handlePointerMove}
-              onMouseUp={handlePointerUp}
-              onMouseLeave={handlePointerUp}
-              onDoubleClick={handleDoubleClick}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handlePointerMove}
-              onTouchEnd={handlePointerUp}
-              className="rounded-2xl shadow-2xl"
-              style={{
-                display: 'block', touchAction: 'none',
-                width: displayScale ? pitchSize.w * displayScale : undefined,
-                height: displayScale ? pitchSize.h * displayScale : undefined,
-                cursor: isDrawingMode ? 'crosshair' : 'default',
-              }}
-            />
-          </div>
-
-          {/* Timeline */}
-          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-white/10 bg-slate-950/60 overflow-x-auto">
-            <button onClick={isPlaying ? stop : play} disabled={frames.length < 2}
-              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title={frames.length < 2 ? 'Dodaj co najmniej 2 klatki' : ''}>
-              {isPlaying ? '⏸ Stop' : '▶ Odtwórz'}
+      {/* ── Center: toolbar + canvas + timeline ── */}
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30">
+        <div className="flex-shrink-0 flex items-center gap-1 flex-wrap px-2 py-1.5 border-b border-white/10 bg-slate-950/50 relative z-30">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
+            <button className={segClass(tool === 'select')} onClick={() => setTool('select')} title="Zaznaczanie i przesuwanie (V)" aria-label="Zaznacz">
+              <MousePointer2 size={14} /> <span className="hidden min-[1300px]:inline">Zaznacz</span>
             </button>
-            <select value={speed} onChange={e => setSpeed(Number(e.target.value))}
-              className="bg-white/10 border border-white/20 rounded text-xs text-white px-1 py-1">
-              {[0.5, 1, 1.5, 2].map(s => <option key={s} value={s} className="bg-slate-800">{s}×</option>)}
-            </select>
-            <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap">
-              <input type="checkbox" checked={loop} onChange={e => setLoop(e.target.checked)} /> Pętla
-            </label>
-            <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap">
-              <input type="checkbox" checked={showPaths} onChange={e => setShowPaths(e.target.checked)} /> Ścieżki
-            </label>
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            <span className="text-xs text-slate-400">Klatki:</span>
-            {frames.map((_, i) => {
-              const active = isPlaying ? Math.floor(playhead) === i : currentFrame === i;
-              return (
-                <button key={i}
-                  draggable
-                  onDragStart={() => setDraggedFrameIdx(i)}
-                  onDragOver={e => { e.preventDefault(); setDragOverFrameIdx(i); }}
-                  onDragLeave={() => setDragOverFrameIdx(null)}
-                  onDrop={e => { e.preventDefault(); if (draggedFrameIdx !== null) reorderFrames(draggedFrameIdx, i); setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
-                  onDragEnd={() => { setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
-                  onClick={() => goToFrame(i)}
-                  className={`w-8 h-8 rounded text-sm font-semibold transition-all cursor-grab active:cursor-grabbing ${
-                    active ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                  } ${dragOverFrameIdx === i && draggedFrameIdx !== i ? 'ring-2 ring-yellow-400' : ''} ${draggedFrameIdx === i ? 'opacity-40' : ''}`}>
-                  {i + 1}
-                </button>
-              );
-            })}
-            <button onClick={addFrame} disabled={isPlaying} className={btn} title="Dodaj klatkę (kopia bieżącej)">＋ Klatka</button>
-            <button onClick={deleteFrame} disabled={isPlaying || frames.length <= 1} className={btn} title="Usuń bieżącą klatkę">− Klatka</button>
+            <button className={segClass(tool === 'line')} onClick={() => setTool('line')} title="Rysowanie linii i strzałek (L)" aria-label="Linie">
+              <MoveUpRight size={14} /> <span className="hidden min-[1300px]:inline">Linie</span>
+            </button>
+            <button className={segClass(tool === 'zone')} onClick={() => setTool('zone')} title="Rysowanie stref (S)" aria-label="Strefy">
+              <Square size={14} /> <span className="hidden min-[1300px]:inline">Strefy</span>
+            </button>
           </div>
+          <ToolbarDivider />
+
+          {tool === 'select' && (
+            <>
+              <button className={tbBtn} onClick={copySelection} disabled={!selectedIds.length || isPlaying} title="Kopiuj (Ctrl+C)"><Copy size={14} /> Kopiuj</button>
+              <button className={tbBtn} onClick={paste} disabled={isPlaying} title="Wklej (Ctrl+V)"><ClipboardPaste size={14} /> Wklej</button>
+              <button className={tbBtn} onClick={duplicateSelection} disabled={!selectedIds.length || isPlaying} title="Duplikuj (Ctrl+D)"><CopyPlus size={14} /> Duplikuj</button>
+              <button className={tbBtn} onClick={deleteSelection} disabled={!selectedIds.length || isPlaying} title="Usuń (Delete)"><Trash2 size={14} /> Usuń</button>
+            </>
+          )}
+
+          {tool === 'line' && (
+            <>
+              {LINE_TYPES.map((t, idx) => {
+                if (!t) return <ToolbarDivider key={idx} />;
+                const [type, title, icon] = t;
+                return (
+                  <button key={type} onClick={() => setLineType(type)} title={title} aria-pressed={lineType === type}
+                    className={`${optClass(lineType === type)} w-9`}>
+                    {icon}
+                  </button>
+                );
+              })}
+              <ToolbarDivider />
+              <ColorQuickPicker value={lineColor} onChange={setLineColor} title="Kolor linii"
+                isOpen={openColorPalette === 'line'}
+                onToggle={() => setOpenColorPalette(p => (p === 'line' ? null : 'line'))} />
+            </>
+          )}
+
+          {tool === 'zone' && (
+            <>
+              {zoneShapes.map(([type, title, icon]) => (
+                <button key={type} onClick={() => { setZoneType(type); setPolygonPoints([]); }} title={title} aria-pressed={zoneType === type}
+                  className={`${optClass(zoneType === type)} w-10`}>
+                  {icon}
+                </button>
+              ))}
+              <ToolbarDivider />
+              <ColorQuickPicker value={zoneColor} onChange={setZoneColor} title="Kolor strefy"
+                isOpen={openColorPalette === 'zone'}
+                onToggle={() => setOpenColorPalette(p => (p === 'zone' ? null : 'zone'))} />
+              <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-400" title="Przezroczystość strefy">
+                Krycie
+                <input type="range" min={0.05} max={1} step={0.05} value={zoneOpacity}
+                  onChange={e => setZoneOpacity(parseFloat(e.target.value))} className="w-20" />
+                <span className="w-8 tabular-nums">{Math.round(zoneOpacity * 100)}%</span>
+              </label>
+            </>
+          )}
+
+          <div className="flex-1" />
+          <button className={tbBtn} onClick={undo} disabled={!canUndo} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
+          <button className={tbBtn} onClick={redo} disabled={!canRedo} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
+          <ToolbarDivider />
+          <button className={tbBtn} onClick={exportPng} title="Pobierz obraz boiska (PNG)" aria-label="Pobierz PNG"><ImageIcon size={14} /> <span className="hidden min-[1400px]:inline">PNG</span></button>
+          <button className={tbBtn} onClick={exportCard} title="Pobierz kartę ćwiczenia z opisem (PNG)" aria-label="Pobierz kartę ćwiczenia"><FileText size={14} /> <span className="hidden min-[1400px]:inline">Karta</span></button>
         </div>
 
-        {/* ── Right panel ── */}
-        <div className="w-52 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col p-3 gap-3 overflow-y-auto">
-          <p className={sectionTitle}>Zaznaczony</p>
+        <div ref={canvasBoxRef} className="flex-1 min-h-0 m-3 flex items-center justify-center relative"
+          onDragOver={e => { if (!isPlaying) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+          onDrop={handleDrop}>
+          <canvas
+            ref={canvasRef}
+            width={pitchSize.w}
+            height={pitchSize.h}
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onDoubleClick={handleDoubleClick}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
+            className="rounded-xl shadow-2xl"
+            style={{
+              display: 'block', touchAction: 'none', cursor: canvasCursor,
+              width: displayScale ? pitchSize.w * displayScale : undefined,
+              height: displayScale ? pitchSize.h * displayScale : undefined,
+            }}
+          />
+          {canvasHint && (
+            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg whitespace-nowrap">
+              {canvasHint}
+            </div>
+          )}
+        </div>
+
+        {/* Timeline */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t border-white/10 bg-slate-950/60 overflow-x-auto">
+          <button onClick={isPlaying ? stop : play} disabled={frames.length < 2}
+            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={frames.length < 2 ? 'Dodaj co najmniej 2 klatki, aby odtworzyć animację' : 'Odtwórz animację'}>
+            {isPlaying ? <><Pause size={14} /> Stop</> : <><Play size={14} /> Odtwórz</>}
+          </button>
+          <select value={speed} onChange={e => setSpeed(Number(e.target.value))} title="Prędkość odtwarzania"
+            className="h-8 bg-white/10 border border-white/15 rounded-md text-xs text-white px-1">
+            {[0.5, 1, 1.5, 2].map(s => <option key={s} value={s} className="bg-slate-800">{s}×</option>)}
+          </select>
+          <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Odtwarzaj w kółko">
+            <input type="checkbox" checked={loop} onChange={e => setLoop(e.target.checked)} /> Pętla
+          </label>
+          <label className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Pokaż przerywaną ścieżkę z poprzedniej klatki">
+            <input type="checkbox" checked={showPaths} onChange={e => setShowPaths(e.target.checked)} /> Ścieżki
+          </label>
+          <ToolbarDivider />
+          <span className="text-xs text-slate-400 whitespace-nowrap">Klatki:</span>
+          {frames.map((_, i) => {
+            const active = isPlaying ? Math.floor(playhead) === i : currentFrame === i;
+            return (
+              <button key={i}
+                draggable
+                onDragStart={e => { e.dataTransfer.setData('text/plain', `frame:${i}`); setDraggedFrameIdx(i); }}
+                onDragOver={e => { e.preventDefault(); setDragOverFrameIdx(i); }}
+                onDragLeave={() => setDragOverFrameIdx(null)}
+                onDrop={e => { e.preventDefault(); if (draggedFrameIdx !== null) reorderFrames(draggedFrameIdx, i); setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
+                onDragEnd={() => { setDraggedFrameIdx(null); setDragOverFrameIdx(null); }}
+                onClick={() => goToFrame(i)}
+                title={`Klatka ${i + 1} — kliknij, aby edytować; przeciągnij, aby zmienić kolejność`}
+                className={`w-8 h-8 flex-shrink-0 rounded-md text-sm font-semibold transition-colors cursor-grab active:cursor-grabbing ${
+                  active ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                } ${dragOverFrameIdx === i && draggedFrameIdx !== i ? 'ring-2 ring-yellow-400' : ''} ${draggedFrameIdx === i ? 'opacity-40' : ''}`}>
+                {i + 1}
+              </button>
+            );
+          })}
+          <button onClick={addFrame} disabled={isPlaying} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Dodaj klatkę (kopia bieżącej)">
+            <Plus size={13} /> Klatka
+          </button>
+          <button onClick={deleteFrame} disabled={isPlaying || frames.length <= 1} className={`${btn} h-8 inline-flex items-center gap-1 whitespace-nowrap`} title="Usuń bieżącą klatkę">
+            <Minus size={13} /> Klatka
+          </button>
+        </div>
+      </main>
+
+      {/* ── Right: inspector ── */}
+      <aside className="w-52 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+          <p className={sectionTitle}>{selectedIds.length ? 'Właściwości' : 'Ustawienia ćwiczenia'}</p>
 
           {selectedIds.length > 1 ? (
             <div className="flex flex-col gap-3">
               <div className="bg-white/5 rounded-lg p-2">
                 <p className="text-sm font-medium text-white">Zaznaczono: {selectedIds.length}</p>
-                <p className="text-xs text-slate-400">Przeciągnij dowolny, aby przesunąć grupę</p>
+                <p className="text-xs text-slate-400">Przeciągnij dowolny element, aby przesunąć grupę. Strzałki przesuwają o 1 px (Shift: 10 px).</p>
               </div>
-              <button onClick={duplicateSelection} className={`${btn} py-2 text-sm`}>⧉ Duplikuj grupę</button>
+              <button onClick={duplicateSelection} className={`${btn} py-2 text-sm inline-flex items-center justify-center gap-1.5`}><CopyPlus size={14} /> Duplikuj grupę</button>
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń zaznaczone</button>
             </div>
           ) : single?.kind === 'lines' ? (
             <div className="flex flex-col gap-3">
               <div className="bg-white/5 rounded-lg p-2"><p className="text-sm font-medium text-white">Linia</p></div>
               <div>
-                <p className="text-xs text-slate-400 mb-1">Typ</p>
+                <p className={fieldLabel}>Typ</p>
                 <select value={single.obj.type}
                   onChange={e => patchObj('all', 'lines', single.obj.id, { type: e.target.value })}
-                  className="w-full bg-white/10 border border-white/20 rounded text-sm text-white px-1 py-1">
+                  className={inputCls}>
                   {LINE_TYPES.filter(Boolean).map(([type, title]) => <option key={type} value={type} className="bg-slate-800">{title}</option>)}
                 </select>
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-1">Kolor</p>
+                <p className={fieldLabel}>Kolor</p>
                 <input type="color" value={single.obj.color || '#000000'}
                   onChange={e => patchObj('all', 'lines', single.obj.id, { color: e.target.value })}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
               </div>
+              <p className="text-xs text-slate-500">Przeciągnij koniec linii, aby go przesunąć. Krzywą wyginasz zielonym punktem.</p>
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń linię</button>
             </div>
           ) : single?.kind === 'zones' ? (
             <div className="flex flex-col gap-3">
               <div className="bg-white/5 rounded-lg p-2"><p className="text-sm font-medium text-white">Strefa</p></div>
               <div>
-                <p className="text-xs text-slate-400 mb-1">Kolor</p>
+                <p className={fieldLabel}>Kolor</p>
                 <input type="color" value={single.obj.color || '#ff0000'}
                   onChange={e => patchObj('all', 'zones', single.obj.id, { color: e.target.value })}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-1">Przezroczystość</p>
+                <p className={fieldLabel}>Krycie</p>
                 <input type="range" min={0.05} max={1} step={0.05} value={single.obj.opacity ?? 0.3}
                   onChange={e => patchObj('all', 'zones', single.obj.id, { opacity: parseFloat(e.target.value) })}
                   className="w-full" />
@@ -1855,41 +1913,38 @@ export default function TrainingDrillApp() {
 
               {(single.obj.type === 'player' || single.obj.type === 'step') && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">{single.obj.type === 'player' ? 'Numer / Imię' : 'Numer kroku'}</p>
+                  <p className={fieldLabel}>{single.obj.type === 'player' ? 'Numer / imię' : 'Numer kroku'}</p>
                   <input type="text" value={single.obj.label ?? ''}
                     onChange={e => patchObj('all', 'items', single.obj.id, { label: e.target.value })}
-                    className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-sm text-white"
-                    placeholder={single.obj.type === 'player' ? 'np. 10 lub Jan' : 'np. 1'} />
+                    className={inputCls} placeholder={single.obj.type === 'player' ? 'np. 10 lub Jan' : 'np. 1'} />
                 </div>
               )}
 
               {single.obj.type === 'text' && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Tekst</p>
+                  <p className={fieldLabel}>Tekst</p>
                   <input type="text" value={single.obj.text ?? ''}
                     onChange={e => patchObj('all', 'items', single.obj.id, { text: e.target.value })}
-                    className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-sm text-white" />
+                    className={inputCls} />
                 </div>
               )}
 
               <div>
-                <p className="text-xs text-slate-400 mb-1">Kolor</p>
+                <p className={fieldLabel}>Kolor</p>
                 <input type="color" value={single.obj.color || '#ffffff'}
                   onChange={e => patchObj('all', 'items', single.obj.id, { color: e.target.value })}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
               </div>
 
               <div>
-                <p className="text-xs text-slate-400 mb-1">Rozmiar</p>
+                <p className={fieldLabel}>Rozmiar <span className="text-slate-500 tabular-nums">{Math.round((single.obj.scale || 1) * 100)}%</span></p>
                 <input type="range" min={0.4} max={2.5} step={0.05} value={single.obj.scale || 1}
                   onChange={e => patchObj('all', 'items', single.obj.id, { scale: parseFloat(e.target.value) })}
                   className="w-full" />
               </div>
 
               <div>
-                <p className="text-xs text-slate-400 mb-1">Obrót&nbsp;
-                  <span className="text-slate-500">{Math.round(((single.obj.rotation || 0) * 180) / Math.PI)}°</span>
-                </p>
+                <p className={fieldLabel}>Obrót <span className="text-slate-500 tabular-nums">{Math.round(((single.obj.rotation || 0) * 180) / Math.PI)}°</span></p>
                 <input type="range" min={0} max={TWO_PI} step={0.05} value={single.obj.rotation || 0}
                   onChange={e => patchObj('current', 'items', single.obj.id, { rotation: parseFloat(e.target.value) })}
                   className="w-full" />
@@ -1899,73 +1954,197 @@ export default function TrainingDrillApp() {
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń element</button>
             </div>
           ) : (
-            <div className="text-xs text-slate-500 leading-relaxed space-y-2">
-              <p>Kliknij element, linię lub strefę.</p>
-              <p>Przeciągnij po pustym polu, aby zaznaczyć kilka. <kbd className="bg-white/10 px-1 rounded">Shift</kbd>+klik dodaje do zaznaczenia.</p>
-              <p>Dwuklik → zmień kolor. Niebieska rączka → obrót.</p>
-              <p>Animacja: „＋ Klatka” kopiuje bieżące ustawienie — przesuń zawodników i odtwórz.</p>
-              <div className="pt-1 space-y-0.5">
-                {[['Ctrl+Z / Y', 'cofnij / ponów'], ['Ctrl+C / V', 'kopiuj / wklej'], ['Ctrl+D', 'duplikuj'], ['Ctrl+A', 'zaznacz wszystko'], ['Delete', 'usuń']].map(([k, d]) => (
-                  <p key={k}><kbd className="bg-white/10 px-1 rounded">{k}</kbd> {d}</p>
-                ))}
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className={fieldLabel}>Boisko</p>
+                <div className="grid grid-cols-2 gap-1 mb-1">
+                  {PITCH_TYPES.map(t => (
+                    <button key={t.id} onClick={() => changePitch({ type: t.id })} aria-pressed={pitch.type === t.id}
+                      className={`h-8 rounded-md text-xs transition-colors ${pitch.type === t.id ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  {[['horizontal', '↔ Poziomo'], ['vertical', '↕ Pionowo']].map(([o, l]) => (
+                    <button key={o} onClick={() => changePitch({ orientation: o })} aria-pressed={pitch.orientation === o}
+                      className={`h-8 rounded-md text-xs transition-colors ${pitch.orientation === o ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                {pitch.type === 'custom' && (
+                  <div className="grid grid-cols-2 gap-1 mt-2">
+                    {[['width', 'Szerokość (m)'], ['length', 'Długość (m)']].map(([key, label]) => (
+                      <label key={key} className="text-[11px] text-slate-400">
+                        {label}
+                        <input key={`${key}-${pitch[key]}`} type="number" min={5} max={120} defaultValue={pitch[key]}
+                          onBlur={e => changePitch({ [key]: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          className={`${inputCls} mt-0.5`} />
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              <div>
+                <p className={fieldLabel}>Kolory drużyn</p>
+                <div className="flex flex-col gap-1.5">
+                  {[['A', teamAColor, setTeamAColor], ['B', teamBColor, setTeamBColor]].map(([team, color, setColor]) => (
+                    <label key={team} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                      <input type="color" value={color}
+                        onChange={e => {
+                          const c = e.target.value;
+                          setColor(c);
+                          updateKind('all', 'items', list => list.map(i => (i.type === 'player' && i.team === team ? { ...i, color: c } : i)));
+                        }}
+                        className="w-7 h-7 rounded cursor-pointer border border-white/20 bg-transparent" />
+                      Drużyna {team}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <details className="group text-xs text-slate-400">
+                <summary className="cursor-pointer select-none text-slate-300 hover:text-white inline-flex items-center gap-1.5">
+                  <Keyboard size={13} /> Skróty i wskazówki
+                </summary>
+                <div className="mt-2 space-y-1 leading-relaxed">
+                  {[
+                    ['V / L / S', 'zaznacz / linie / strefy'],
+                    ['Ctrl+S', 'zapisz'],
+                    ['Ctrl+Z / Y', 'cofnij / ponów'],
+                    ['Ctrl+C / V / D', 'kopiuj / wklej / duplikuj'],
+                    ['Ctrl+A', 'zaznacz wszystko'],
+                    ['Strzałki', 'przesuń o 1 px (Shift: 10)'],
+                    ['Delete', 'usuń'],
+                    ['Esc', 'anuluj / odznacz'],
+                  ].map(([k, d]) => (
+                    <p key={k}><kbd className="bg-white/10 px-1 rounded text-slate-300">{k}</kbd> {d}</p>
+                  ))}
+                  <p className="pt-1">Przeciągnij po pustym polu, aby zaznaczyć kilka elementów; Shift+klik dodaje do zaznaczenia.</p>
+                  <p>Dwuklik na elemencie → szybka zmiana koloru.</p>
+                  <p>Animacja: „+ Klatka” kopiuje bieżące ustawienie — przesuń zawodników i odtwórz.</p>
+                </div>
+              </details>
             </div>
           )}
+        </div>
 
-          <div className="mt-auto border-t border-white/10 pt-3 flex flex-col gap-1">
-            <p className="text-xs text-slate-400">
-              Klatka {currentFrame + 1}/{frames.length} · Elementy: {frame.items.length} · Linie: {frame.lines.length} · Strefy: {frame.zones.length}
-            </p>
-            {(frame.items.length > 0 || frame.lines.length > 0 || frame.zones.length > 0) && (
-              <button onClick={clearFrame}
-                className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-slate-400 transition-all">
-                <Trash2 size={12} /> Wyczyść klatkę
+        <div className="flex-shrink-0 border-t border-white/10 p-3 flex flex-col gap-1.5">
+          <p className="text-[11px] text-slate-500 leading-snug">
+            Klatka {currentFrame + 1}/{frames.length} · {frame.items.length} el. · {frame.lines.length} lin. · {frame.zones.length} str.
+          </p>
+          {(frame.items.length > 0 || frame.lines.length > 0 || frame.zones.length > 0) && (
+            <button onClick={clearFrame}
+              className="w-full flex items-center justify-center gap-2 h-7 bg-white/5 hover:bg-white/10 rounded-md text-xs text-slate-400 transition-colors">
+              <Trash2 size={12} /> Wyczyść klatkę
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Library modal ── */}
+      {showLibrary && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowLibrary(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Biblioteka ćwiczeń"
+            className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+              <h2 className="text-lg font-semibold text-white">Biblioteka ćwiczeń <span className="text-sm font-normal text-slate-400">({savedDrills.length})</span></h2>
+              <button onClick={() => setShowLibrary(false)} className="p-1 text-slate-400 hover:text-white" aria-label="Zamknij"><X size={18} /></button>
+            </div>
+            <div className="px-5 pt-3 relative">
+              <Search size={14} className="absolute left-7 top-1/2 mt-1.5 -translate-y-1/2 text-slate-500" />
+              <input autoFocus type="search" value={librarySearch} onChange={e => setLibrarySearch(e.target.value)}
+                placeholder="Szukaj po nazwie lub kategorii…" className={`${inputCls} pl-8`} />
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+              {savedDrills.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-10">
+                  Biblioteka jest pusta.<br />
+                  <span className="text-slate-500">Zapisz bieżące ćwiczenie przyciskiem „Zapisz” albo zaimportuj pliki.</span>
+                </p>
+              )}
+              {savedDrills.length > 0 && filteredDrills.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-10">Brak ćwiczeń pasujących do „{librarySearch}”.</p>
+              )}
+              {filteredDrills.map(d => {
+                const isCurrent = d.id === currentDrillId;
+                const n = d.frames?.length || 1;
+                const framesLabel = n === 1 ? '1 klatka' : `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'klatki' : 'klatek'}`;
+                return (
+                  <div key={d.id}
+                    className={`flex items-center gap-2 rounded-lg px-2 py-2 ${isCurrent ? 'bg-blue-600/15 ring-1 ring-blue-500/50' : 'hover:bg-white/5'}`}>
+                    <button onClick={() => openDrill(d)} className="flex-1 min-w-0 text-left">
+                      <p className="text-sm text-slate-100 truncate">
+                        {d.name}
+                        {isCurrent && <span className="ml-2 text-[10px] uppercase tracking-wide text-blue-300">otwarte</span>}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {[d.meta?.category, framesLabel, new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })].filter(Boolean).join(' · ')}
+                      </p>
+                    </button>
+                    <button onClick={() => openDrill(d)} className={btn}>Otwórz</button>
+                    <button onClick={() => deleteDrill(d.id)} title="Usuń z biblioteki" aria-label={`Usuń ${d.name}`}
+                      className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-white/10 flex items-center gap-2">
+              <button onClick={() => importInputRef.current?.click()} className={`${btn} text-sm px-3 inline-flex items-center gap-1.5`} title="Jeden lub wiele plików .json">
+                <Upload size={14} /> Importuj pliki…
               </button>
-            )}
+              <button onClick={exportLibrary} disabled={!savedDrills.length} className={`${btn} text-sm px-3 inline-flex items-center gap-1.5`} title="Wszystkie ćwiczenia w jednym pliku .json">
+                <Download size={14} /> Eksportuj bibliotekę
+              </button>
+              <div className="flex-1" />
+              <button onClick={() => setShowLibrary(false)} className="px-4 py-1.5 rounded-md text-sm bg-white/10 hover:bg-white/15 text-white">Zamknij</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Drill description modal ── */}
       {showMeta && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowMeta(false)}>
-          <div className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          <div role="dialog" aria-modal="true" aria-label="Opis ćwiczenia"
+            className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 sticky top-0 bg-slate-900">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
               <h2 className="text-lg font-semibold text-white">Opis ćwiczenia</h2>
-              <button onClick={() => setShowMeta(false)} className="p-1 text-slate-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowMeta(false)} className="p-1 text-slate-400 hover:text-white" aria-label="Zamknij"><X size={18} /></button>
             </div>
-            <div className="p-5 grid grid-cols-2 gap-3">
+            <div className="p-5 grid grid-cols-2 gap-3 overflow-y-auto">
               <label className="col-span-2 text-xs text-slate-400">Nazwa
-                <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
-                  className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white" />
+                <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)} className={`${inputCls} mt-1`} />
               </label>
               <label className="text-xs text-slate-400">Kategoria
-                <select value={meta.category} onChange={e => setMeta(m => ({ ...m, category: e.target.value }))}
-                  className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white">
+                <select value={meta.category} onChange={e => setMeta(m => ({ ...m, category: e.target.value }))} className={`${inputCls} mt-1`}>
                   <option value="" className="bg-slate-800">—</option>
                   {CATEGORIES.map(c => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
                 </select>
               </label>
               <label className="text-xs text-slate-400">Czas (min)
-                <input type="number" min={1} value={meta.duration} onChange={e => setMeta(m => ({ ...m, duration: e.target.value }))}
-                  className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white" />
+                <input type="number" min={1} value={meta.duration} onChange={e => setMeta(m => ({ ...m, duration: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
               <label className="text-xs text-slate-400">Liczba zawodników
-                <input type="text" value={meta.players} placeholder="np. 8 (4v4)" onChange={e => setMeta(m => ({ ...m, players: e.target.value }))}
-                  className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white placeholder-slate-500" />
+                <input type="text" value={meta.players} placeholder="np. 8 (4v4)" onChange={e => setMeta(m => ({ ...m, players: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
               <label className="text-xs text-slate-400">Wymiary pola
                 <input type="text" value={meta.area}
                   placeholder={pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : 'np. 30×20 m'}
-                  onChange={e => setMeta(m => ({ ...m, area: e.target.value }))}
-                  className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white placeholder-slate-500" />
+                  onChange={e => setMeta(m => ({ ...m, area: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
               {META_FIELDS.map(([key, label, placeholder]) => (
                 <label key={key} className="col-span-2 text-xs text-slate-400">{label}
                   <textarea value={meta[key]} rows={3} placeholder={placeholder}
                     onChange={e => setMeta(m => ({ ...m, [key]: e.target.value }))}
-                    className="mt-1 w-full px-2 py-1.5 bg-white/10 border border-white/20 rounded text-sm text-white placeholder-slate-500 resize-y" />
+                    className={`${inputCls} mt-1 resize-y`} />
                 </label>
               ))}
               {equipmentSummary(frames) && (
@@ -1973,10 +2152,19 @@ export default function TrainingDrillApp() {
               )}
             </div>
             <div className="px-5 py-3 border-t border-white/10 flex justify-end gap-2">
-              <button onClick={exportCard} className={`${btn} text-sm px-3`}>📄 Karta PNG</button>
-              <button onClick={() => setShowMeta(false)} className="px-4 py-1.5 rounded text-sm bg-blue-600 hover:bg-blue-500 text-white">Gotowe</button>
+              <button onClick={exportCard} className={`${btn} text-sm px-3 inline-flex items-center gap-1.5`}><FileText size={14} /> Pobierz kartę PNG</button>
+              <button onClick={() => setShowMeta(false)} className="px-4 py-1.5 rounded-md text-sm bg-blue-600 hover:bg-blue-500 text-white">Gotowe</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
+      {libraryMsg && (
+        <div role="status" aria-live="polite"
+          className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-2xl text-sm border ${
+            libraryMsg.tone === 'warn' ? 'bg-amber-950/95 border-amber-500/40 text-amber-200' : 'bg-slate-900/95 border-emerald-500/40 text-emerald-200'}`}>
+          {libraryMsg.text}
         </div>
       )}
     </div>

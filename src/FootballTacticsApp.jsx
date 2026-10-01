@@ -7,7 +7,7 @@ import {
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
-import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers } from './utils/draw.js';
+import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers, findMatchingPlayer } from './utils/draw.js';
 import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
@@ -1662,8 +1662,9 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
     // Rysuj linie ruchu jeśli mamy następną klatkę
     if (nextFrameData) {
-      currentFrameData.team.forEach((player, i) => {
-        if (nextFrameData.team[i]) {
+      (currentFrameData.team || []).forEach((player, i) => {
+        const target = findMatchingPlayer(nextFrameData.team, player, i);
+        if (target) {
           ctx.save();
           ctx.strokeStyle = 'rgba(26, 54, 93, 0.3)';
           ctx.lineWidth = 2;
@@ -1671,7 +1672,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           
           ctx.beginPath();
           ctx.moveTo(player.x, player.y);
-          ctx.lineTo(nextFrameData.team[i].x, nextFrameData.team[i].y);
+          ctx.lineTo(target.x, target.y);
           ctx.stroke();
           
           ctx.setLineDash([]);
@@ -1679,8 +1680,9 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         }
       });
 
-      currentFrameData.opponent.forEach((player, i) => {
-        if (nextFrameData.opponent[i]) {
+      (currentFrameData.opponent || []).forEach((player, i) => {
+        const target = findMatchingPlayer(nextFrameData.opponent, player, i);
+        if (target) {
           ctx.save();
           ctx.strokeStyle = 'rgba(139, 0, 0, 0.3)';
           ctx.lineWidth = 2;
@@ -1688,7 +1690,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           
           ctx.beginPath();
           ctx.moveTo(player.x, player.y);
-          ctx.lineTo(nextFrameData.opponent[i].x, nextFrameData.opponent[i].y);
+          ctx.lineTo(target.x, target.y);
           ctx.stroke();
           
           ctx.setLineDash([]);
@@ -1700,24 +1702,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     // Interpoluj pozycje zawodników jeśli jest progress
     let interpolatedData = currentFrameData;
     if (nextFrameData && progress > 0) {
-      interpolatedData = {
-        team: currentFrameData.team.map((player, i) => ({
-          ...player,
-          x: player.x + (nextFrameData.team[i].x - player.x) * progress,
-          y: player.y + (nextFrameData.team[i].y - player.y) * progress,
-          rotation: player.rotation
-        })),
-        opponent: currentFrameData.opponent.map((player, i) => ({
-          ...player,
-          x: player.x + (nextFrameData.opponent[i].x - player.x) * progress,
-          y: player.y + (nextFrameData.opponent[i].y - player.y) * progress,
-          rotation: player.rotation
-        })),
-        ball: {
-          x: currentFrameData.ball.x + (nextFrameData.ball.x - currentFrameData.ball.x) * progress,
-          y: currentFrameData.ball.y + (nextFrameData.ball.y - currentFrameData.ball.y) * progress
-        }
-      };
+      interpolatedData = interpolatePlayers(currentFrameData, nextFrameData, progress);
     }
 
     // Rysuj zawodników
@@ -3124,16 +3109,14 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       const toFrame = currentScheme.frames[currentFrame + 1];
       
       // Rysuj ścieżki ruchu
-      fromFrame.team.forEach((player, i) => {
-        if (toFrame.team[i]) {
-          drawPlayerPath(ctx, player, toFrame.team[i], true, interpolationProgress);
-        }
+      (fromFrame.team || []).forEach((player, i) => {
+        const target = findMatchingPlayer(toFrame.team, player, i);
+        if (target) drawPlayerPath(ctx, player, target, true, interpolationProgress);
       });
-      
-      fromFrame.opponent.forEach((player, i) => {
-        if (toFrame.opponent[i]) {
-          drawPlayerPath(ctx, player, toFrame.opponent[i], false, interpolationProgress);
-        }
+
+      (fromFrame.opponent || []).forEach((player, i) => {
+        const target = findMatchingPlayer(toFrame.opponent, player, i);
+        if (target) drawPlayerPath(ctx, player, target, false, interpolationProgress);
       });
     }
     
@@ -5173,7 +5156,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
       {/* Prawy panel - Szczegóły schematu */}
       <div className={`
-        absolute md:relative right-0 z-40 h-full
+        absolute md:relative right-0 z-40 h-full min-h-0 overflow-y-auto scrollbar-custom
         w-80 md:w-96 bg-slate-950/95 md:bg-slate-950/50 backdrop-blur-xl border-l border-white/10 flex flex-col
         transition-transform duration-300
         ${rightPanelOpen ? 'translate-x-0' : 'translate-x-full'}

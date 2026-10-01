@@ -351,22 +351,28 @@ export const drawPlayerPath = (ctx, fromPlayer, toPlayer, isTeam, progress) => {
     ctx.restore();
   };
 
+// Players are matched by id (falling back to list position), so frames saved by older versions or
+// imported with a different player list do not break playback; a missing ball stays where it was.
+export const findMatchingPlayer = (list, player, index) =>
+  (list || []).find(p => p.id === player.id) || (list || [])[index];
+
 export const interpolatePlayers = (from, to, progress) => {
+    const lerp = (a, b) => a + (b - a) * progress;
+    const lerpAngle = (a = 0, b = 0) => {
+      const d = ((((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+      return a + d * progress;
+    };
+    const mix = (fromList, toList) => (fromList || []).map((player, i) => {
+      const target = findMatchingPlayer(toList, player, i);
+      if (!target) return player;
+      return { ...player, x: lerp(player.x, target.x), y: lerp(player.y, target.y), rotation: lerpAngle(player.rotation, target.rotation) };
+    });
+    const fromBall = from.ball || to.ball || { x: 350, y: 540 };
+    const toBall = to.ball || fromBall;
     return {
-      team: from.team.map((player, i) => ({
-        ...player,
-        x: player.x + (to.team[i].x - player.x) * progress,
-        y: player.y + (to.team[i].y - player.y) * progress
-      })),
-      opponent: from.opponent.map((player, i) => ({
-        ...player,
-        x: player.x + (to.opponent[i].x - player.x) * progress,
-        y: player.y + (to.opponent[i].y - player.y) * progress
-      })),
-      ball: {
-        x: from.ball.x + (to.ball.x - from.ball.x) * progress,
-        y: from.ball.y + (to.ball.y - from.ball.y) * progress
-      }
+      team: mix(from.team, to.team),
+      opponent: mix(from.opponent, to.opponent),
+      ball: { x: lerp(fromBall.x, toBall.x), y: lerp(fromBall.y, toBall.y) }
     };
   };
 

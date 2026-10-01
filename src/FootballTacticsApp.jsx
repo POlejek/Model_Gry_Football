@@ -8,7 +8,7 @@ import { isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointIn
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 
 
-const FootballTacticsApp = () => {
+const FootballTacticsApp = ({ embedded = false }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -3987,7 +3987,7 @@ const FootballTacticsApp = () => {
   return (
     <>
       <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />
-    <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className={`w-full text-white flex flex-col overflow-hidden ${embedded ? 'flex-1' : 'h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'}`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
         

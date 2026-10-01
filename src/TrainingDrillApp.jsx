@@ -71,7 +71,7 @@ const measureCtx = () => (measureContext ||= document.createElement('canvas').ge
 const textFont = (item) => `bold ${Math.round(18 * (item.scale || 1))}px Outfit, Arial, sans-serif`;
 
 const BOUNDS = {
-  player: [18, 18], goal: [45, 28], 'mini-goal': [23, 14], cone: [10, 18], disc: [8, 8],
+  player: [18, 18], goal: [48, 17], 'mini-goal': [24, 9], cone: [10, 18], disc: [8, 8],
   pole: [6, 22], hurdle: [22, 6], hoop: [15, 15], ladder: [13, 60], mannequin: [8, 20],
   ball: [10, 10], step: [12, 12],
 };
@@ -227,20 +227,61 @@ function interpolateFrames(frames, t) {
 // ── Item draw functions ──────────────────────────────────────────
 const glow = (ctx, selected) => { if (selected) { ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 12; } };
 
+// Top view: frame on the goal line (local +y side, facing the pitch), net behind it (local -y).
 function drawGoal(ctx, item, selected) {
   const { x, y, rotation = 0, scale = 1, color = '#ffffff' } = item;
-  const w = 90 * scale, h = 16 * scale, depth = 20 * scale;
-  ctx.save(); ctx.translate(x, y); ctx.rotate(rotation); glow(ctx, selected);
-  ctx.strokeStyle = color; ctx.lineWidth = 3;
-  ctx.save(); ctx.globalAlpha *= 0.1; ctx.fillStyle = color;
-  ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.restore();
-  ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.stroke();
-  ctx.lineWidth = 4;
+  const w = 90 * scale, d = 26 * scale;
+  const front = d / 2, back = -d / 2, inset = 7 * scale;
+  const post = Math.max(2, 3.5 * scale);
+
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rotation);
+
+  const netPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(-w / 2, front);
+    ctx.lineTo(-w / 2 + inset, back);
+    ctx.lineTo(w / 2 - inset, back);
+    ctx.lineTo(w / 2, front);
+  };
+
+  // net: light fill + diagonal mesh clipped to the net area
+  ctx.save();
+  netPath(); ctx.closePath();
+  ctx.fillStyle = 'rgba(148,163,184,0.22)'; ctx.fill();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(51,65,85,0.55)';
+  ctx.lineWidth = Math.max(0.6, 0.9 * scale);
+  const step = Math.max(4, 6 * scale);
   ctx.beginPath();
-  ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(-w / 2, -h / 2 - depth);
-  ctx.moveTo(w / 2, -h / 2); ctx.lineTo(w / 2, -h / 2 - depth);
-  ctx.moveTo(-w / 2, -h / 2 - depth); ctx.lineTo(w / 2, -h / 2 - depth);
-  ctx.stroke(); ctx.restore();
+  for (let t = -w / 2 - d; t <= w / 2 + d; t += step) {
+    ctx.moveTo(t, back); ctx.lineTo(t + d, front);
+    ctx.moveTo(t, front); ctx.lineTo(t + d, back);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // net edges (sides + back)
+  ctx.strokeStyle = 'rgba(51,65,85,0.85)';
+  ctx.lineWidth = Math.max(1, 1.3 * scale);
+  ctx.lineJoin = 'round';
+  netPath(); ctx.stroke();
+
+  // frame: dark outline under the coloured bar so a white goal stays visible on a light pitch
+  glow(ctx, selected);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#1f2937'; ctx.lineWidth = post * 2 + 2;
+  ctx.beginPath(); ctx.moveTo(-w / 2, front); ctx.lineTo(w / 2, front); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = color; ctx.lineWidth = post * 2 - 1;
+  ctx.beginPath(); ctx.moveTo(-w / 2, front); ctx.lineTo(w / 2, front); ctx.stroke();
+
+  [-w / 2, w / 2].forEach(px => {
+    ctx.beginPath(); ctx.arc(px, front, post + 1.5, 0, TWO_PI);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  ctx.restore();
 }
 
 function drawCone(ctx, item, selected) {

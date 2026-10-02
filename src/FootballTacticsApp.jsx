@@ -2,18 +2,19 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
-import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, interpolatePlayers, findMatchingPlayer } from './utils/draw.js';
+import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, drawTextNote, interpolatePlayers, findMatchingPlayer, TEXT_NOTE_SIZE } from './utils/draw.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex,
   hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
+import { safeFileName } from './utils/drill.js';
 
 
 const TOOLBAR_BTN = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
@@ -579,6 +580,10 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         ctx.lineWidth = 2;
 
         switch (zone.type) {
+          case 'text':
+            drawTextNote(ctx, zone);
+            break;
+
           case 'rectangle':
             ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
             ctx.globalAlpha = 1;
@@ -1375,6 +1380,10 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         ctx.lineWidth = 2;
 
         switch (zone.type) {
+          case 'text':
+            drawTextNote(ctx, zone);
+            break;
+
           case 'rectangle':
             ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
             ctx.globalAlpha = 1;
@@ -3231,6 +3240,13 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     checkpointScheme();
     const { x, y } = getCanvasCoords(e);
 
+    // Tryb tekstu: kliknięcie otwiera pole do wpisania napisu
+    if (isDrawingMode && drawingTool === 'text') {
+      e.preventDefault?.(); // keep focus in the text field that opens now
+      openTextEditor(x, y, null, '');
+      return;
+    }
+
     // Tryb rysowania linii
     if (isDrawingMode && drawingTool === 'line') {
       setCurrentLine({
@@ -3373,7 +3389,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         setIsDraggingZone(true);
         
         // Oblicz offset dla różnych typów stref
-        if (zone.type === 'rectangle') {
+        if (zone.type === 'rectangle' || zone.type === 'text') {
           setZoneDragOffset({ x: x - zone.x, y: y - zone.y });
         } else if (zone.type === 'circle') {
           setZoneDragOffset({ x: x - zone.centerX, y: y - zone.centerY });
@@ -3583,7 +3599,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       const updatedZones = [...zones];
       const zone = zones[selectedZoneIndex];
       
-      if (zone.type === 'rectangle') {
+      if (zone.type === 'rectangle' || zone.type === 'text') {
         updatedZones[selectedZoneIndex] = {
           ...zone,
           x: x - zoneDragOffset.x,
@@ -3792,6 +3808,14 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
   const handleCanvasDoubleClick = (e) => {
     const { x, y } = getCanvasCoords(e);
+
+    // Dwuklik na tekście: edycja napisu
+    const textIndex = zones.findIndex(z => z.type === 'text' && isPointInZone(x, y, z));
+    if (textIndex !== -1) {
+      const note = zones[textIndex];
+      openTextEditor(note.x, note.y, textIndex, note.text);
+      return;
+    }
 
     const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[gameFormat] || 18;
@@ -4211,6 +4235,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       if (k === 'v') setTacticsTool('select');
       else if (k === 'l') setTacticsTool('line');
       else if (k === 's') setTacticsTool('zone');
+      else if (k === 't') setTacticsTool('text');
     }
   };
 
@@ -4231,6 +4256,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
   const canvasHint = isPlaying || (!modeHintVisible && !polygonPoints.length) ? null
     : tacticsTool === 'line' ? 'Przeciągnij po boisku, aby narysować linię · Esc kończy rysowanie'
+    : tacticsTool === 'text' ? 'Kliknij na boisku, aby dodać napis'
     : tacticsTool === 'zone' ? (zoneType === 'polygon'
       ? (polygonPoints.length
         ? (isCoarsePointer
@@ -4240,6 +4266,71 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       : 'Przeciągnij po boisku, aby narysować strefę · Esc kończy rysowanie')
     : null;
 
+
+
+  // ── Text notes (stored with zones) ──
+  const [textEditor, setTextEditor] = useState(null); // { x, y, index, value }
+  const openTextEditor = (x, y, index, value) => setTextEditor({ x, y, index, value });
+
+  const textCancelRef = useRef(false);
+  const commitTextEditor = () => {
+    if (!textEditor) return;
+    if (textCancelRef.current) { textCancelRef.current = false; setTextEditor(null); return; }
+    const value = textEditor.value.trim();
+    const { index } = textEditor;
+    setTextEditor(null);
+    let newZones = zones;
+    if (index === null) {
+      if (!value) return;
+      newZones = [...zones, { type: 'text', x: textEditor.x, y: textEditor.y, text: value, color: lineColor, size: TEXT_NOTE_SIZE }];
+      setSelectedZoneIndex(newZones.length - 1);
+    } else if (!value) {
+      newZones = zones.filter((_, i) => i !== index);
+      setSelectedZoneIndex(null);
+    } else {
+      newZones = zones.map((z, i) => (i === index ? { ...z, text: value } : z));
+    }
+    setSelectedLineIndex(null);
+    setZones(newZones);
+    saveDrawingsToScheme(lines, newZones);
+  };
+
+  const textEditorStyle = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !textEditor) return {};
+    const rect = canvas.getBoundingClientRect();
+    const s = rect.width / canvas.width;
+    return { left: rect.left + textEditor.x * s, top: rect.top + textEditor.y * s };
+  };
+
+  const displayPlayer = (p) => p;
+
+  // ── PNG export of the current frame ──
+  const exportSchemePng = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 700;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    // same drawing as the editor (without selection), so the image matches the screen
+    drawField(ctx, gameFormat);
+    zones.forEach(zone => drawZone(ctx, zone, false, zoneColor, zoneOpacity, 0));
+    lines.forEach(line => drawLine(ctx, line, false));
+    players.team.forEach(p => drawPlayer(ctx, displayPlayer(p), true, null, teamColor, opponentColor, gameFormat, null));
+    players.opponent.forEach(p => drawPlayer(ctx, displayPlayer(p), false, null, teamColor, opponentColor, gameFormat, null));
+    drawBall(ctx, players.ball, gameFormat);
+    const bin = atob(canvas.toDataURL('image/png').split(',')[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    const frames = currentScheme?.frames.length || 1;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeFileName(currentScheme?.name || 'schemat')}${frames > 1 ? `_klatka${currentFrame + 1}` : ''}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
 
   const colorSwatch = (kind, value, onPick, inputRef, title, align) => (
     <div className="relative flex items-center">
@@ -4267,6 +4358,23 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   return (
     <>
       <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />
+      {textEditor && (
+        <input
+          autoFocus
+          aria-label="Tekst na boisku"
+          placeholder="Wpisz tekst, Enter zapisuje"
+          value={textEditor.value}
+          onChange={(e) => setTextEditor(t => ({ ...t, value: e.target.value }))}
+          onKeyDown={(e) => {
+            // blur commits exactly once; Esc discards the edit first
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') { textCancelRef.current = true; e.currentTarget.blur(); }
+          }}
+          onBlur={commitTextEditor}
+          className="fixed z-[100] -translate-x-1/2 -translate-y-1/2 w-56 px-2 py-1.5 rounded-md bg-white text-slate-900 text-sm font-semibold shadow-2xl border-2 border-blue-500 outline-none"
+          style={textEditorStyle()}
+        />
+      )}
     <div className={`w-full text-white flex flex-col overflow-hidden ${embedded ? 'flex-1' : 'h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'}`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
@@ -4380,6 +4488,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
             ['select', MousePointer2, 'Przesuwanie', 'Przesuwanie zawodników, piłki, linii i stref (V)'],
             ['line', MoveUpRight, 'Linie', 'Rysowanie linii i strzałek (L)'],
             ['zone', Square, 'Strefy', 'Rysowanie stref (S)'],
+            ['text', TypeIcon, 'Tekst', 'Dodawanie napisów na boisku (T)'],
           ].map(([t, Icon, label, title]) => (
             <button key={t} onClick={() => setTacticsTool(t)} title={title} aria-label={label} aria-pressed={tacticsTool === t}
               className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -4514,6 +4623,13 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           </>
         )}
 
+        {tacticsTool === 'text' && (
+          <>
+            {colorSwatch('line', lineColor, setLineColor, lineColorInputRef, 'Kolor tekstu', 'left')}
+            <span className="hidden lg:inline text-xs text-slate-400 ml-1">Dwuklik na napisie — edycja</span>
+          </>
+        )}
+
         <div className="flex-1" />
 
         <div className="hidden md:flex items-center gap-1.5">
@@ -4550,6 +4666,9 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
         <div className="hidden md:block w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
         <button className={TOOLBAR_BTN} onClick={undoScheme} disabled={!canUndoScheme} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
         <button className={TOOLBAR_BTN} onClick={redoScheme} disabled={!canRedoScheme} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={15} /></button>
+        <button className={TOOLBAR_BTN} onClick={exportSchemePng} title="Pobierz obraz bieżącej klatki (PNG) — np. do wysłania zawodnikom" aria-label="Pobierz PNG">
+          <ImageIcon size={15} />
+        </button>
         <div className="hidden md:block w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
         {currentScheme ? (
           <span className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap" title="Zmiany zapisują się automatycznie w pamięci tej przeglądarki">

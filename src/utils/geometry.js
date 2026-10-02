@@ -87,6 +87,13 @@ export const isPointInZone = (px, py, zone) => {
                py >= Math.min(zone.y, zone.y + zone.height) &&
                py <= Math.max(zone.y, zone.y + zone.height);
       
+      case 'text': {
+        // approximate box of bold text: ~0.6 em per character
+        const size = zone.size || 22;
+        const halfW = Math.max(12, ((zone.text || '').length * size * 0.6) / 2) + 6;
+        return Math.abs(px - zone.x) <= halfW && Math.abs(py - zone.y) <= size * 0.75;
+      }
+
       case 'circle':
         const dx = px - zone.centerX;
         const dy = py - zone.centerY;

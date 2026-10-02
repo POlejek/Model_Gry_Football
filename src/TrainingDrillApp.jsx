@@ -60,7 +60,7 @@ const measureCtx = () => (measureContext ||= document.createElement('canvas').ge
 const textFont = (item) => `bold ${Math.round(18 * (item.scale || 1))}px Outfit, Arial, sans-serif`;
 
 const BOUNDS = {
-  player: [18, 18], goal: [48, 17], 'mini-goal': [24, 9], cone: [10, 18], disc: [8, 8],
+  player: [18, 18], coach: [17, 17], goal: [48, 17], 'mini-goal': [24, 9], cone: [10, 18], disc: [8, 8],
   pole: [6, 22], hurdle: [22, 6], hoop: [15, 15], ladder: [13, 60], mannequin: [8, 20],
   ball: [10, 10], step: [12, 12],
 };
@@ -263,9 +263,26 @@ function drawPlayerItem(ctx, item, selected) {
   ctx.fillStyle = color; ctx.strokeStyle = selected ? '#60a5fa' : '#ffffff'; ctx.lineWidth = selected ? 2.5 : 2;
   ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.fill();
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.stroke();
+  if (item.gk) {
+    // goalkeeper: second outline ring
+    ctx.strokeStyle = '#111827'; ctx.lineWidth = Math.max(1.5, r * 0.12);
+    ctx.beginPath(); ctx.arc(0, 0, r + Math.max(3, r * 0.2), 0, TWO_PI); ctx.stroke();
+  }
   ctx.rotate(-rotation);
   ctx.font = `bold ${Math.max(9, Math.round(r * 0.7))}px Outfit, Arial, sans-serif`;
   drawPlayerLabel(ctx, label, 0, 0, r, color);
+  ctx.restore();
+}
+
+function drawCoach(ctx, item, selected) {
+  const { x, y, scale = 1, color = '#334155', label = 'T' } = item;
+  const s = 16 * scale;
+  ctx.save(); ctx.translate(x, y); glow(ctx, selected);
+  ctx.fillStyle = color; ctx.strokeStyle = selected ? '#60a5fa' : '#ffffff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(-s, -s, 2 * s, 2 * s, 5 * scale); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.font = `bold ${Math.round(s * 1.1)}px Outfit, Arial, sans-serif`;
+  drawPlayerLabel(ctx, label, 0, 1, s, color);
   ctx.restore();
 }
 
@@ -306,6 +323,7 @@ function drawItem(ctx, item, selected) {
     case 'mannequin': drawMannequin(ctx, item, selected); break;
     case 'ball':      drawBall(ctx, item, selected); break;
     case 'player':    drawPlayerItem(ctx, item, selected); break;
+    case 'coach':     drawCoach(ctx, item, selected); break;
     case 'step':      drawStep(ctx, item, selected); break;
     case 'text':      drawText(ctx, item, selected); break;
   }
@@ -371,6 +389,10 @@ const EQUIPMENT_GROUPS = [
   { title: 'Zawodnicy', items: [
     { type: 'player', label: 'Zawodnik A', team: 'A', icon: '🔵' },
     { type: 'player', label: 'Zawodnik B', team: 'B', icon: '🔴' },
+    { type: 'player', label: 'Bramkarz A', team: 'A', gk: true, color: '#16a34a', icon: '🧤' },
+    { type: 'player', label: 'Bramkarz B', team: 'B', gk: true, color: '#7c3aed', icon: '🧤' },
+    { type: 'player', label: 'Joker', team: 'C', icon: '🟡' },
+    { type: 'coach',  label: 'Trener', icon: '🧑‍🏫', color: '#334155' },
   ] },
   { title: 'Sprzęt', items: [
     { type: 'goal',      label: 'Bramka',      icon: '🥅', color: '#ffffff' },
@@ -836,15 +858,28 @@ export default function TrainingDrillApp({ active = true }) {
     return { x: cx + (Math.random() - 0.5) * 80, y: cy + (Math.random() - 0.5) * 80 };
   };
 
+  const JOKER_COLOR = '#eab308';
+  const jokerColor = frames.flatMap(f => f.items).find(i => i.type === 'player' && i.team === 'C')?.color || JOKER_COLOR;
+  const playerColorFor = (eq) => {
+    if (eq.gk) return eq.color;
+    if (eq.team === 'C') return jokerColor;
+    return eq.team === 'A' ? teamAColor : teamBColor;
+  };
+
   const addItem = (eq, pos = null) => {
     checkpoint();
     const id = newId();
     const item = {
       id, type: eq.type, scale: 1, rotation: 0,
       ...(pos ? { x: clamp(pos.x, 10, pitchSize.w - 10), y: clamp(pos.y, 10, pitchSize.h - 10) } : freeSpot()),
-      color: eq.type === 'player' ? (eq.team === 'A' ? teamAColor : teamBColor) : eq.color,
+      color: eq.type === 'player' ? playerColorFor(eq) : eq.color,
     };
-    if (eq.type === 'player') { item.team = eq.team; item.label = nextLabel(i => i.type === 'player' && i.team === eq.team); }
+    if (eq.type === 'player') {
+      item.team = eq.team;
+      if (eq.gk) item.gk = true;
+      item.label = nextLabel(i => i.type === 'player' && i.team === eq.team && !!i.gk === !!eq.gk);
+    }
+    if (eq.type === 'coach') item.label = 'T';
     if (eq.type === 'step') item.label = nextLabel(i => i.type === 'step');
     if (eq.type === 'text') item.text = 'Tekst';
     updateKind('from', 'items', list => [...list, item]);
@@ -1469,7 +1504,7 @@ export default function TrainingDrillApp({ active = true }) {
             title={`${eq.label} — kliknij, aby dodać na środek, lub przeciągnij na boisko`}
             className={`${cols === 4 ? 'h-16' : 'h-14'} flex flex-col items-center justify-center gap-1 rounded-md bg-white/5 hover:bg-white/15 active:scale-95 transition text-slate-200 cursor-grab`}>
             {eq.type === 'player'
-              ? <span className="w-4 h-4 rounded-full border-2 border-white/80" style={{ background: eq.team === 'A' ? teamAColor : teamBColor }} />
+              ? <span className={`w-4 h-4 rounded-full border-2 ${eq.gk ? 'border-slate-900 ring-2 ring-white/80' : 'border-white/80'}`} style={{ background: playerColorFor(eq) }} />
               : <span className="text-lg leading-none">{eq.icon}</span>}
             <span className="text-[11px] leading-tight text-center px-1">{eq.label}</span>
           </button>
@@ -1543,12 +1578,16 @@ export default function TrainingDrillApp({ active = true }) {
             <div className="flex flex-col gap-3">
               <div className="bg-white/5 rounded-lg p-2">
                 <p className="text-sm font-medium text-white">{TYPE_LABELS[single.obj.type]}</p>
-                {single.obj.type === 'player' && <p className="text-xs text-slate-400">Drużyna {single.obj.team}</p>}
+                {single.obj.type === 'player' && (
+                  <p className="text-xs text-slate-400">
+                    {single.obj.team === 'C' ? 'Joker (neutralny)' : `${single.obj.gk ? 'Bramkarz · ' : ''}Drużyna ${single.obj.team}`}
+                  </p>
+                )}
               </div>
 
-              {(single.obj.type === 'player' || single.obj.type === 'step') && (
+              {(single.obj.type === 'player' || single.obj.type === 'step' || single.obj.type === 'coach') && (
                 <div>
-                  <p className={fieldLabel}>{single.obj.type === 'player' ? 'Numer / imię' : 'Numer kroku'}</p>
+                  <p className={fieldLabel}>{single.obj.type === 'step' ? 'Numer kroku' : 'Numer / imię'}</p>
                   <input type="text" value={single.obj.label ?? ''}
                     onChange={e => patchObj('all', 'items', single.obj.id, { label: e.target.value })}
                     className={inputCls} placeholder={single.obj.type === 'player' ? 'np. 10 lub Jan' : 'np. 1'} />
@@ -1626,16 +1665,16 @@ export default function TrainingDrillApp({ active = true }) {
               <div>
                 <p className={fieldLabel}>Kolory drużyn</p>
                 <div className="flex flex-col gap-1.5">
-                  {[['A', teamAColor, setTeamAColor], ['B', teamBColor, setTeamBColor]].map(([team, color, setColor]) => (
+                  {[['A', teamAColor, setTeamAColor, 'Drużyna A'], ['B', teamBColor, setTeamBColor, 'Drużyna B'], ['C', jokerColor, null, 'Jokery']].map(([team, color, setColor, name]) => (
                     <label key={team} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
                       <input type="color" value={color}
                         onChange={e => {
                           const c = e.target.value;
-                          setColor(c);
-                          updateKind('all', 'items', list => list.map(i => (i.type === 'player' && i.team === team ? { ...i, color: c } : i)));
+                          setColor?.(c);
+                          updateKind('all', 'items', list => list.map(i => (i.type === 'player' && i.team === team && !i.gk ? { ...i, color: c } : i)));
                         }}
                         className="w-7 h-7 rounded cursor-pointer border border-white/20 bg-transparent" />
-                      Drużyna {team}
+                      {name}
                     </label>
                   ))}
                 </div>

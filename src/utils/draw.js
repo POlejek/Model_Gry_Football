@@ -467,7 +467,35 @@ const drawZoneResizeHandles = (ctx, zone, scale) => {
     ctx.restore();
   };
 
+export const TEXT_NOTE_SIZE = 22;
+
+// Text annotation on the pitch (stored with zones as { type: 'text', x, y, text, color, size }).
+export const drawTextNote = (ctx, note, isSelected = false) => {
+    const size = note.size || TEXT_NOTE_SIZE;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+    ctx.font = `bold ${size}px Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(3, size * 0.22);
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.strokeText(note.text || '', note.x, note.y);
+    ctx.fillStyle = note.color || '#111827';
+    ctx.fillText(note.text || '', note.x, note.y);
+    if (isSelected) {
+      const w = ctx.measureText(note.text || '').width;
+      ctx.strokeStyle = '#16a34a';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(note.x - w / 2 - 6, note.y - size * 0.7, w + 12, size * 1.4);
+    }
+    ctx.restore();
+  };
+
 export const drawZone = (ctx, zone, isSelected = false, zoneColor = "#ff0000", zoneOpacity = 0.3, handleScale = 1) => {
+    if (zone.type === 'text') { drawTextNote(ctx, zone, isSelected); return; }
     ctx.save();
     ctx.fillStyle = zone.color || zoneColor;
     ctx.globalAlpha = zone.opacity || zoneOpacity;

@@ -149,7 +149,7 @@ export function interpolateFrames(frames, t) {
 export const TYPE_LABELS = {
   player: 'Zawodnik', goal: 'Bramka', 'mini-goal': 'Mini-bramka', cone: 'Stożek', disc: 'Talerzyk',
   pole: 'Tyczka', hurdle: 'Płotek', hoop: 'Obręcz', ladder: 'Drabinka', mannequin: 'Manekin',
-  ball: 'Piłka', text: 'Tekst', step: 'Krok',
+  ball: 'Piłka', text: 'Tekst', step: 'Krok', coach: 'Trener',
 };
 
 export const DEFAULT_META = {
@@ -260,7 +260,7 @@ export function wrapText(ctx, text, maxWidth) {
 export function equipmentSummary(frames) {
   const byType = {};
   frames.forEach(f => f.items.forEach(i => {
-    if (['player', 'text', 'step'].includes(i.type)) return;
+    if (['player', 'text', 'step', 'coach'].includes(i.type)) return;
     (byType[i.type] ||= new Set()).add(i.id);
   }));
   return Object.entries(byType).map(([t, ids]) => `${TYPE_LABELS[t]} ×${ids.size}`).join(', ');

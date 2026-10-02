@@ -7,6 +7,7 @@ import {
 import { drawField, drawLine, drawZone, drawPlayerLabel } from './utils/draw.js';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
+import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
@@ -521,7 +522,7 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
 // ── Main component ───────────────────────────────────────────────
-export default function TrainingDrillApp({ active = true, squad = [] }) {
+export default function TrainingDrillApp({ active = true, squad = [], openDrillRequest = null }) {
   const [initial] = useState(loadDraft);
 
   const canvasRef = useRef(null);
@@ -578,9 +579,12 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
   const [currentDrillId, setCurrentDrillId] = useState(initial.drillId);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
+  // phases are edited in the tactics tab, so re-read them whenever a dialog that shows them opens
+  const modelPhaseOptions = useMemo(() => phaseOptions(readModelPhases()), [showMeta, showLibrary, active]);
   const [libraryMsg, setLibraryMsg] = useState(null);
   const [savedDrills, setSavedDrills] = useState(readLibrary);
   const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryPhase, setLibraryPhase] = useState('');
   const [hoverCursor, setHoverCursor] = useState('default');
   const [savedSig, setSavedSig] = useState(() => {
     const entry = initial.drillId && readLibrary().find(d => d.id === initial.drillId);
@@ -1219,7 +1223,9 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
       meta.players && `Zawodnicy: ${meta.players}`,
       area && `Pole: ${area}`,
     ].filter(Boolean).join('   ·   ');
+    const phaseText = (meta.phases || []).map(k => phaseLabel(k, modelPhaseOptions)).join(', ');
     const sections = [
+      ['Faza modelu gry', phaseText],
       ...META_FIELDS.map(([key, label]) => [label, meta[key]]),
       ['Sprzęt', equipmentSummary(frames)],
     ].filter(([, t]) => t && String(t).trim());
@@ -1331,6 +1337,15 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
 
   const openDrill = (d) => { if (confirmDiscard()) loadDrill(d); };
 
+  // "Open" requests from the tactics tab (drill list of a game-model phase)
+  useEffect(() => {
+    if (!openDrillRequest) return;
+    const library = readLibrary();
+    setSavedDrills(library);
+    const d = library.find(x => x.id === openDrillRequest.id);
+    if (d && d.id !== currentDrillId) openDrill(d);
+  }, [openDrillRequest]);
+
   const deleteDrill = (id) => {
     if (!window.confirm('Usunąć to ćwiczenie z biblioteki?')) return;
     persistLibrary(savedDrills.filter(d => d.id !== id));
@@ -1408,7 +1423,9 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
   // ── UI ───────────────────────────────────────────────────────────
   const filteredDrills = savedDrills.filter(d => {
     const q = librarySearch.trim().toLowerCase();
-    return !q || d.name.toLowerCase().includes(q) || (d.meta?.category || '').toLowerCase().includes(q);
+    if (libraryPhase && !(d.meta?.phases || []).includes(libraryPhase)) return false;
+    const phaseNames = (d.meta?.phases || []).map(k => phaseLabel(k, modelPhaseOptions)).join(' ').toLowerCase();
+    return !q || d.name.toLowerCase().includes(q) || (d.meta?.category || '').toLowerCase().includes(q) || phaseNames.includes(q);
   });
 
   const coarse = isCoarsePointer;
@@ -2039,7 +2056,13 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
             <div className="px-5 pt-3 relative">
               <Search size={14} className="absolute left-7 top-1/2 mt-1.5 -translate-y-1/2 text-slate-500" />
               <input autoFocus type="search" value={librarySearch} onChange={e => setLibrarySearch(e.target.value)}
-                placeholder="Szukaj po nazwie lub kategorii…" className={`${inputCls} pl-8`} />
+                placeholder="Szukaj po nazwie, kategorii lub fazie…" className={`${inputCls} pl-8`} />
+            </div>
+            <div className="px-5 pt-2">
+              <select value={libraryPhase} onChange={e => setLibraryPhase(e.target.value)} aria-label="Filtruj po fazie modelu gry" className={inputCls}>
+                <option value="" className="bg-slate-800">Wszystkie fazy modelu gry</option>
+                {modelPhaseOptions.map(o => <option key={o.key} value={o.key} className="bg-slate-800">{o.label}</option>)}
+              </select>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
               {savedDrills.length === 0 && (
@@ -2065,6 +2088,11 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
                       </p>
                       <p className="text-xs text-slate-500 truncate">
                         {[d.meta?.category, framesLabel, new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })].filter(Boolean).join(' · ')}
+                      </p>
+                      <p className="flex flex-wrap gap-1 mt-0.5">
+                        {(d.meta?.phases || []).map(k => (
+                          <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px]">{phaseLabel(k, modelPhaseOptions)}</span>
+                        ))}
                       </p>
                     </button>
                     <button onClick={() => openDrill(d)} className={btn}>Otwórz</button>
@@ -2121,6 +2149,21 @@ export default function TrainingDrillApp({ active = true, squad = [] }) {
                   placeholder={pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : 'np. 30×20 m'}
                   onChange={e => setMeta(m => ({ ...m, area: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
+              <div className="col-span-2 text-xs text-slate-400">
+                Faza modelu gry <span className="text-slate-500">— które fazy z zakładki Taktyka trenuje to ćwiczenie</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {modelPhaseOptions.map(o => {
+                    const on = (meta.phases || []).includes(o.key);
+                    return (
+                      <button key={o.key} type="button" aria-pressed={on}
+                        onClick={() => setMeta(m => ({ ...m, phases: on ? (m.phases || []).filter(k => k !== o.key) : [...(m.phases || []), o.key] }))}
+                        className={`px-2 py-1 rounded-md text-xs transition-colors ${on ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               {META_FIELDS.map(([key, label, placeholder]) => (
                 <label key={key} className="col-span-2 text-xs text-slate-400">{label}
                   <textarea value={meta[key]} rows={3} placeholder={placeholder}

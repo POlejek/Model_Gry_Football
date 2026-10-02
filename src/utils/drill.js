@@ -155,6 +155,7 @@ export const TYPE_LABELS = {
 export const DEFAULT_META = {
   category: '', duration: '', players: '', area: '',
   objective: '', organization: '', description: '', coachingPoints: '', variations: '',
+  phases: [], // keys of game-model phases from the tactics editor, e.g. 'Atak-Budowanie'
 };
 
 export const META_FIELDS = [

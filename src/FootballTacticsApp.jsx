@@ -16,6 +16,7 @@ import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import { safeFileName } from './utils/drill.js';
 import { findByNumber, shortName, sortSquad } from './utils/squad.js';
+import { phaseKey, phaseOptions, readDrillLibrary, drillsForPhase } from './utils/modelPhases.js';
 
 
 const TOOLBAR_BTN = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
@@ -23,7 +24,7 @@ const MENU_ITEM = 'w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-
 const optionBtnClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justify-center transition-colors ${
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
-const FootballTacticsApp = ({ embedded = false, active = true, squad = [] }) => {
+const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpenDrill = null }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -4342,6 +4343,14 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [] }) => 
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
+  // ── Training drills linked to game-model phases (edited in the training tab) ──
+  const drillLibrary = useMemo(() => readDrillLibrary(), [active]);
+  const currentPhaseKey = phaseKey(selectedPhase, phases[selectedPhase]?.length > 0 ? selectedSubPhase : null);
+  const currentPhaseDrills = drillsForPhase(drillLibrary, currentPhaseKey);
+  const allPhaseKeys = phaseOptions(phases).map(o => o.key);
+  const coveredPhases = allPhaseKeys.filter(k => drillsForPhase(drillLibrary, k).length > 0).length;
+  const drillCount = (key) => drillsForPhase(drillLibrary, key).length;
+
   const colorSwatch = (kind, value, onPick, inputRef, title, align) => (
     <div className="relative flex items-center">
       <input ref={inputRef} type="color" value={value}
@@ -4946,7 +4955,15 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [] }) => 
                                 : 'bg-white/5 hover:bg-white/10 text-slate-300'
                             }`}
                           >
-                            {subPhase}
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="truncate">{subPhase}</span>
+                              {drillCount(`${phase}-${subPhase}`) > 0 && (
+                                <span className="flex-shrink-0 px-1.5 rounded bg-emerald-600/25 text-emerald-300 text-[10px]"
+                                  title="Ćwiczenia treningowe przypisane do tej fazy">
+                                  🏃 {drillCount(`${phase}-${subPhase}`)}
+                                </span>
+                              )}
+                            </span>
                           </button>
                           <button
                             onClick={() => deleteSubPhase(phase, subPhase)}
@@ -5637,6 +5654,37 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [] }) => 
                 </div>
               </div>
             </div>
+          )}
+        </div>
+
+        <div className="p-6 border-b border-white/10">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-semibold text-slate-200">Ćwiczenia treningowe</h3>
+            <span className="text-xs text-slate-400" title="Ile faz modelu gry ma przypisane co najmniej jedno ćwiczenie">
+              fazy z ćwiczeniami: {coveredPhases}/{allPhaseKeys.length}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">
+            Dla fazy: <span className="text-slate-200">{selectedPhase}{phases[selectedPhase]?.length > 0 && selectedSubPhase ? ` – ${selectedSubPhase}` : ''}</span>
+          </p>
+          {currentPhaseDrills.length ? (
+            <ul className="space-y-1">
+              {currentPhaseDrills.map(d => (
+                <li key={d.id}>
+                  <button onClick={() => onOpenDrill?.(d.id)} disabled={!onOpenDrill}
+                    className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                    <span className="block text-sm text-slate-100 truncate">🏃 {d.name}</span>
+                    <span className="block text-xs text-slate-400 truncate">
+                      {[d.meta?.category, d.meta?.duration && `${d.meta.duration} min`, d.meta?.players && `${d.meta.players} zaw.`].filter(Boolean).join(' · ') || 'Otwórz w zakładce Trening'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Brak ćwiczeń dla tej fazy. W zakładce Trening otwórz ćwiczenie → „Opis” → „Faza modelu gry” i zaznacz tę fazę.
+            </p>
           )}
         </div>
 

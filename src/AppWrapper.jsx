@@ -66,6 +66,7 @@ export default function AppWrapper() {
   const [runtimeError, setRuntimeError] = useState(null);
   const [squad, setSquad] = useState(loadSquad);
   const [showSquad, setShowSquad] = useState(false);
+  const [drillRequest, setDrillRequest] = useState(null);
   const updateSquad = (list) => { setSquad(list); saveSquad(list); };
 
   // Errors thrown outside React rendering (timers, animation, event handlers) would otherwise be
@@ -128,10 +129,10 @@ export default function AppWrapper() {
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'tactics' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} /></TabErrorBoundary>
+        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} /></TabErrorBoundary>
+        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} openDrillRequest={drillRequest} /></TabErrorBoundary>
       </div>
 
       {showSquad && <SquadModal squad={squad} onChange={updateSquad} onClose={() => setShowSquad(false)} />}

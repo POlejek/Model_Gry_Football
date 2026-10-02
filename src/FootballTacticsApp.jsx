@@ -55,6 +55,16 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       'Obrona': [],
       'O/A': [],
       'SFG': []
+    },
+    '5v5': {
+      'Atak-Otwarcie': [],
+      'Atak-Budowanie': [],
+      'Atak-Tworzenie szans': [],
+      'Atak-Finalizacja': [],
+      'A/O': [],
+      'Obrona': [],
+      'O/A': [],
+      'SFG': []
     }
   });
   const [currentScheme, setCurrentScheme] = useState(null);
@@ -161,7 +171,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     const data = loadStoredData();
     if (data) {
       if (data.phases) setPhases(data.phases);
-      if (data.schemes) setSchemes(data.schemes);
+      if (data.schemes) setSchemes(prev => ({ ...prev, ...data.schemes }));
       if (data.gameFormat) setGameFormat(data.gameFormat);
       if (data.selectedPhase) setSelectedPhase(data.selectedPhase);
       if (data.selectedSubPhase) setSelectedSubPhase(data.selectedSubPhase);
@@ -239,6 +249,22 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
   const getInitialPlayers = (format) => {
     const formations = {
+      '5v5': {
+        team: [
+          { id: 'gk', x: 350, y: 1010, number: '1', rotation: 0 },
+          { id: 'lb', x: 220, y: 820, number: '2', rotation: 0 },
+          { id: 'rb', x: 480, y: 820, number: '3', rotation: 0 },
+          { id: 'cm', x: 350, y: 690, number: '4', rotation: 0 },
+          { id: 'st', x: 350, y: 600, number: '5', rotation: 0 }
+        ],
+        opponent: [
+          { id: 'ogk', x: 350, y: 70, number: '1', rotation: Math.PI },
+          { id: 'olb', x: 220, y: 260, number: '2', rotation: Math.PI },
+          { id: 'orb', x: 480, y: 260, number: '3', rotation: Math.PI },
+          { id: 'ocm', x: 350, y: 390, number: '4', rotation: Math.PI },
+          { id: 'ost', x: 350, y: 480, number: '5', rotation: Math.PI }
+        ]
+      },
       '7v7': {
         team: [
           { id: 'gk', x: 350, y: 1020, number: '1', rotation: 0 },
@@ -479,6 +505,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     const margin = 20;
 
     const fieldDimensions = {
+      '5v5': { length: 40, width: 25, penaltyBoxWidth: 15, penaltyBoxDepth: 7, goalBoxWidth: 6, goalBoxDepth: 2, goalWidth: 3, penaltySpot: 6, centerCircle: 4, arcRadius: 0 },
       '7v7': { length: 55, width: 37, penaltyBoxWidth: 20, penaltyBoxDepth: 13, goalBoxWidth: 12, goalBoxDepth: 5, goalWidth: 5, penaltySpot: 0, centerCircle: 6, arcRadius: 0 },
       '9v9': { length: 70, width: 50, penaltyBoxWidth: 30, penaltyBoxDepth: 13, goalBoxWidth: 15, goalBoxDepth: 5, goalWidth: 6, penaltySpot: 9, centerCircle: 7, arcRadius: 7 },
       '11v11': { length: 105, width: 68, penaltyBoxWidth: 40.32, penaltyBoxDepth: 16.5, goalBoxWidth: 18.32, goalBoxDepth: 5.5, goalWidth: 7.32, penaltySpot: 11, centerCircle: 9.15, arcRadius: 9.15 }
@@ -868,7 +895,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     }
 
     // Rysuj zawodników
-    const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
+    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[format] || 18;
 
     // Drużyna
@@ -1189,6 +1216,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     const margin = 20;
 
     const fieldDimensions = {
+      '5v5': { length: 40, width: 25, penaltyBoxWidth: 15, penaltyBoxDepth: 7, goalBoxWidth: 6, goalBoxDepth: 2, goalWidth: 3, penaltySpot: 6, centerCircle: 4, arcRadius: 0 },
       '7v7': { length: 55, width: 37, penaltyBoxWidth: 20, penaltyBoxDepth: 13, goalBoxWidth: 12, goalBoxDepth: 5, goalWidth: 5, penaltySpot: 0, centerCircle: 6, arcRadius: 0 },
       '9v9': { length: 70, width: 50, penaltyBoxWidth: 30, penaltyBoxDepth: 13, goalBoxWidth: 15, goalBoxDepth: 5, goalWidth: 6, penaltySpot: 9, centerCircle: 7, arcRadius: 7 },
       '11v11': { length: 105, width: 68, penaltyBoxWidth: 40.32, penaltyBoxDepth: 16.5, goalBoxWidth: 18.32, goalBoxDepth: 5.5, goalWidth: 7.32, penaltySpot: 11, centerCircle: 9.15, arcRadius: 9.15 }
@@ -1710,7 +1738,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     }
 
     // Rysuj zawodników
-    const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
+    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[format] || 18;
     const fontSize = Math.floor(playerRadius * 0.65);
 
@@ -1801,7 +1829,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     });
 
     // Piłka z klasycznym wzorem
-    const ballSizes = { '7v7': 10, '9v9': 9, '11v11': 8 };
+    const ballSizes = { '5v5': 11, '7v7': 10, '9v9': 9, '11v11': 8 };
     const ballRadius = ballSizes[format] || 8;
     
     ctx.save();
@@ -2399,8 +2427,11 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       
       setSchemes(mergedSchemes);
     } else if (mode === 'replace') {
-      // Zamień wszystko
-      setSchemes(importedData.schemes);
+      // Zamień wszystko (formaty nieobecne w pliku, np. 5v5 w starszych plikach, zostają puste)
+      setSchemes(prev => ({
+        ...Object.fromEntries(Object.entries(prev).map(([f, groups]) => [f, Object.fromEntries(Object.keys(groups).map(k => [k, []]))])),
+        ...importedData.schemes,
+      }));
       setPhases(importedData.phases);
       setCurrentScheme(null);
     }
@@ -3356,8 +3387,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     }
 
     // Rozmiary dynamiczne
-    const ballSizes = { '7v7': 10, '9v9': 9, '11v11': 8 };
-    const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
+    const ballSizes = { '5v5': 11, '7v7': 10, '9v9': 9, '11v11': 8 };
+    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
     const ballRadius = ballSizes[gameFormat] || 8;
     const playerRadius = playerSizes[gameFormat] || 18;
 
@@ -3749,7 +3780,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   const handleCanvasDoubleClick = (e) => {
     const { x, y } = getCanvasCoords(e);
 
-    const playerSizes = { '7v7': 26, '9v9': 22, '11v11': 18 };
+    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
     const playerRadius = playerSizes[gameFormat] || 18;
 
     // Sprawdź czy kliknięto na zawodniku
@@ -4536,7 +4567,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-2">Format gry</label>
             <div className="flex gap-2">
-              {['7v7', '9v9', '11v11'].map(format => (
+              {['5v5', '7v7', '9v9', '11v11'].map(format => (
                 <button
                   key={format}
                   onClick={() => {

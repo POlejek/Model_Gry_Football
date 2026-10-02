@@ -8,6 +8,7 @@ export const drawField = (ctx, gameFormat) => {
     
     // Wymiary boiska według unifikacji PZPN
     const fieldDimensions = {
+      '5v5': { length: 40, width: 25, penaltyBoxWidth: 15, penaltyBoxDepth: 7, goalBoxWidth: 6, goalBoxDepth: 2, goalWidth: 3, penaltySpot: 6, centerCircle: 4, arcRadius: 0 }, // PZPN: gra 5v5 (Żak), bramki 3 m
       '7v7': { 
         length: 55, 
         width: 37,
@@ -247,6 +248,7 @@ export const drawPlayer = (ctx, player, isTeam, playerColor = null, teamColor = 
     // Rozmiar zawodnika proporcjonalny do boiska
     // Im mniejsze boisko, tym większe ikony (lepiej widoczne)
     const playerSizes = {
+      '5v5': 30,   // największe
       '7v7': 26,   // większe
       '9v9': 22,   // średnie
       '11v11': 18  // standardowe
@@ -382,6 +384,7 @@ export const drawBall = (ctx, ball, gameFormat = "11v11") => {
     
     // Rozmiar pi\u0142ki proporcjonalny do formatu gry
     const ballSizes = {
+      '5v5': 11,
       '7v7': 10,   // wi\u0119ksza
       '9v9': 9,    // \u015brednia
       '11v11': 8   // standardowa

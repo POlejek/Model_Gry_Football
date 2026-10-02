@@ -596,6 +596,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const modelPhaseOptions = useMemo(() => phaseOptions(readModelPhases()), [showMeta, showLibrary, active]);
   const [libraryMsg, setLibraryMsg] = useState(null);
   const [savedDrills, setSavedDrills] = useState(readLibrary);
+  useEffect(() => { if (active) setSavedDrills(readLibrary()); }, [active]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryPhase, setLibraryPhase] = useState('');
   const [hoverCursor, setHoverCursor] = useState('default');

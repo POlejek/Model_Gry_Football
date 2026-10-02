@@ -1,13 +1,36 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList,
+  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
-import { TYPE_LABELS, META_FIELDS } from './utils/drill.js';
+import { TYPE_LABELS, META_FIELDS, safeFileName } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
 
 const SESSIONS_KEY = 'trainingSessions';
+const DRILLS_KEY = 'trainingDrillLibrary';
+export const SESSION_FORMAT = 'model-gry-training-session';
+export const SESSION_LIBRARY_FORMAT = 'model-gry-session-library';
+
+function downloadJson(data, fileName) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// Sessions from a session file or a session-library file, plus the drills they reference.
+function parseSessionFile(data) {
+  if (data?.format === SESSION_FORMAT && data.session) return { sessions: [data.session], drills: data.drills || [] };
+  if (data?.format === SESSION_LIBRARY_FORMAT && Array.isArray(data.sessions)) return { sessions: data.sessions, drills: data.drills || [] };
+  return null;
+}
+
+const isValidSession = (s) => s && typeof s === 'object' && Array.isArray(s.blocks);
 
 const readSessions = () => {
   try {
@@ -53,7 +76,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
   const [pickerPhase, setPickerPhase] = useState('');
 
   // drills and phases live in the other tabs; refresh whenever this tab becomes visible
-  const library = useMemo(() => readDrillLibrary(), [active, showPicker]);
+  const [libraryVersion, setLibraryVersion] = useState(0);
+  const library = useMemo(() => readDrillLibrary(), [active, showPicker, libraryVersion]);
   const options = useMemo(() => phaseOptions(readModelPhases()), [active]);
   const drillById = useMemo(() => new Map(library.map(d => [d.id, d])), [library]);
 
@@ -95,6 +119,85 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
     const rest = sessions.filter(s => s.id !== id);
     setSessions(rest);
     if (id === currentId) setCurrentId(rest[0]?.id || null);
+  };
+
+  // ── Download / import ──
+  const importInputRef = useRef(null);
+  const [message, setMessage] = useState(null);
+  const flash = (text, tone = 'ok') => {
+    setMessage({ text, tone });
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  // drills are bundled so the file works on another device / browser
+  const drillsUsedBy = (list) => {
+    const ids = new Set(list.flatMap(s => s.blocks.map(b => b.drillId).filter(Boolean)));
+    return library.filter(d => ids.has(d.id));
+  };
+
+  const exportSession = () => {
+    if (!current) return;
+    downloadJson(
+      { format: SESSION_FORMAT, version: 1, exportedAt: new Date().toISOString(), session: current, drills: drillsUsedBy([current]) },
+      `konspekt_${safeFileName(current.title || 'trening')}${current.date ? `_${current.date}` : ''}.json`,
+    );
+  };
+
+  const exportAllSessions = () => {
+    if (!sessions.length) return;
+    downloadJson(
+      { format: SESSION_LIBRARY_FORMAT, version: 1, exportedAt: new Date().toISOString(), sessions, drills: drillsUsedBy(sessions) },
+      `biblioteka_konspektow_${today()}.json`,
+    );
+  };
+
+  const importFiles = async (e) => {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!files.length) return;
+    const incomingSessions = [];
+    const incomingDrills = [];
+    let badFiles = 0;
+    await Promise.all(files.map(async (file) => {
+      try {
+        const parsed = parseSessionFile(JSON.parse(await file.text()));
+        if (!parsed) throw new Error('format');
+        incomingSessions.push(...parsed.sessions.filter(isValidSession));
+        incomingDrills.push(...parsed.drills.filter(d => d && typeof d.id === 'string' && Array.isArray(d.frames)));
+      } catch {
+        badFiles++;
+      }
+    }));
+
+    // drills: add the ones this device does not have yet (an existing drill with the same id is kept)
+    let drillLibrary = readDrillLibrary();
+    const knownDrills = new Set(drillLibrary.map(d => d.id));
+    const newDrills = incomingDrills.filter(d => !knownDrills.has(d.id) && knownDrills.add(d.id));
+    if (newDrills.length) {
+      drillLibrary = [...newDrills, ...drillLibrary];
+      try { localStorage.setItem(DRILLS_KEY, JSON.stringify(drillLibrary)); } catch { flash('Brak miejsca w pamięci przeglądarki', 'warn'); return; }
+    }
+
+    // sessions: identical ones (same id and last change) are skipped, others are added as new
+    let skipped = 0;
+    const added = [];
+    incomingSessions.forEach((s) => {
+      const known = [...added, ...sessions];
+      if (known.some(x => x.id === s.id && x.updatedAt === s.updatedAt)) { skipped++; return; }
+      const idTaken = !s.id || known.some(x => x.id === s.id);
+      added.push({ ...newSession(), ...s, id: idTaken ? uid('session') : s.id, blocks: s.blocks.map(b => ({ ...b, id: b.id || uid('block') })) });
+    });
+    if (added.length) {
+      setSessions(list => [...added, ...list]);
+      setCurrentId(added[0].id);
+    }
+    setLibraryVersion(v => v + 1);
+
+    const parts = [`Zaimportowano konspekty: ${added.length}`];
+    if (newDrills.length) parts.push(`nowe ćwiczenia: ${newDrills.length}`);
+    if (skipped) parts.push(`pominięte duplikaty: ${skipped}`);
+    if (badFiles) parts.push(`błędne pliki: ${badFiles}`);
+    flash(parts.join(' · '), badFiles ? 'warn' : 'ok');
   };
 
   const addDrillBlock = (drill) => {
@@ -167,7 +270,18 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
             );
           })}
         </div>
+        <div className="p-2 border-t border-white/10 grid grid-cols-2 gap-1">
+          <button onClick={exportAllSessions} disabled={!sessions.length} className={`${btn} justify-center text-xs`}
+            title="Wszystkie konspekty z użytymi ćwiczeniami w jednym pliku .json">
+            <Download size={13} /> Wszystkie
+          </button>
+          <button onClick={() => importInputRef.current?.click()} className={`${btn} justify-center text-xs`}
+            title="Wczytaj jeden lub wiele plików z konspektami">
+            <Upload size={13} /> Importuj
+          </button>
+        </div>
       </aside>
+      <input ref={importInputRef} type="file" accept=".json,application/json" multiple onChange={importFiles} className="hidden" aria-label="Plik z konspektami" />
 
       {/* ── Editor ── */}
       <main className="flex-1 min-w-0 overflow-y-auto">
@@ -177,6 +291,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
             {sessions.map(s => <option key={s.id} value={s.id} className="bg-slate-800">{s.title || 'Bez tytułu'} · {s.date}</option>)}
           </select>
           <button onClick={createSession} className={btn} aria-label="Nowy konspekt"><Plus size={15} /></button>
+          <button onClick={exportAllSessions} disabled={!sessions.length} className={btn} aria-label="Pobierz wszystkie konspekty"><Download size={15} /></button>
+          <button onClick={() => importInputRef.current?.click()} className={btn} aria-label="Importuj konspekty"><Upload size={15} /></button>
         </div>
 
         {!current ? (
@@ -187,6 +303,9 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
             <button onClick={createSession} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center gap-2">
               <Plus size={16} /> Utwórz pierwszy konspekt
             </button>
+            <p className="mt-3 text-xs">
+              lub <button onClick={() => importInputRef.current?.click()} className="underline text-slate-300 hover:text-white">zaimportuj konspekty z pliku</button>
+            </p>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto p-4 lg:p-6 space-y-5">
@@ -232,6 +351,9 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
               )}
               <div className="flex-1" />
               <button onClick={duplicateSession} className={btn} title="Kopia konspektu z dzisiejszą datą"><Copy size={14} /> Duplikuj</button>
+              <button onClick={exportSession} className={btn} title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
+                <Download size={14} /> Pobierz
+              </button>
               <button onClick={printPlan} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`}
                 title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
                 <Printer size={14} /> Drukuj / PDF
@@ -309,6 +431,14 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
           </div>
         )}
       </main>
+
+      {message && (
+        <div role="status" aria-live="polite"
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] text-center px-4 py-2 rounded-lg shadow-2xl text-sm border ${
+            message.tone === 'warn' ? 'bg-amber-950/95 border-amber-500/40 text-amber-200' : 'bg-slate-900/95 border-emerald-500/40 text-emerald-200'}`}>
+          {message.text}
+        </div>
+      )}
 
       {/* ── Drill picker ── */}
       {showPicker && (

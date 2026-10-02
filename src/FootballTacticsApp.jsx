@@ -166,8 +166,12 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     'SFG': []
   });
 
+  // Saving waits until stored data is loaded, so the first render's defaults never overwrite it.
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
   // Wczytaj dane z localStorage przy starcie (z migracją wersji)
   useEffect(() => {
+    setStorageLoaded(true);
     const data = loadStoredData();
     if (data) {
       if (data.phases) setPhases(data.phases);
@@ -183,8 +187,9 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
   // Zapisz dane do localStorage przy każdej zmianie
   useEffect(() => {
+    if (!storageLoaded) return;
     saveStoredData({ phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor });
-  }, [phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor]);
+  }, [storageLoaded, phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor]);
 
   // Synchronizuj zawartość comments edytora tylko gdy zmienia się schemat
   useEffect(() => {
@@ -2671,6 +2676,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const addFrame = () => {
+    checkpointScheme();
     if (!currentScheme) return;
     
     const newFrame = {
@@ -2819,6 +2825,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const applyFormation = (teamType, formationName) => {
+    checkpointScheme();
     const positions = getFormationPositions(formationName, teamType);
     if (!positions) return;
 
@@ -3160,37 +3167,42 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     drawBall(ctx, players.ball, gameFormat);
   }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
 
+  // One transition per effect run. The interval stops itself after the last step, so ticks that
+  // fire before React re-renders (slow devices) cannot advance the frame past the end.
   useEffect(() => {
-    let interval;
-    if (isPlaying && currentScheme && currentFrame < currentScheme.frames.length - 1) {
-      const startFrame = currentScheme.frames[currentFrame];
-      const endFrame = currentScheme.frames[currentFrame + 1];
-      const duration = 800; // czas trwania przejścia w ms
-      const fps = 30; // klatek na sekundę
-      const steps = (duration / 1000) * fps;
-      let step = 0;
-      
-      interval = setInterval(() => {
-        step++;
-        const progress = Math.min(step / steps, 1);
-        setInterpolationProgress(progress);
-        
-        const interpolated = interpolatePlayers(startFrame, endFrame, progress);
-        setPlayers(interpolated);
-        
-        if (progress >= 1) {
-          step = 0;
-          setCurrentFrame(prev => {
-            const next = prev + 1;
-            if (next >= currentScheme.frames.length - 1) {
-              setIsPlaying(false);
-              setInterpolationProgress(0);
-            }
-            return next;
-          });
-        }
-      }, 1000 / fps);
+    if (!isPlaying || !currentScheme) return undefined;
+    const frames = currentScheme.frames;
+    if (currentFrame >= frames.length - 1) {
+      setIsPlaying(false);
+      setInterpolationProgress(0);
+      return undefined;
     }
+    const startFrame = frames[currentFrame];
+    const endFrame = frames[currentFrame + 1];
+    const duration = 800; // czas trwania przejścia w ms
+    const fps = 30; // klatek na sekundę
+    const steps = (duration / 1000) * fps;
+    let step = 0;
+    let finished = false;
+
+    const interval = setInterval(() => {
+      if (finished) return;
+      step++;
+      const progress = Math.min(step / steps, 1);
+      setInterpolationProgress(progress);
+      setPlayers(interpolatePlayers(startFrame, endFrame, progress));
+
+      if (progress >= 1) {
+        finished = true;
+        clearInterval(interval);
+        const next = currentFrame + 1;
+        setCurrentFrame(next);
+        if (next >= frames.length - 1) {
+          setIsPlaying(false);
+          setInterpolationProgress(0);
+        }
+      }
+    }, 1000 / fps);
     return () => clearInterval(interval);
   }, [isPlaying, currentFrame, currentScheme]);
 
@@ -3216,6 +3228,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const handleCanvasMouseDown = (e) => {
+    checkpointScheme();
     const { x, y } = getCanvasCoords(e);
 
     // Tryb rysowania linii
@@ -3998,6 +4011,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const deleteFrame = (frameIndex) => {
+    checkpointScheme();
     if (!currentScheme || currentScheme.frames.length <= 1) return;
     
     const confirmDelete = window.confirm(`Czy na pewno chcesz usunąć klatkę #${frameIndex + 1}?`);
@@ -4046,6 +4060,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const pasteDrawing = () => {
+    checkpointScheme();
     if (!clipboard) return;
     if (clipboard.type === 'line') {
       const d = clipboard.data;
@@ -4070,6 +4085,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   };
 
   const deleteSelectedDrawing = () => {
+    checkpointScheme();
     if (selectedLineIndex !== null) {
       const newLines = lines.filter((_, i) => i !== selectedLineIndex);
       setLines(newLines);
@@ -4083,8 +4099,8 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     }
   };
 
-  const clearAllLines = () => { setLines([]); setSelectedLineIndex(null); saveDrawingsToScheme([], zones); };
-  const clearAllZones = () => { setZones([]); setSelectedZoneIndex(null); saveDrawingsToScheme(lines, []); };
+  const clearAllLines = () => { checkpointScheme(); setLines([]); setSelectedLineIndex(null); saveDrawingsToScheme([], zones); };
+  const clearAllZones = () => { checkpointScheme(); setZones([]); setSelectedZoneIndex(null); saveDrawingsToScheme(lines, []); };
 
   // ── Tool switching (desktop toolbar; mobile keeps its expandable panels) ──
   const tacticsTool = isDrawingMode ? drawingTool : 'select';
@@ -4104,6 +4120,11 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
   const schemeHistRef = useRef({ id: null, stack: [], index: -1 });
   const [, setSchemeHistTick] = useState(0);
   const schemeSnapshot = useMemo(() => (currentScheme ? JSON.stringify(currentScheme) : null), [currentScheme]);
+
+  // Record the state before a discrete edit so quick successive edits stay separate undo steps.
+  function checkpointScheme() {
+    commitSchemeHistory(schemeSnapshot);
+  }
 
   const commitSchemeHistory = (snap) => {
     const h = schemeHistRef.current;
@@ -5056,7 +5077,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
               <button
                 onClick={() => {
-                  if (!isPlaying && currentFrame === currentScheme.frames.length - 1) {
+                  if (!isPlaying && currentFrame >= currentScheme.frames.length - 1) {
                     setCurrentFrame(0);
                     setPlayers(currentScheme.frames[0]);
                     setInterpolationProgress(0);

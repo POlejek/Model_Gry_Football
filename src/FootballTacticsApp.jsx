@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, Users,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -15,6 +15,7 @@ import {
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import { safeFileName } from './utils/drill.js';
+import { findByNumber, shortName, sortSquad } from './utils/squad.js';
 
 
 const TOOLBAR_BTN = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
@@ -22,7 +23,7 @@ const MENU_ITEM = 'w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-
 const optionBtnClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justify-center transition-colors ${
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
-const FootballTacticsApp = ({ embedded = false, active = true }) => {
+const FootballTacticsApp = ({ embedded = false, active = true, squad = [] }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -167,8 +168,17 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     'SFG': []
   });
 
+  // With "show names" on, own players show the surname of the squad member with the same number.
+  const displayPlayer = (p, isTeam = true) => {
+    if (!showNames || !isTeam) return p;
+    const member = findByNumber(squad, p.number);
+    const name = member && shortName(member);
+    return name ? { ...p, number: name } : p;
+  };
+
   // Saving waits until stored data is loaded, so the first render's defaults never overwrite it.
   const [storageLoaded, setStorageLoaded] = useState(false);
+  const [showNames, setShowNames] = useState(false); // nazwiska z kadry zamiast numerów (drużyna)
 
   // Wczytaj dane z localStorage przy starcie (z migracją wersji)
   useEffect(() => {
@@ -183,14 +193,15 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       if (data.expandedPhases) setExpandedPhases(data.expandedPhases);
       if (data.teamColor) setTeamColor(data.teamColor);
       if (data.opponentColor) setOpponentColor(data.opponentColor);
+      if (typeof data.showNames === 'boolean') setShowNames(data.showNames);
     }
   }, []);
 
   // Zapisz dane do localStorage przy każdej zmianie
   useEffect(() => {
     if (!storageLoaded) return;
-    saveStoredData({ phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor });
-  }, [storageLoaded, phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor]);
+    saveStoredData({ phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames });
+  }, [storageLoaded, phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames]);
 
   // Synchronizuj zawartość comments edytora tylko gdy zmienia się schemat
   useEffect(() => {
@@ -3171,10 +3182,10 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       });
     }
     
-    players.team.forEach(player => drawPlayer(ctx, player, true, null, teamColor, opponentColor, gameFormat, selectedPlayer));
+    players.team.forEach(player => drawPlayer(ctx, displayPlayer(player), true, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     drawBall(ctx, players.ball, gameFormat);
-  }, [players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
+  }, [showNames, squad, players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
 
   // One transition per effect run. The interval stops itself after the last step, so ticks that
   // fire before React re-renders (slow devices) cannot advance the frame past the end.
@@ -4303,7 +4314,6 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     return { left: rect.left + textEditor.x * s, top: rect.top + textEditor.y * s };
   };
 
-  const displayPlayer = (p) => p;
 
   // ── PNG export of the current frame ──
   const exportSchemePng = () => {
@@ -4316,7 +4326,7 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
     zones.forEach(zone => drawZone(ctx, zone, false, zoneColor, zoneOpacity, 0));
     lines.forEach(line => drawLine(ctx, line, false));
     players.team.forEach(p => drawPlayer(ctx, displayPlayer(p), true, null, teamColor, opponentColor, gameFormat, null));
-    players.opponent.forEach(p => drawPlayer(ctx, displayPlayer(p), false, null, teamColor, opponentColor, gameFormat, null));
+    players.opponent.forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
     drawBall(ctx, players.ball, gameFormat);
     const bin = atob(canvas.toDataURL('image/png').split(',')[1]);
     const bytes = new Uint8Array(bin.length);
@@ -4632,6 +4642,11 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
 
         <div className="flex-1" />
 
+        <button className={`${TOOLBAR_BTN} hidden md:inline-flex ${showNames ? 'bg-white/15 text-white' : ''}`} aria-pressed={showNames}
+          onClick={() => setShowNames(v => !v)} aria-label="Nazwiska z kadry"
+          title={squad.length ? 'Pokaż nazwiska z kadry zamiast numerów (Twoja drużyna)' : 'Dodaj zawodników w „Kadra”, aby pokazywać nazwiska'}>
+          <Users size={15} /> <span className="hidden min-[1450px]:inline">Nazwiska</span>
+        </button>
         <div className="hidden md:flex items-center gap-1.5">
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline">Drużyna</span>
           {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
@@ -5375,6 +5390,10 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
       `}>
         <div className="md:hidden p-4 border-b border-white/10 space-y-3">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Drużyny</p>
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={showNames} onChange={e => setShowNames(e.target.checked)} />
+            Pokaż nazwiska z kadry zamiast numerów
+          </label>
           <div className="flex items-center gap-4 text-sm text-slate-300">
             <span className="flex items-center gap-2">{colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'left')} Drużyna</span>
             <span className="flex items-center gap-2">{colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'left')} Przeciwnik</span>
@@ -5700,6 +5719,24 @@ const FootballTacticsApp = ({ embedded = false, active = true }) => {
                   placeholder="Wprowadź numer"
                 />
               </div>
+
+              {editingPlayerNumber.type === 'team' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Z kadry</label>
+                  {squad.length ? (
+                    <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-1">
+                      {sortSquad(squad).map(m => (
+                        <button key={m.id} onClick={() => setNewPlayerNumber(String(m.number))}
+                          className={`text-left px-2 py-1.5 rounded-md text-sm truncate ${String(newPlayerNumber) === String(m.number) ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}>
+                          <span className="font-semibold tabular-nums">{m.number}</span> {m.name || '—'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Dodaj zawodników w „👥 Kadra” u góry ekranu.</p>
+                  )}
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-2">Kolor zawodnika</label>

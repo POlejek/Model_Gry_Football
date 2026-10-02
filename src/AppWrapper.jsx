@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
+import SquadModal from './components/SquadModal.jsx';
+import { loadSquad, saveSquad } from './utils/squad.js';
 
 const TABS = [
   { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
@@ -62,6 +64,9 @@ const readTab = () => {
 export default function AppWrapper() {
   const [activeTab, setActiveTab] = useState(readTab);
   const [runtimeError, setRuntimeError] = useState(null);
+  const [squad, setSquad] = useState(loadSquad);
+  const [showSquad, setShowSquad] = useState(false);
+  const updateSquad = (list) => { setSquad(list); saveSquad(list); };
 
   // Errors thrown outside React rendering (timers, animation, event handlers) would otherwise be
   // invisible; surface them so a broken action is visible and can be reported precisely.
@@ -112,15 +117,24 @@ export default function AppWrapper() {
             {tab.label}
           </button>
         ))}
+        <button
+          onClick={() => setShowSquad(true)}
+          title="Kadra zespołu: numery, nazwiska i pozycje"
+          className="ml-auto self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
+        >
+          <span aria-hidden="true">👥</span> Kadra{squad.length ? <span className="text-xs text-slate-500">({squad.length})</span> : null}
+        </button>
       </div>
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'tactics' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} /></TabErrorBoundary>
+        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} /></TabErrorBoundary>
+        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} /></TabErrorBoundary>
       </div>
+
+      {showSquad && <SquadModal squad={squad} onChange={updateSquad} onClose={() => setShowSquad(false)} />}
 
       {runtimeError && (
         <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[300] w-[min(92vw,36rem)] flex items-start gap-3 bg-red-950/95 border border-red-500/50 rounded-xl px-4 py-3 shadow-2xl text-sm text-red-100">

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { drawField, drawLine, drawZone, drawPlayerLabel } from './utils/draw.js';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
+import { shortName, sortSquad } from './utils/squad.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
@@ -520,7 +521,7 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
 // ── Main component ───────────────────────────────────────────────
-export default function TrainingDrillApp({ active = true }) {
+export default function TrainingDrillApp({ active = true, squad = [] }) {
   const [initial] = useState(loadDraft);
 
   const canvasRef = useRef(null);
@@ -1591,6 +1592,19 @@ export default function TrainingDrillApp({ active = true }) {
                   <input type="text" value={single.obj.label ?? ''}
                     onChange={e => patchObj('all', 'items', single.obj.id, { label: e.target.value })}
                     className={inputCls} placeholder={single.obj.type === 'player' ? 'np. 10 lub Jan' : 'np. 1'} />
+                  {single.obj.type === 'player' && squad.length > 0 && (
+                    <select value="" aria-label="Wybierz z kadry"
+                      onChange={e => {
+                        const m = squad.find(x => x.id === e.target.value);
+                        if (m) patchObj('all', 'items', single.obj.id, { label: shortName(m) || String(m.number) });
+                      }}
+                      className={`${inputCls} mt-1`}>
+                      <option value="" className="bg-slate-800">Wybierz z kadry…</option>
+                      {sortSquad(squad).map(m => (
+                        <option key={m.id} value={m.id} className="bg-slate-800">{m.number} – {m.name || 'bez nazwiska'}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 

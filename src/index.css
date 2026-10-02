@@ -20,3 +20,12 @@ canvas {
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
 }
+
+/* Printing a session plan: show only the printable plan rendered into a portal. */
+.print-root { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { overflow: visible !important; height: auto !important; background: #fff !important; }
+  body.printing-session #root { display: none !important; }
+  body.printing-session .print-root { display: block !important; font-family: Arial, sans-serif; }
+}

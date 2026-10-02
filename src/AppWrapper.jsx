@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
+import SessionPlanApp from './SessionPlanApp.jsx';
 import SquadModal from './components/SquadModal.jsx';
 import { loadSquad, saveSquad } from './utils/squad.js';
 
 const TABS = [
   { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
   { id: 'training', label: '🏃 Trening', title: 'Budowanie ćwiczeń treningowych' },
+  { id: 'session',  label: '📋 Konspekt', title: 'Plan jednostki treningowej z ćwiczeń, druk i PDF' },
 ];
 const TAB_KEY = 'modelGryActiveTab';
 
@@ -97,7 +99,7 @@ export default function AppWrapper() {
       className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden"
       style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="flex-shrink-0 flex items-end gap-1 bg-slate-950/80 border-b border-white/10 px-3 pt-1" role="tablist">
+      <div className="flex-shrink-0 flex items-end gap-1 bg-slate-950/80 border-b border-white/10 px-2 sm:px-3 pt-1" role="tablist">
         <span className="hidden md:inline-flex items-center gap-2 self-center mr-3 text-sm font-semibold text-slate-200">
           <span className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-xs">⚽</span>
           Model Gry
@@ -109,7 +111,7 @@ export default function AppWrapper() {
             aria-selected={activeTab === tab.id}
             onClick={() => selectTab(tab.id)}
             title={tab.title}
-            className={`px-5 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
+            className={`px-3 sm:px-5 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
               activeTab === tab.id
                 ? 'border-blue-400 text-blue-300 bg-white/5'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -120,10 +122,10 @@ export default function AppWrapper() {
         ))}
         <button
           onClick={() => setShowSquad(true)}
-          title="Kadra zespołu: numery, nazwiska i pozycje"
+          title="Kadra zespołu: numery, nazwiska i pozycje" aria-label="Kadra"
           className="ml-auto self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
         >
-          <span aria-hidden="true">👥</span> Kadra{squad.length ? <span className="text-xs text-slate-500">({squad.length})</span> : null}
+          <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-500">({squad.length})</span> : null}
         </button>
       </div>
 
@@ -133,6 +135,11 @@ export default function AppWrapper() {
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
         <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} openDrillRequest={drillRequest} /></TabErrorBoundary>
+      </div>
+      <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'session' ? 'flex' : 'hidden'}`}>
+        <TabErrorBoundary name="Konspekt">
+          <SessionPlanApp active={activeTab === 'session'} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} />
+        </TabErrorBoundary>
       </div>
 
       {showSquad && <SquadModal squad={squad} onChange={updateSquad} onClose={() => setShowSquad(false)} />}

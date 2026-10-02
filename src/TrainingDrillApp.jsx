@@ -522,6 +522,19 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
 // ── Main component ───────────────────────────────────────────────
+// Static image of a drill's first frame (used by the session plan for thumbnails and printing).
+export function renderDrillImage(drill, scale = 0.5) {
+  const n = normalizeDrill(drill);
+  const { w, h } = getPitchSize(n.pitch);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  renderScene(ctx, { pitchImg: renderPitchCanvas(n.pitch), frame: n.frames[0], w, h });
+  return canvas.toDataURL('image/png');
+}
+
 export default function TrainingDrillApp({ active = true, squad = [], openDrillRequest = null }) {
   const [initial] = useState(loadDraft);
 

@@ -5,3 +5,7 @@ dist/
 .env
 .vscode/
 generate-icons.cjs
+coverage/
+playwright-report/
+test-results/
+blob-report/

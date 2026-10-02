@@ -1,46 +1,97 @@
-name: Deploy to GitHub Pages
+name: Testy i wdrożenie
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  unit:
+    name: Testy jednostkowe i komponentów
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
 
-      - name: Install dependencies
-        run: npm ci
+  e2e:
+    name: Testy E2E (laptop + telefon)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=laptop --project=telefon
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: raport-e2e
+          path: playwright-report/
+          retention-days: 14
 
-      - name: Build
-        run: npm run build
+  e2e-iphone:
+    name: Testy E2E iPhone (Safari) — informacyjne
+    runs-on: ubuntu-latest
+    # Reports Safari-specific problems without blocking deployment until the suite is proven stable on WebKit.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - run: npx playwright test --project=iphone
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: raport-e2e-iphone
+          path: playwright-report/
+          retention-days: 14
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+  build:
+    needs: [unit, e2e]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

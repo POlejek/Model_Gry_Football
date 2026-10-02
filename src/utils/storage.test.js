@@ -35,8 +35,10 @@ describe('loadStoredData', () => {
   });
 
   it('zwraca null i czyści localStorage po uszkodzonym JSON', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     localStorageMock.setItem('footballTacticsData', 'INVALID_JSON{{{');
     expect(loadStoredData()).toBeNull();
+    expect(errorSpy).toHaveBeenCalledOnce();
     expect(localStorageMock.getItem('footballTacticsData')).toBeNull();
   });
 });

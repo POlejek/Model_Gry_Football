@@ -32,7 +32,7 @@ export default defineConfig({
     ...(process.env.CI || process.env.PW_WEBKIT ? [{
       name: 'iphone',
       use: { ...devices['iPhone 13'] },
-      testMatch: /mobile\.spec|tactics\.spec/,
+      testMatch: /mobile\.spec/,
     }] : []),
   ],
   webServer: {

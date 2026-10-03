@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, Users,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -15,7 +15,7 @@ import {
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import { safeFileName } from './utils/drill.js';
-import { findByNumber, shortName, sortSquad } from './utils/squad.js';
+import { findByNumber, shortName, sortSquad, assignSquadToTeam } from './utils/squad.js';
 import { phaseKey, phaseOptions, readDrillLibrary, drillsForPhase } from './utils/modelPhases.js';
 
 
@@ -4316,6 +4316,30 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   };
 
 
+  // ── Squad names on the pitch ──
+  const squadHasNames = squad.some(m => String(m.name || '').trim());
+  const matchedPlayers = players.team.filter(p => { const m = findByNumber(squad, p.number); return m && shortName(m); }).length;
+
+  // the first time names appear in the squad, switch the pitch to names automatically
+  const hadNamesRef = useRef(squadHasNames);
+  useEffect(() => {
+    if (squadHasNames && !hadNamesRef.current) setShowNames(true);
+    hadNamesRef.current = squadHasNames;
+  }, [squadHasNames]);
+
+  const assignSquad = () => {
+    const numbers = assignSquadToTeam(players.team, squad);
+    if (!Object.keys(numbers).length) return;
+    checkpointScheme();
+    const renumber = (team) => team.map(p => (numbers[p.id] ? { ...p, number: numbers[p.id] } : p));
+    setPlayers(prev => ({ ...prev, team: renumber(prev.team) }));
+    if (currentScheme) {
+      // same player ids in every frame, so the whole animation gets the line-up
+      updateCurrentScheme({ ...currentScheme, frames: currentScheme.frames.map(f => ({ ...f, team: renumber(f.team || []) })) });
+    }
+    setShowNames(true);
+  };
+
   // ── PNG export of the current frame ──
   const exportSchemePng = () => {
     const canvas = document.createElement('canvas');
@@ -4512,7 +4536,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             <button key={t} onClick={() => setTacticsTool(t)} title={title} aria-label={label} aria-pressed={tacticsTool === t}
               className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                 tacticsTool === t ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
-              <Icon size={14} /> <span className="hidden min-[1300px]:inline">{label}</span>
+              <Icon size={14} /> <span className="hidden min-[1450px]:inline">{label}</span>
             </button>
           ))}
         </div>
@@ -4651,11 +4675,17 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
 
         <div className="flex-1" />
 
-        <button className={`${TOOLBAR_BTN} hidden md:inline-flex ${showNames ? 'bg-white/15 text-white' : ''}`} aria-pressed={showNames}
-          onClick={() => setShowNames(v => !v)} aria-label="Nazwiska z kadry"
-          title={squad.length ? 'Pokaż nazwiska z kadry zamiast numerów (Twoja drużyna)' : 'Dodaj zawodników w „Kadra”, aby pokazywać nazwiska'}>
-          <Users size={15} /> <span className="hidden min-[1450px]:inline">Nazwiska</span>
-        </button>
+        <div className="hidden md:flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Opis zawodników na boisku"
+          title={squadHasNames ? 'Twoja drużyna: numery albo nazwiska z kadry' : 'Uzupełnij „Kadra” (u góry), aby pokazywać nazwiska'}>
+          {[[false, 'Nr', 'Numery'], [true, 'Nazwiska', 'Nazwiska z kadry']].map(([value, label, aria]) => (
+            <button key={label} onClick={() => setShowNames(value)} aria-pressed={showNames === value} aria-label={aria}
+              disabled={value && !squadHasNames}
+              className={`h-7 px-2.5 rounded-md text-xs font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none ${
+                showNames === value ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="hidden md:flex items-center gap-1.5">
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline">Drużyna</span>
           {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
@@ -5183,6 +5213,20 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           </div>
         )}
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
+          {showNames && squadHasNames && matchedPlayers < players.team.length && !isPlaying && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 max-w-[95%] flex items-center gap-3 pl-3 pr-1.5 py-1.5 rounded-full bg-slate-900/90 border border-white/15 shadow-xl text-xs text-slate-200">
+              <span>
+                {matchedPlayers === 0
+                  ? 'Numery na boisku nie pasują do kadry'
+                  : `Z kadry: ${matchedPlayers} z ${players.team.length} zawodników`}
+              </span>
+              <button onClick={assignSquad}
+                className="h-7 px-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-medium whitespace-nowrap"
+                title="Przypisz zawodników z kadry do pozycji na boisku (bramkarz, obrona, pomoc, atak)">
+                Ustaw z kadry
+              </button>
+            </div>
+          )}
           {currentScheme && canvasHint && (
             <div className={`${polygonPoints.length ? '' : 'hidden md:block'} pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-10 max-w-[92%] text-center px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg md:whitespace-nowrap`}>
               {canvasHint}
@@ -5407,10 +5451,16 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       `}>
         <div className="md:hidden p-4 border-b border-white/10 space-y-3">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Drużyny</p>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" checked={showNames} onChange={e => setShowNames(e.target.checked)} />
-            Pokaż nazwiska z kadry zamiast numerów
-          </label>
+          <div className="flex items-center gap-2 text-sm text-slate-300">
+            Na boisku:
+            {[[false, 'Numery'], [true, 'Nazwiska']].map(([value, label]) => (
+              <button key={label} onClick={() => setShowNames(value)} disabled={value && !squadHasNames} aria-pressed={showNames === value}
+                className={`px-2.5 py-1 rounded-md text-xs disabled:opacity-40 ${showNames === value ? 'bg-blue-600 text-white' : 'bg-white/10'}`}>
+                {label}
+              </button>
+            ))}
+            {squadHasNames && <button onClick={assignSquad} className="px-2.5 py-1 rounded-md text-xs bg-white/10">Ustaw z kadry</button>}
+          </div>
           <div className="flex items-center gap-4 text-sm text-slate-300">
             <span className="flex items-center gap-2">{colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'left')} Drużyna</span>
             <span className="flex items-center gap-2">{colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'left')} Przeciwnik</span>

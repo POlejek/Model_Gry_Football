@@ -3,6 +3,8 @@ import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
 import SquadModal from './components/SquadModal.jsx';
+import DataModal, { IMPORT_RESULT_KEY } from './components/DataModal.jsx';
+import { needsBackup } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 
 const TABS = [
@@ -69,6 +71,23 @@ export default function AppWrapper() {
   const [squad, setSquad] = useState(loadSquad);
   const [showSquad, setShowSquad] = useState(false);
   const [drillRequest, setDrillRequest] = useState(null);
+  const [showData, setShowData] = useState(false);
+  const [backupDue, setBackupDue] = useState(() => needsBackup());
+  // result of an import/undo, shown once after the reload that applied it
+  const [notice, setNotice] = useState(() => {
+    try {
+      const msg = sessionStorage.getItem(IMPORT_RESULT_KEY);
+      sessionStorage.removeItem(IMPORT_RESULT_KEY);
+      return msg;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [notice]);
   const updateSquad = (list) => { setSquad(list); saveSquad(list); };
 
   // Errors thrown outside React rendering (timers, animation, event handlers) would otherwise be
@@ -121,9 +140,18 @@ export default function AppWrapper() {
           </button>
         ))}
         <button
+          onClick={() => setShowData(true)}
+          title={backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych'}
+          aria-label="Dane"
+          className="ml-auto self-center mb-1 relative px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
+        >
+          <span aria-hidden="true">💾</span><span className="hidden sm:inline">Dane</span>
+          {backupDue && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />}
+        </button>
+        <button
           onClick={() => setShowSquad(true)}
           title="Kadra zespołu: numery, nazwiska i pozycje" aria-label="Kadra"
-          className="ml-auto self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
+          className="self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
         >
           <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-500">({squad.length})</span> : null}
         </button>
@@ -142,6 +170,14 @@ export default function AppWrapper() {
         </TabErrorBoundary>
       </div>
 
+      {showData && <DataModal onClose={() => { setShowData(false); setBackupDue(needsBackup()); }} />}
+      {notice && (
+        <div role="status" aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[min(92vw,40rem)] px-4 py-3 rounded-xl bg-slate-900/95 border border-emerald-500/40 text-sm text-emerald-100 shadow-2xl flex items-start gap-3">
+          <span className="flex-1">{notice}</span>
+          <button onClick={() => setNotice(null)} className="text-emerald-300 hover:text-white" aria-label="Zamknij komunikat">✕</button>
+        </div>
+      )}
       {showSquad && <SquadModal squad={squad} onChange={updateSquad} onClose={() => setShowSquad(false)} />}
 
       {runtimeError && (

@@ -11,4 +11,4 @@ test-results/
 blob-report/
 
 # Lokalne pliki importu (materiały trenera, nie publikujemy)
-import-tydzien-budowanie/
+import-tydzien-*/

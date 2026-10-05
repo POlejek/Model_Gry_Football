@@ -17,3 +17,7 @@ Struktura:
 - `e2e/*.spec.js` — pełne scenariusze w przeglądarce; każdy test kończy się błędem, jeśli na stronie wystąpi błąd JavaScript.
 
 CI (`.github/workflows/deploy.yml`) uruchamia testy przy każdym pushu i pull requeście; strona wdraża się tylko, gdy testy jednostkowe i E2E przejdą. Testy na iPhonie (WebKit) są na razie informacyjne i nie blokują wdrożenia.
+
+## Plan treningowy
+
+[`plan-treningowy/plan-roczny-2026-2027.md`](plan-treningowy/plan-roczny-2026-2027.md): plan na rok 12.10.2026–10.10.2027 (U14–U15) według Programu Szkolenia PZPN U14–U15, z blokami tematycznymi zapisanymi w fazach modelu gry aplikacji.

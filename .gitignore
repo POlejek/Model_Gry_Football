@@ -9,3 +9,6 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+
+# Lokalne pliki importu (materiały trenera, nie publikujemy)
+import-tydzien-budowanie/

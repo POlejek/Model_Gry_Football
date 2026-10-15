@@ -6,6 +6,7 @@ import {
 import { renderDrillImage } from './TrainingDrillApp.jsx';
 import { TYPE_LABELS, META_FIELDS, safeFileName } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
+import PhasePicker from './components/PhasePicker.jsx';
 
 const SESSIONS_KEY = 'trainingSessions';
 const DRILLS_KEY = 'trainingDrillLibrary';
@@ -49,6 +50,45 @@ const newSession = () => ({
 });
 const minutesOf = (b) => Math.max(0, parseInt(b.minutes, 10) || 0);
 const formatDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) : '');
+const shortDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '');
+
+// Monday (ISO date) of the week a session belongs to; sessions without a date go last.
+export function weekStart(iso) {
+  if (!iso) return '';
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+const weekLabel = (monday) => {
+  if (!monday) return 'Bez daty';
+  const a = new Date(`${monday}T12:00:00`);
+  const b = new Date(a); b.setDate(a.getDate() + 6);
+  const f = (d) => d.toLocaleDateString('pl-PL', { day: 'numeric', month: '2-digit' });
+  return `Tydzień ${f(a)}–${f(b)}`;
+};
+// Sessions grouped by week: newest week first, days in order inside a week.
+export function groupByWeek(list) {
+  const map = new Map();
+  [...list].sort((x, y) => (x.date || '').localeCompare(y.date || '')).forEach(s => {
+    const k = weekStart(s.date);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(s);
+  });
+  return [...map.entries()].sort(([a], [b]) => (!a ? 1 : !b ? -1 : b.localeCompare(a))).map(([monday, items]) => ({ monday, label: weekLabel(monday), items }));
+}
+
+// Textarea that grows with its content.
+// `watch` re-measures when a hidden tab becomes visible (a hidden textarea measures 0).
+function AutoTextarea({ value, minRows = 2, className, watch, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    if (el.scrollHeight) el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value, watch]);
+  return <textarea ref={ref} rows={minRows} value={value} className={`${className} resize-none overflow-hidden`} {...props} />;
+}
 
 // Equipment needed for the whole session: for each type the largest amount any single drill uses.
 function sessionEquipment(drills) {
@@ -94,6 +134,9 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
   }, [sessions]);
 
   const current = sessions.find(s => s.id === currentId) || null;
+  const weeks = useMemo(() => groupByWeek(sessions), [sessions]);
+  const thisWeek = weekStart(today());
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const patchSession = (patch) => setSessions(list => list.map(s => (
     s.id === currentId ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
@@ -254,18 +297,33 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-          {sessions.length === 0 && <p className="text-xs text-slate-500 p-2">Brak konspektów.</p>}
-          {sessions.map(s => {
-            const mins = s.blocks.reduce((sum, b) => sum + minutesOf(b), 0);
+          {sessions.length === 0 && <p className="text-xs text-slate-400 p-2">Brak konspektów.</p>}
+          {weeks.map(w => {
+            const weekMins = w.items.reduce((sum, s) => sum + s.blocks.reduce((t, b) => t + minutesOf(b), 0), 0);
             return (
-              <div key={s.id} className={`group flex items-center gap-1 rounded-lg px-2 py-2 ${s.id === currentId ? 'bg-blue-600/20 ring-1 ring-blue-500/50' : 'hover:bg-white/5'}`}>
-                <button onClick={() => setCurrentId(s.id)} className="flex-1 min-w-0 text-left">
-                  <p className="text-sm text-slate-100 truncate">{s.title || 'Bez tytułu'}</p>
-                  <p className="text-xs text-slate-500 truncate">{[s.date && formatDate(s.date), `${mins} min`].filter(Boolean).join(' · ')}</p>
-                </button>
-                <button onClick={() => deleteSession(s.id)} className={iconBtn} aria-label={`Usuń konspekt ${s.title || ''}`} title="Usuń konspekt">
-                  <Trash2 size={13} />
-                </button>
+              <div key={w.monday || 'none'} className="pb-1">
+                <p className="flex items-baseline justify-between px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <span>{w.label}{w.monday === thisWeek && <span className="ml-1.5 normal-case font-normal text-emerald-300">bieżący</span>}</span>
+                  <span className="font-normal normal-case tabular-nums">{w.items.length} · {weekMins} min</span>
+                </p>
+                {w.items.map(s => {
+                  const mins = s.blocks.reduce((sum, b) => sum + minutesOf(b), 0);
+                  return (
+                    <div key={s.id} className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 ${s.id === currentId ? 'bg-blue-600/20 ring-1 ring-blue-500/50' : 'hover:bg-white/5'}`}>
+                      <button onClick={() => setCurrentId(s.id)} className="flex-1 min-w-0 text-left flex gap-2">
+                        <span className="w-12 flex-shrink-0 text-xs font-semibold text-slate-300 leading-5 capitalize">{shortDate(s.date) || '—'}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm text-slate-100 leading-5 line-clamp-2">{s.title || 'Bez tytułu'}</span>
+                          <span className="block text-xs text-slate-400">{mins} min · {s.blocks.length} bl.</span>
+                        </span>
+                      </button>
+                      <button onClick={() => deleteSession(s.id)} className={`${iconBtn} [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100`}
+                        aria-label={`Usuń konspekt ${s.title || ''}`} title="Usuń konspekt">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -288,7 +346,11 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
         <div className="lg:hidden flex gap-2 p-3 border-b border-white/10 bg-slate-950/60">
           <select value={currentId || ''} onChange={e => setCurrentId(e.target.value || null)} aria-label="Wybierz konspekt" className={inputCls}>
             {sessions.length === 0 && <option value="">Brak konspektów</option>}
-            {sessions.map(s => <option key={s.id} value={s.id} className="bg-slate-800">{s.title || 'Bez tytułu'} · {s.date}</option>)}
+            {weeks.map(w => (
+              <optgroup key={w.monday || 'none'} label={w.label} className="bg-slate-800">
+                {w.items.map(s => <option key={s.id} value={s.id} className="bg-slate-800">{shortDate(s.date)} · {s.title || 'Bez tytułu'}</option>)}
+              </optgroup>
+            ))}
           </select>
           <button onClick={createSession} className={btn} aria-label="Nowy konspekt"><Plus size={15} /></button>
           <button onClick={exportAllSessions} disabled={!sessions.length} className={btn} aria-label="Pobierz wszystkie konspekty"><Download size={15} /></button>
@@ -297,7 +359,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
 
         {!current ? (
           <div className="max-w-lg mx-auto text-center py-16 px-6 text-slate-400">
-            <ClipboardList size={40} className="mx-auto mb-3 text-slate-500" />
+            <ClipboardList size={40} className="mx-auto mb-3 text-slate-400" />
             <p className="text-lg text-slate-200 mb-1">Konspekt jednostki treningowej</p>
             <p className="text-sm mb-5">Złóż trening z ćwiczeń z biblioteki: kolejność, czas, cel i fazy modelu gry. Wydrukuj albo zapisz jako PDF.</p>
             <button onClick={createSession} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center gap-2">
@@ -315,30 +377,35 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                 <input value={current.title} onChange={e => patchSession({ title: e.target.value })} placeholder="np. Mikrocykl 3 — trening 2"
                   className={`${inputCls} mt-1 text-base font-semibold`} aria-label="Tytuł konspektu" />
               </label>
-              <label className="text-xs text-slate-400">Data
+              <label className="text-xs text-slate-400">Data{current.date && <span className="ml-1 text-slate-200">· {formatDate(current.date)}</span>}
                 <input type="date" value={current.date} onChange={e => patchSession({ date: e.target.value })} className={`${inputCls} mt-1`} />
               </label>
               <label className="text-xs text-slate-400">Grupa / drużyna
                 <input value={current.group} onChange={e => patchSession({ group: e.target.value })} placeholder="np. U15" className={`${inputCls} mt-1`} />
               </label>
               <label className="sm:col-span-4 text-xs text-slate-400">Cel treningu
-                <textarea rows={2} value={current.goal} onChange={e => patchSession({ goal: e.target.value })}
-                  placeholder="np. Wyjście spod pressingu przez trzeciego zawodnika" className={`${inputCls} mt-1 resize-y`} />
+                <AutoTextarea watch={`${active}-${currentId}`} value={current.goal} onChange={e => patchSession({ goal: e.target.value })}
+                  placeholder="np. Wyjście spod pressingu przez trzeciego zawodnika" className={`${inputCls} mt-1`} />
               </label>
-              <div className="sm:col-span-4 text-xs text-slate-400">
-                Fazy modelu gry w centrum uwagi
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {options.map(o => {
-                    const on = current.phases.includes(o.key);
-                    return (
-                      <button key={o.key} aria-pressed={on}
-                        onClick={() => patchSession({ phases: on ? current.phases.filter(k => k !== o.key) : [...current.phases, o.key] })}
-                        className={`px-2 py-1 rounded-md text-xs transition-colors ${on ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="sm:col-span-4">
+                <PhasePicker options={options} value={current.phases} label="Fazy modelu gry w centrum uwagi"
+                  onChange={phases => patchSession({ phases })} />
+              </div>
+              <div className="sm:col-span-4 rounded-lg border border-white/10 bg-white/[0.03]">
+                <button onClick={() => setNotesOpen(o => !o)} aria-expanded={notesOpen}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs text-slate-400 hover:text-slate-200">
+                  <span className="min-w-0">
+                    <span className="font-semibold text-slate-300">Notatki trenera</span> — karta tygodnia, organizacja, uwagi po treningu
+                    {!notesOpen && current.notes && <span className="block mt-0.5 text-slate-400 truncate">{current.notes.split('\n').find(Boolean)}</span>}
+                  </span>
+                  <span className="flex-shrink-0 text-slate-300">{notesOpen ? 'Zwiń ▲' : 'Rozwiń ▼'}</span>
+                </button>
+                {notesOpen && (
+                  <div className="px-3 pb-3">
+                    <AutoTextarea minRows={3} watch={`${active}-${currentId}`} value={current.notes} onChange={e => patchSession({ notes: e.target.value })} aria-label="Notatki trenera"
+                      placeholder="Karta tygodnia, organizacja, co zadziałało, co poprawić, obecność…" className={inputCls} />
+                  </div>
+                )}
               </div>
             </section>
 
@@ -349,15 +416,16 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
               {trainedPhases.length > 0 && (
                 <span className="text-slate-300"><span className="text-slate-400">Ćwiczenia trenują:</span> {trainedPhases.map(k => phaseLabel(k, options)).join(', ')}</span>
               )}
-              <div className="flex-1" />
-              <button onClick={duplicateSession} className={btn} title="Kopia konspektu z dzisiejszą datą"><Copy size={14} /> Duplikuj</button>
-              <button onClick={exportSession} className={btn} title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
-                <Download size={14} /> Pobierz
-              </button>
-              <button onClick={printPlan} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`}
-                title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
-                <Printer size={14} /> Drukuj / PDF
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <button onClick={duplicateSession} className={btn} title="Kopia konspektu z dzisiejszą datą" aria-label="Duplikuj"><Copy size={14} /> <span className="hidden sm:inline">Duplikuj</span></button>
+                <button onClick={exportSession} className={btn} aria-label="Pobierz" title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
+                  <Download size={14} /> <span className="hidden sm:inline">Pobierz</span>
+                </button>
+                <button onClick={printPlan} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
+                  title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
+                  <Printer size={14} /> Drukuj / PDF
+                </button>
+              </div>
             </section>
             {equipment && <p className="text-xs text-slate-400 -mt-2">Sprzęt na trening: <span className="text-slate-200">{equipment}</span></p>}
 
@@ -424,10 +492,6 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
               </div>
             </section>
 
-            <label className="block text-xs text-slate-400">Uwagi po treningu
-              <textarea rows={3} value={current.notes} onChange={e => patchSession({ notes: e.target.value })}
-                placeholder="Co zadziałało, co poprawić, obecność…" className={`${inputCls} mt-1 resize-y`} />
-            </label>
           </div>
         )}
       </main>
@@ -452,7 +516,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
             </div>
             <div className="px-5 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input autoFocus type="search" value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
                   placeholder="Szukaj po nazwie lub kategorii…" className={`${inputCls} pl-8`} />
               </div>
@@ -466,7 +530,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                 <p className="sm:col-span-2 text-sm text-slate-400 text-center py-10">Biblioteka jest pusta — zapisz ćwiczenia w zakładce Trening.</p>
               )}
               {library.length > 0 && pickerList.length === 0 && (
-                <p className="sm:col-span-2 text-sm text-slate-500 text-center py-10">Brak pasujących ćwiczeń.</p>
+                <p className="sm:col-span-2 text-sm text-slate-400 text-center py-10">Brak pasujących ćwiczeń.</p>
               )}
               {pickerList.map(d => (
                 <button key={d.id} onClick={() => addDrillBlock(d)}
@@ -477,7 +541,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                     <span className="block text-xs text-slate-400 truncate">
                       {[d.meta?.category, d.meta?.duration && `${d.meta.duration} min`].filter(Boolean).join(' · ')}
                     </span>
-                    <span className="block text-[10px] text-emerald-300 truncate">{(d.meta?.phases || []).map(k => phaseLabel(k, options)).join(', ')}</span>
+                    <span className="block text-xs text-emerald-300 truncate">{(d.meta?.phases || []).map(k => phaseLabel(k, options)).join(', ')}</span>
                   </span>
                 </button>
               ))}
@@ -527,7 +591,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
               </div>
             </section>
           ))}
-          {current.notes && <p style={{ fontSize: 12, borderTop: '1px solid #cbd5e1', paddingTop: 8, whiteSpace: 'pre-wrap' }}><strong>Uwagi: </strong>{current.notes}</p>}
+          {current.notes && <p style={{ fontSize: 12, borderTop: '1px solid #cbd5e1', paddingTop: 8, whiteSpace: 'pre-wrap' }}><strong>Notatki: </strong>{current.notes}</p>}
         </div>,
         document.body,
       )}

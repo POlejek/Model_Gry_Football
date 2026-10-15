@@ -41,7 +41,7 @@ export default function SquadModal({ squad, onChange, onClose }) {
           {rows.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-8">
               Kadra jest pusta.<br />
-              <span className="text-slate-500">Dodaj zawodników, aby wybierać ich na boisku i pokazywać nazwiska zamiast numerów.</span>
+              <span className="text-slate-400">Dodaj zawodników, aby wybierać ich na boisku i pokazywać nazwiska zamiast numerów.</span>
             </p>
           ) : (
             <table className="w-full text-sm">
@@ -73,7 +73,7 @@ export default function SquadModal({ squad, onChange, onClose }) {
                       </td>
                       <td className="py-1 text-right">
                         <button onClick={() => remove(r.id)} aria-label={`Usuń ${r.name || r.number}`}
-                          className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-white/5"><Trash2 size={14} /></button>
+                          className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-white/5"><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   );

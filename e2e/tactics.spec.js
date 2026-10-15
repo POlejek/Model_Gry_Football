@@ -80,7 +80,8 @@ test.describe('Taktyka', () => {
   });
 
   test('format 5v5 ma po 5 zawodników na drużynę', async ({ page }) => {
-    await page.getByRole('button', { name: '5v5' }).click();
+    await page.getByRole('button', { name: /^Format gry:/ }).click();
+    await page.getByRole('menuitemradio', { name: '5v5' }).click();
     await newScheme(page);
     const scheme = await firstScheme(page, '5v5');
     expect(scheme.frames[0].team).toHaveLength(5);

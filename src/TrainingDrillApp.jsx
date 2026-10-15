@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { drawField, drawLine, drawZone, drawPlayerLabel } from './utils/draw.js';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
+import PhasePicker from './components/PhasePicker.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import {
@@ -37,7 +38,8 @@ function renderPitchCanvas(p) {
   if (p.type === 'custom') {
     ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#c4a76e'; ctx.lineWidth = 3; ctx.strokeRect(20, 20, w - 40, h - 40);
-    ctx.fillStyle = '#a8916a'; ctx.font = '600 13px Arial, sans-serif';
+    // dimensions: dark and bold so they stay readable on the light pitch and in printed cards
+    ctx.fillStyle = '#1e293b'; ctx.font = 'bold 15px Arial, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(`${horizontal ? p.length : p.width} m`, w / 2, 10);
     ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
@@ -514,7 +516,7 @@ const tbBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-xs te
 const dangerBtn = 'flex items-center justify-center gap-2 px-3 py-2 bg-red-600/15 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm text-red-300 transition-colors';
 const fieldLabel = 'text-xs text-slate-400 mb-1';
 const inputCls = 'w-full px-2 py-1.5 bg-white/10 border border-white/15 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400';
-const sectionTitle = 'text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2';
+const sectionTitle = 'text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2';
 const ToolbarDivider = () => <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />;
 const segClass = (active) => `h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
   active ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`;
@@ -1473,7 +1475,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
 
   const saveStatus = isDirty
     ? { text: currentDrillId ? 'Niezapisane zmiany' : 'Nowe ćwiczenie · niezapisane', cls: 'text-amber-300', dot: true }
-    : { text: currentDrillId ? 'Zapisano w bibliotece' : 'Nowe ćwiczenie', cls: 'text-slate-500', dot: false };
+    : { text: currentDrillId ? 'Zapisano w bibliotece' : 'Nowe ćwiczenie', cls: 'text-slate-400', dot: false };
 
   const canvasCursor = isPlaying ? 'default'
     : isDrawingMode ? 'crosshair'
@@ -1501,7 +1503,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     <>
       <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)}
         placeholder="Nazwa ćwiczenia" aria-label="Nazwa ćwiczenia" className={`${inputCls} font-medium`} />
-      <p className={`mt-1 h-4 text-[11px] flex items-center gap-1.5 ${saveStatus.cls}`}>
+      <p className={`mt-1 h-4 text-xs flex items-center gap-1.5 ${saveStatus.cls}`}>
         {saveStatus.dot && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
         {saveStatus.text}
       </p>
@@ -1557,7 +1559,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             {eq.type === 'player'
               ? <span className={`w-4 h-4 rounded-full border-2 ${eq.gk ? 'border-slate-900 ring-2 ring-white/80' : 'border-white/80'}`} style={{ background: playerColorFor(eq) }} />
               : <span className="text-lg leading-none">{eq.icon}</span>}
-            <span className="text-[11px] leading-tight text-center px-1">{eq.label}</span>
+            <span className="text-xs leading-tight text-center px-1">{eq.label}</span>
           </button>
         ))}
       </div>
@@ -1587,20 +1589,9 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   placeholder={pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : 'np. 30×20 m'}
                   onChange={e => setMeta(m => ({ ...m, area: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
-              <div className="col-span-2 text-xs text-slate-400">
-                Faza modelu gry <span className="text-slate-500">— które fazy z zakładki Taktyka trenuje to ćwiczenie</span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {modelPhaseOptions.map(o => {
-                    const on = (meta.phases || []).includes(o.key);
-                    return (
-                      <button key={o.key} type="button" aria-pressed={on}
-                        onClick={() => setMeta(m => ({ ...m, phases: on ? (m.phases || []).filter(k => k !== o.key) : [...(m.phases || []), o.key] }))}
-                        className={`px-2 py-1 rounded-md text-xs transition-colors ${on ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="col-span-2">
+                <PhasePicker options={modelPhaseOptions} value={meta.phases || []} hint="co trenuje ćwiczenie"
+                  label="Faza modelu gry" onChange={phases => setMeta(m => ({ ...m, phases }))} />
               </div>
               {META_FIELDS.map(([key, label, placeholder]) => (
                 <label key={key} className="col-span-2 text-xs text-slate-400">{label}
@@ -1646,7 +1637,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   onChange={e => patchObj('all', 'lines', single.obj.id, { color: e.target.value })}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
               </div>
-              <p className="text-xs text-slate-500">Przeciągnij koniec linii, aby go przesunąć. Krzywą wyginasz zielonym punktem.</p>
+              <p className="text-xs text-slate-400">Przeciągnij koniec linii, aby go przesunąć. Krzywą wyginasz zielonym punktem.</p>
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń linię</button>
             </div>
           ) : single?.kind === 'zones' ? (
@@ -1664,7 +1655,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   onChange={e => patchObj('all', 'zones', single.obj.id, { opacity: parseFloat(e.target.value) })}
                   className="w-full" />
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {single.obj.type === 'polygon'
                   ? 'Przeciągnij wierzchołek, aby zmienić kształt.'
                   : 'Przeciągnij biały uchwyt, aby powiększyć lub zmniejszyć strefę.'}
@@ -1727,18 +1718,18 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
               </div>
 
               <div>
-                <p className={fieldLabel}>Rozmiar <span className="text-slate-500 tabular-nums">{Math.round((single.obj.scale || 1) * 100)}%</span></p>
+                <p className={fieldLabel}>Rozmiar <span className="text-slate-400 tabular-nums">{Math.round((single.obj.scale || 1) * 100)}%</span></p>
                 <input type="range" min={0.4} max={2.5} step={0.05} value={single.obj.scale || 1}
                   onChange={e => patchObj('all', 'items', single.obj.id, { scale: parseFloat(e.target.value) })}
                   className="w-full" />
               </div>
 
               <div>
-                <p className={fieldLabel}>Obrót <span className="text-slate-500 tabular-nums">{Math.round(((single.obj.rotation || 0) * 180) / Math.PI)}°</span></p>
+                <p className={fieldLabel}>Obrót <span className="text-slate-400 tabular-nums">{Math.round(((single.obj.rotation || 0) * 180) / Math.PI)}°</span></p>
                 <input type="range" min={0} max={TWO_PI} step={0.05} value={single.obj.rotation || 0}
                   onChange={e => patchObj('current', 'items', single.obj.id, { rotation: parseFloat(e.target.value) })}
                   className="w-full" />
-                <p className="text-xs text-slate-500 mt-0.5">lub przeciągnij niebieską rączkę</p>
+                <p className="text-xs text-slate-400 mt-0.5">lub przeciągnij niebieską rączkę</p>
               </div>
 
               <button onClick={deleteSelection} className={dangerBtn}><Trash2 size={14} /> Usuń element</button>
@@ -1766,7 +1757,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                 {pitch.type === 'custom' && (
                   <div className="grid grid-cols-2 gap-1 mt-2">
                     {[['width', 'Szerokość (m)'], ['length', 'Długość (m)']].map(([key, label]) => (
-                      <label key={key} className="text-[11px] text-slate-400">
+                      <label key={key} className="text-xs text-slate-400">
                         {label}
                         <input key={`${key}-${pitch[key]}`} type="number" min={5} max={120} defaultValue={pitch[key]}
                           onBlur={e => changePitch({ [key]: e.target.value })}
@@ -1825,7 +1816,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
 
   const renderFrameFooter = () => (
         <div className="flex-shrink-0 border-t border-white/10 p-3 flex flex-col gap-1.5">
-          <p className="text-[11px] text-slate-500 leading-snug">
+          <p className="text-xs text-slate-400 leading-snug">
             Klatka {currentFrame + 1}/{frames.length} · {frame.items.length} el. · {frame.lines.length} lin. · {frame.zones.length} str.
           </p>
           {(frame.items.length > 0 || frame.lines.length > 0 || frame.zones.length > 0) && (
@@ -1862,7 +1853,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
           {renderDrillPanel()}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-          <p className="text-[11px] text-slate-500">Kliknij albo przeciągnij na boisko</p>
+          <p className="text-xs text-slate-400">Kliknij albo przeciągnij na boisko</p>
           {renderEquipment(2)}
         </div>
       </aside>
@@ -2072,7 +2063,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             ['drill', <FolderOpen size={20} />, 'Ćwiczenie', isDirty && hasContent],
           ].map(([id, icon, label, dot]) => (
             <button key={id} onClick={() => setMobileSheet(m => (m === id ? null : id))}
-              className={`relative flex flex-col items-center gap-0.5 py-2 text-[11px] transition-colors ${mobileSheet === id ? 'text-blue-400' : 'text-slate-300'}`}>
+              className={`relative flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${mobileSheet === id ? 'text-blue-400' : 'text-slate-300'}`}>
               {icon}
               {label}
               {dot && <span className={`absolute top-1.5 right-[calc(50%-18px)] w-2 h-2 rounded-full ${id === 'drill' ? 'bg-amber-400' : 'bg-blue-400'}`} />}
@@ -2105,7 +2096,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
       {/* ── Phone bottom sheets ── */}
       {mobileSheet === 'equipment' && (
         <BottomSheet title="Dodaj na boisko" onClose={() => setMobileSheet(null)}>
-          <p className="text-xs text-slate-500 mb-3">Stuknij element, aby dodać go na środek boiska, potem przeciągnij palcem.</p>
+          <p className="text-xs text-slate-400 mb-3">Stuknij element, aby dodać go na środek boiska, potem przeciągnij palcem.</p>
           <div className="space-y-3">{renderEquipment(4, () => setMobileSheet(null))}</div>
         </BottomSheet>
       )}
@@ -2157,7 +2148,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             </div>
             <div className="px-5 pt-3 flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input autoFocus type="search" value={librarySearch} onChange={e => setLibrarySearch(e.target.value)}
                   placeholder="Szukaj po nazwie, kategorii lub fazie…" className={`${inputCls} pl-8`} />
               </div>
@@ -2171,11 +2162,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                 {savedDrills.length === 0 && (
                   <p className="text-sm text-slate-400 text-center py-10">
                     Biblioteka jest pusta.<br />
-                    <span className="text-slate-500">Zapisz bieżące ćwiczenie przyciskiem „Zapisz” albo zaimportuj pliki.</span>
+                    <span className="text-slate-400">Zapisz bieżące ćwiczenie przyciskiem „Zapisz” albo zaimportuj pliki.</span>
                   </p>
                 )}
                 {savedDrills.length > 0 && filteredDrills.length === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-10">Brak ćwiczeń pasujących do „{librarySearch}”.</p>
+                  <p className="text-sm text-slate-400 text-center py-10">Brak ćwiczeń pasujących do „{librarySearch}”.</p>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                   {filteredDrills.map(d => {
@@ -2191,26 +2182,26 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                           <div className="aspect-[16/10] rounded-t-xl bg-slate-800/80 overflow-hidden flex items-center justify-center">
                             {thumb
                               ? <img src={thumb} alt="" className="max-w-full max-h-full object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
-                              : <span className="text-xs text-slate-500">brak podglądu</span>}
+                              : <span className="text-xs text-slate-400">brak podglądu</span>}
                           </div>
                           <div className="px-3 pt-2">
                             <p className="text-sm text-slate-100 leading-snug line-clamp-2">
                               {d.name}
-                              {isCurrent && <span className="ml-2 text-[10px] uppercase tracking-wide text-blue-300">otwarte</span>}
+                              {isCurrent && <span className="ml-2 text-xs uppercase tracking-wide text-blue-300">otwarte</span>}
                             </p>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{[...facts(d), framesLabel(d.frames?.length || 1)].join(' · ')}</p>
+                            <p className="text-xs text-slate-400 truncate mt-0.5">{[...facts(d), framesLabel(d.frames?.length || 1)].join(' · ')}</p>
                             <p className="flex flex-wrap gap-1 mt-1">
                               {(d.meta?.phases || []).map(k => (
-                                <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px]">{phaseLabel(k, modelPhaseOptions)}</span>
+                                <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-xs">{phaseLabel(k, modelPhaseOptions)}</span>
                               ))}
                             </p>
                           </div>
                         </button>
                         <div className="mt-auto flex items-center gap-2 px-3 py-2">
-                          <span className="flex-1 text-[11px] text-slate-500">{new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          <span className="flex-1 text-xs text-slate-400">{new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</span>
                           <button onClick={() => openDrill(d)} className={btn}>Otwórz</button>
                           <button onClick={() => deleteDrill(d.id)} title="Usuń z biblioteki" aria-label={`Usuń ${d.name}`}
-                            className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors">
+                            className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-white/5 transition-colors">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -2225,7 +2216,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                     <div className="rounded-xl bg-slate-800/80 overflow-hidden flex items-center justify-center">
                       {drillThumb(preview, 0.75)
                         ? <img src={drillThumb(preview, 0.75)} alt={`Rysunek: ${preview.name}`} className="max-w-full max-h-[46vh] object-contain" />
-                        : <span className="text-xs text-slate-500 py-16">brak podglądu</span>}
+                        : <span className="text-xs text-slate-400 py-16">brak podglądu</span>}
                     </div>
                     <div>
                       <p className="text-base font-semibold text-white leading-snug">{preview.name}</p>

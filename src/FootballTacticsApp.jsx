@@ -4675,6 +4675,25 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
 
         <div className="flex-1" />
 
+        <div className="relative hidden md:block">
+          <button className={TOOLBAR_BTN} title="Format gry (liczba zawodników)" aria-label={`Format gry: ${gameFormat}`} aria-haspopup="menu" aria-expanded={openFormationMenu === 'format'}
+            onClick={(e) => { e.stopPropagation(); setOpenFormationMenu(openFormationMenu === 'format' ? null : 'format'); }}>
+            <span className="font-semibold">{gameFormat}</span> <ChevronDown size={13} />
+          </button>
+          {openFormationMenu === 'format' && (
+            <div role="menu" className="absolute top-full mt-1 right-0 w-40 bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-1 z-50">
+              <p className="px-2 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Format gry</p>
+              {['5v5', '7v7', '9v9', '11v11'].map(format => (
+                <button key={format} role="menuitemradio" aria-checked={gameFormat === format}
+                  onClick={() => { setGameFormat(format); setCurrentScheme(null); setOpenFormationMenu(null); }}
+                  className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${gameFormat === format ? 'bg-blue-600 text-white' : 'text-slate-200 hover:bg-white/10'}`}>
+                  {format}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="hidden md:flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Opis zawodników na boisku"
           title={squadHasNames ? 'Twoja drużyna: numery albo nazwiska z kadry' : 'Uzupełnij „Kadra” (u góry), aby pokazywać nazwiska'}>
           {[[false, 'Nr', 'Numery'], [true, 'Nazwiska', 'Nazwiska z kadry']].map(([value, label, aria]) => (
@@ -4703,7 +4722,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               <div className="absolute top-full mt-1 right-0 w-64 bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50 grid grid-cols-2 gap-2">
                 {[['team', 'Drużyna'], ['opponent', 'Przeciwnik']].map(([side, label]) => (
                   <div key={side}>
-                    <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+                    <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
                     {['1-4-4-2', '1-4-3-3', '1-3-5-2', '1-3-4-3'].map((f) => (
                       <button key={f} onClick={() => { applyFormation(side, f); setOpenFormationMenu(null); }}
                         className="w-full text-left px-2 py-1.5 rounded-md text-sm font-mono text-slate-200 hover:bg-white/10 transition-colors">
@@ -4757,34 +4776,25 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
         md:translate-x-0
       `}>
         <div className="px-4 py-3 border-b border-white/10">
-          {/* Wybór formatu gry */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">Format gry</label>
-            <div className="flex gap-2">
-              {['5v5', '7v7', '9v9', '11v11'].map(format => (
-                <button
-                  key={format}
-                  onClick={() => {
-                    setGameFormat(format);
-                    setCurrentScheme(null);
-                  }}
-                  className={`flex-1 px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-                    gameFormat === format
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/50'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
-                >
-                  {format}
-                </button>
-              ))}
-            </div>
+          <div className="md:hidden flex gap-1 mb-3" role="group" aria-label="Format gry">
+            {['5v5', '7v7', '9v9', '11v11'].map(format => (
+              <button key={format} onClick={() => { setGameFormat(format); setCurrentScheme(null); }} aria-pressed={gameFormat === format}
+                className={`flex-1 py-1.5 rounded-md text-sm font-semibold ${gameFormat === format ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300'}`}>
+                {format}
+              </button>
+            ))}
           </div>
-
-          {/* Przyciski kontroli */}
-          <div className="mt-3 flex gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={createNewScheme}
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+            >
+              <Plus size={18} />
+              Nowy schemat
+            </button>
             <button
               onClick={toggleAllPhases}
-              className="flex-1 px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium rounded-lg transition-all"
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium rounded-lg transition-colors"
               title={allPhasesExpanded ? "Zwiń wszystkie fazy" : "Rozwiń wszystkie fazy"}
             >
               {allPhasesExpanded ? "➖ Zwiń" : "➕ Rozwiń"}
@@ -4829,7 +4839,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               onDragOver={handlePhaseDragOver}
               onDrop={(e) => handlePhaseDrop(e, phase)}
             >
-              <div className="flex items-center gap-2">
+              <div className="group/phase flex items-center gap-2">
                 {editingPhase === phase ? (
                   <input
                     type="text"
@@ -4879,13 +4889,15 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   onClick={() => addNewSubPhase(phase)}
                   className="p-2 bg-blue-600/30 hover:bg-blue-600/50 rounded-lg transition-all"
                   title="Dodaj subfazę"
+                  aria-label={`Dodaj subfazę do ${phase}`}
                 >
                   <Plus size={16} />
                 </button>
                 <button
                   onClick={() => deletePhase(phase)}
-                  className="p-2 bg-red-600/30 hover:bg-red-600/50 rounded-lg transition-all"
+                  className="p-2 rounded-lg text-slate-400 hover:text-red-300 hover:bg-red-600/30 transition-all [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-hover/phase:opacity-100"
                   title="Usuń fazę"
+                  aria-label={`Usuń fazę ${phase}`}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -4921,7 +4933,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   {phases[phase].map(subPhase => (
                     <div 
                       key={subPhase} 
-                      className="flex flex-wrap items-center gap-2"
+                      className="group/sub flex flex-wrap items-center gap-2"
                       draggable={editingSubPhase !== `${phase}-${subPhase}`}
                       onDragStart={(e) => handleSubPhaseDragStart(e, phase, subPhase)}
                       onDragOver={handleSubPhaseDragOver}
@@ -4989,7 +5001,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                             <span className="flex items-center justify-between gap-2">
                               <span className="truncate">{subPhase}</span>
                               {drillCount(`${phase}-${subPhase}`) > 0 && (
-                                <span className="flex-shrink-0 px-1.5 rounded bg-emerald-600/25 text-emerald-300 text-[10px]"
+                                <span className="flex-shrink-0 px-1.5 rounded bg-emerald-600/25 text-emerald-300 text-xs"
                                   title="Ćwiczenia treningowe przypisane do tej fazy">
                                   🏃 {drillCount(`${phase}-${subPhase}`)}
                                 </span>
@@ -4998,7 +5010,8 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                           </button>
                           <button
                             onClick={() => deleteSubPhase(phase, subPhase)}
-                            className="flex-shrink-0 p-2 bg-red-600/30 hover:bg-red-600/50 rounded-lg transition-all"
+                            className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-red-300 hover:bg-red-600/30 transition-all [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-hover/sub:opacity-100"
+                            aria-label={`Usuń subfazę ${subPhase}`}
                             title="Usuń subfazę"
                           >
                             <Trash2 size={14} />
@@ -5019,7 +5032,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                                 e.dataTransfer.setData('fromKey', `${phase}-${subPhase}`);
                               }}
                               onClick={() => pptSelectionMode ? null : selectScheme(scheme)}
-                              className={`scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
+                              className={`group/scheme scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
                                 currentScheme?.id === scheme.id && !pptSelectionMode
                                   ? 'from-blue-600/30 to-purple-600/30 border border-blue-500/50'
                                   : pptSelectionMode && selectedSchemesForPpt.has(scheme.id)
@@ -5050,7 +5063,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                                         e.stopPropagation();
                                         deleteScheme(scheme.id, `${phase}-${subPhase}`);
                                       }}
-                                      className="flex-shrink-0 ml-2 text-red-400 hover:text-red-300 transition-colors" title="Usuń schemat" aria-label="Usuń schemat"
+                                      className="flex-shrink-0 ml-2 text-slate-400 hover:text-red-300 transition-colors [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-hover/scheme:opacity-100" title="Usuń schemat" aria-label="Usuń schemat"
                                     >
                                       <Trash2 size={12} />
                                     </button>
@@ -5079,7 +5092,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                         e.dataTransfer.setData('fromKey', phase);
                       }}
                       onClick={() => pptSelectionMode ? null : selectScheme(scheme)}
-                      className={`scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
+                      className={`group/scheme scheme-card p-2 rounded-lg bg-gradient-to-br ${pptSelectionMode ? 'cursor-pointer' : 'cursor-move'} ${
                         currentScheme?.id === scheme.id && !pptSelectionMode
                           ? 'from-blue-600/30 to-purple-600/30 border border-blue-500/50'
                           : pptSelectionMode && selectedSchemesForPpt.has(scheme.id)
@@ -5110,7 +5123,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                                 e.stopPropagation();
                                 deleteScheme(scheme.id, phase);
                               }}
-                              className="flex-shrink-0 ml-2 text-red-400 hover:text-red-300 transition-colors" title="Usuń schemat" aria-label="Usuń schemat"
+                              className="flex-shrink-0 ml-2 text-slate-400 hover:text-red-300 transition-colors [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-hover/scheme:opacity-100" title="Usuń schemat" aria-label="Usuń schemat"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -5125,76 +5138,50 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           ))}
         </div>
 
-        <div className="p-4 border-t border-white/10 space-y-2">
-          <button
-            onClick={createNewScheme}
-            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all transform hover:scale-105"
-          >
-            <Plus size={20} />
-            Nowy schemat
-          </button>
+        <div className="p-4 border-t border-white/10 flex gap-2">
           <button
             onClick={addNewPhase}
-            className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm"
+            className="flex-1 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors text-sm"
           >
             <Plus size={16} />
             Dodaj fazę
           </button>
-          
-          <div className="flex gap-2 pt-2 border-t border-white/10">
-            <button
-              onClick={exportData}
-              className="flex-1 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-green-300"
-              title="Eksportuj wszystkie fazy i schematy do pliku .json (kopia zapasowa)"
-            >
-              <Download size={16} />
-              Eksport
-            </button>
-            {pptSelectionMode ? (
-              <>
-                <button
-                  onClick={() => {
-                    exportToPowerPoint(selectedSchemesForPpt);
-                    setPptSelectionMode(false);
-                    setSelectedSchemesForPpt(new Set());
-                  }}
-                  disabled={selectedSchemesForPpt.size === 0}
-                  className="flex-1 px-4 py-2 bg-red-600/40 hover:bg-red-600/60 border border-red-500/60 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Pobierz zaznaczone schematy jako PPT"
-                >
-                  <Download size={16} />
-                  PPT ({selectedSchemesForPpt.size})
-                </button>
-                <button
-                  onClick={() => {
-                    setPptSelectionMode(false);
-                    setSelectedSchemesForPpt(new Set());
-                  }}
-                  className="px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg text-sm text-slate-300 transition-all"
-                  title="Anuluj"
-                >
-                  ✕
-                </button>
-              </>
-            ) : (
+          {pptSelectionMode ? (
+            <>
               <button
-                onClick={() => setPptSelectionMode(true)}
-                className="flex-1 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-300"
-                title="Wybierz schematy do eksportu PowerPoint"
+                onClick={() => {
+                  exportToPowerPoint(selectedSchemesForPpt);
+                  setPptSelectionMode(false);
+                  setSelectedSchemesForPpt(new Set());
+                }}
+                disabled={selectedSchemesForPpt.size === 0}
+                className="flex-1 px-4 py-2 bg-red-600/40 hover:bg-red-600/60 border border-red-500/60 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Pobierz zaznaczone schematy jako PPT"
               >
                 <Download size={16} />
-                PPT
+                PPT ({selectedSchemesForPpt.size})
               </button>
-            )}
+              <button
+                onClick={() => {
+                  setPptSelectionMode(false);
+                  setSelectedSchemesForPpt(new Set());
+                }}
+                className="px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg text-sm text-slate-300 transition-all"
+                title="Anuluj"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
             <button
-              onClick={importData}
-              className="flex-1 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-purple-300"
-              title="Importuj dane z pliku JSON"
+              onClick={() => setPptSelectionMode(true)}
+              className="flex-1 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-300"
+              title="Wybierz schematy do eksportu PowerPoint"
             >
-              <Upload size={16} />
-              Import
+              <Download size={16} />
+              PPT
             </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -5434,7 +5421,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             ['right', <SlidersHorizontal size={20} />, 'Szczegóły', rightPanelOpen, () => { setRightPanelOpen(v => !v); setLeftPanelOpen(false); }],
           ].map(([id, icon, label, active, onClick]) => (
             <button key={id} onClick={onClick}
-              className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition-colors ${active ? 'text-blue-400' : 'text-slate-300'}`}>
+              className={`flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${active ? 'text-blue-400' : 'text-slate-300'}`}>
               {icon}
               {label}
             </button>
@@ -5451,7 +5438,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
         md:translate-x-0
       `}>
         <div className="md:hidden p-4 border-b border-white/10 space-y-3">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Drużyny</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Drużyny</p>
           <div className="flex items-center gap-2 text-sm text-slate-300">
             Na boisku:
             {[[false, 'Numery'], [true, 'Nazwiska']].map(([value, label]) => (
@@ -5633,7 +5620,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                     style={{ outline: 'none', whiteSpace: 'normal', wordWrap: 'break-word', color: '#cbd5e1' }}
                   />
                   {(!currentScheme.comments || commentsRef.current?.textContent?.trim() === '') && (
-                    <div className="absolute top-2 left-4 text-xs text-slate-500 pointer-events-none">
+                    <div className="absolute top-2 left-4 text-xs text-slate-400 pointer-events-none">
                       Dodaj zadania dla zawodników, uwagi taktyczne...
                     </div>
                   )}
@@ -5733,7 +5720,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               Brak ćwiczeń dla tej fazy. W zakładce Trening otwórz ćwiczenie → „Opis” → „Faza modelu gry” i zaznacz tę fazę.
             </p>
           )}
@@ -5832,7 +5819,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Dodaj zawodników w „👥 Kadra” u góry ekranu.</p>
+                    <p className="text-xs text-slate-400">Dodaj zawodników w „👥 Kadra” u góry ekranu.</p>
                   )}
                 </div>
               )}

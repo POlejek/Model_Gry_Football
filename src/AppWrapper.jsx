@@ -4,7 +4,7 @@ import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
 import SquadModal from './components/SquadModal.jsx';
 import DataModal, { IMPORT_RESULT_KEY } from './components/DataModal.jsx';
-import { needsBackup } from './utils/backup.js';
+import { needsBackup, backupAgeDays } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 
 const TABS = [
@@ -143,17 +143,25 @@ export default function AppWrapper() {
           onClick={() => setShowData(true)}
           title={backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych'}
           aria-label="Dane"
-          className="ml-auto self-center mb-1 relative px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
+          className="ml-auto self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
         >
           <span aria-hidden="true">💾</span><span className="hidden sm:inline">Dane</span>
-          {backupDue && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />}
+          {backupDue && (() => {
+            const age = backupAgeDays();
+            return (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-xs whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <span className="hidden md:inline">{age === null ? 'brak kopii' : `kopia: ${age} dni temu`}</span>
+              </span>
+            );
+          })()}
         </button>
         <button
           onClick={() => setShowSquad(true)}
           title="Kadra zespołu: numery, nazwiska i pozycje" aria-label="Kadra"
           className="self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
         >
-          <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-500">({squad.length})</span> : null}
+          <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-400">({squad.length})</span> : null}
         </button>
       </div>
 

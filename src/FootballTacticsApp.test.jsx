@@ -42,6 +42,11 @@ describe('Taktyka — schematy', () => {
   });
 });
 
+const pickFormat = async (user, format) => {
+  await user.click(screen.getByRole('button', { name: /^Format gry:/ }));
+  await user.click(screen.getByRole('menuitemradio', { name: format }));
+};
+
 describe('Taktyka — formaty gry', () => {
   it.each([
     ['5v5', 5],
@@ -50,7 +55,7 @@ describe('Taktyka — formaty gry', () => {
     ['11v11', 11],
   ])('format %s tworzy schemat z %i zawodnikami na drużynę', async (format, players) => {
     const { user } = setup();
-    await user.click(screen.getByRole('button', { name: format }));
+    await pickFormat(user, format);
     await createScheme(user);
     const [scheme] = allSchemes(format);
     expect(scheme.frames[0].team).toHaveLength(players);
@@ -61,7 +66,7 @@ describe('Taktyka — formaty gry', () => {
   it('formacje są dostępne tylko dla 11v11', async () => {
     const { user } = setup();
     expect(screen.getByRole('button', { name: /Formacja/ })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '5v5' }));
+    await pickFormat(user, '5v5');
     expect(screen.queryByRole('button', { name: /Formacja/ })).not.toBeInTheDocument();
   });
 
@@ -70,7 +75,7 @@ describe('Taktyka — formaty gry', () => {
       _version: 2, gameFormat: '11v11', schemes: { '11v11': { 'Atak-Otwarcie': [] }, '9v9': {}, '7v7': {} },
     }));
     const { user } = setup();
-    await user.click(screen.getByRole('button', { name: '5v5' }));
+    await pickFormat(user, '5v5');
     await createScheme(user);
     expect(allSchemes('5v5')).toHaveLength(1);
   });

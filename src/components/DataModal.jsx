@@ -194,7 +194,7 @@ export default function DataModal({ onClose }) {
                         </div>
                       );
                     })}
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-400">
                       „Dodaj” dopisuje nowe elementy i pomija te, które już masz. „Zastąp” usuwa obecne dane tej części i wstawia te z pliku.
                     </p>
                     <button onClick={doImport} disabled={Object.values(choices).every(v => v === 'skip')} className={btnPrimary}>

@@ -2386,7 +2386,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `model-gry-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `plangry-taktyka-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

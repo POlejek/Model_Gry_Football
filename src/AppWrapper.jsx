@@ -121,7 +121,7 @@ export default function AppWrapper() {
       <div className="flex-shrink-0 flex items-end gap-1 bg-slate-950/80 border-b border-white/10 px-2 sm:px-3 pt-1" role="tablist">
         <span className="hidden md:inline-flex items-center gap-2 self-center mr-3 text-sm font-semibold text-slate-200">
           <span className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-xs">⚽</span>
-          Model Gry
+          PlanGry
         </span>
         {TABS.map(tab => (
           <button

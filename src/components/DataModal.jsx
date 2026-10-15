@@ -52,7 +52,7 @@ export default function DataModal({ onClose }) {
     const { backup, addedDrills } = buildBackup(selected, current);
     const full = available.every(s => selected.has(s.id));
     const date = new Date().toISOString().slice(0, 10);
-    download(backup, full ? `model-gry_kopia_${date}.json` : `model-gry_${[...selected].map(id => SECTION_SLUGS[id]).join('-')}_${date}.json`);
+    download(backup, full ? `plangry_kopia_${date}.json` : `plangry_${[...selected].map(id => SECTION_SLUGS[id]).join('-')}_${date}.json`);
     if (full) markBackupDone();
     setExportNote(addedDrills
       ? `Pobrano. Dołączono ${plural(addedDrills, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} z konspektów, aby konspekty były kompletne.`

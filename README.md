@@ -1,4 +1,7 @@
-# Model_Gry_Football
+# PlanGry
+
+Aplikacja dla trenera piłki nożnej: model gry (Taktyka), ćwiczenia (Trening) i konspekty jednostek treningowych (Konspekt). Działa w przeglądarce, dane zapisuje lokalnie.
+
 ## Testy
 
 | Polecenie | Co sprawdza |

@@ -1,7 +1,7 @@
 {
-  "name": "Model Gry – Taktyka Piłkarska",
-  "short_name": "Model Gry",
-  "description": "Edytor taktyki piłkarskiej",
+  "name": "PlanGry – model gry, ćwiczenia, konspekty",
+  "short_name": "PlanGry",
+  "description": "Model gry, ćwiczenia i konspekty treningowe dla trenera piłki nożnej",
   "start_url": "/Model_Gry_Football/",
   "scope": "/Model_Gry_Football/",
   "display": "standalone",

@@ -5192,12 +5192,8 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           <div className="flex-shrink-0 flex items-center justify-center gap-3 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-100">
             <AlertTriangle size={14} className="text-amber-300 flex-shrink-0" />
             <span className="whitespace-nowrap">
-              Bez schematu<span className="hidden sm:inline"> — zmiany na boisku nie są zapisywane</span>
+              Bez schematu<span className="hidden sm:inline"> — zmiany na boisku nie są zapisywane. Utwórz lub wybierz schemat w panelu faz.</span>
             </span>
-            <button onClick={createNewScheme}
-              className="h-7 px-3 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center gap-1 whitespace-nowrap flex-shrink-0">
-              <Plus size={13} /> Nowy schemat
-            </button>
           </div>
         )}
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative">
@@ -5663,7 +5659,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               <ol className="space-y-2.5">
                 {[
                   'Wybierz fazę gry w lewym panelu, np. Atak, a w niej Budowanie.',
-                  'Kliknij „Nowy schemat” albo wybierz istniejący z listy.',
+                  'Kliknij „Nowy schemat” (u góry panelu faz) albo wybierz istniejący z listy.',
                   'Ustaw zawodników, narysuj linie i strefy, dodawaj kolejne klatki animacji.',
                 ].map((text, i) => (
                   <li key={i} className="flex gap-2.5">
@@ -5672,10 +5668,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   </li>
                 ))}
               </ol>
-              <button onClick={createNewScheme}
-                className="w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium inline-flex items-center justify-center gap-2 transition-colors">
-                <Plus size={16} /> Nowy schemat w fazie „{selectedPhase}{phases[selectedPhase]?.length > 0 && selectedSubPhase ? ` – ${selectedSubPhase}` : ''}”
-              </button>
+              <p className="text-xs text-slate-400">Nowy schemat trafi do fazy: <span className="text-slate-200">„{selectedPhase}{phases[selectedPhase]?.length > 0 && selectedSubPhase ? ` – ${selectedSubPhase}` : ''}”</span></p>
               <div className="pt-3 border-t border-white/10">
                 <p className="flex items-center gap-1.5 text-slate-300 mb-2"><Keyboard size={14} /> Skróty klawiszowe</p>
                 <div className="space-y-1 text-xs">

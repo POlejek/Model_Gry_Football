@@ -15,10 +15,11 @@ const setup = () => {
 };
 
 describe('Taktyka — schematy', () => {
-  it('bez schematu ostrzega, że zmiany nie są zapisywane, i proponuje utworzenie schematu', () => {
+  it('bez schematu ostrzega, że zmiany nie są zapisywane, i ma jeden przycisk „Nowy schemat”', () => {
     setup();
     expect(screen.getAllByText(/Bez schematu/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Nowy schemat w fazie „Atak – Otwarcie”/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Nowy schemat$/ })).toHaveLength(1);
+    expect(screen.getByText(/Nowy schemat trafi do fazy/)).toHaveTextContent('„Atak – Otwarcie”');
   });
 
   it('„Nowy schemat” tworzy i zapisuje schemat w bieżącej fazie', async () => {

@@ -36,8 +36,7 @@ test.describe('Trening', () => {
     await page.keyboard.press('Control+s');
     await expect(page.getByRole('status')).toHaveText('Zapisano „Rondo 4v2”');
 
-    await page.getByRole('button', { name: /Więcej/ }).first().click();
-    await page.getByRole('button', { name: 'Nowe ćwiczenie', exact: true }).click();
+    await page.locator('aside:visible').getByRole('button', { name: 'Nowe ćwiczenie', exact: true }).click();
     await expect(nameInput(page)).toHaveValue('');
 
     await page.reload();

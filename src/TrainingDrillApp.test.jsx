@@ -9,7 +9,7 @@ import { DRILL_FORMAT, LIBRARY_FORMAT } from './utils/drill.js';
 const leftPanel = () => screen.getAllByRole('complementary')[0];
 const inspector = () => screen.getAllByRole('complementary')[1];
 const frameStatus = () => within(inspector()).getByText(/Klatka \d+\/\d+/).textContent;
-const saveStatus = () => within(leftPanel()).getByText(/Nowe ćwiczenie|Niezapisane zmiany|Zapisano w bibliotece/).textContent;
+const saveStatus = () => within(leftPanel()).getByText(/Nowe ćwiczenie|Niezapisane zmiany|Zapisano w bibliotece/, { ignore: 'button, button *, script, style' }).textContent;
 const addFromPalette = (user, label) => user.click(within(leftPanel()).getByTitle(new RegExp(`^${label} —`)));
 const library = () => JSON.parse(localStorage.getItem('trainingDrillLibrary') || '[]');
 

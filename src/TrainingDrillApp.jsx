@@ -1514,18 +1514,21 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     <>          {renderDrillHeader()}
           <div className="mt-2 flex gap-1">
             <button onClick={() => saveDrill(false)} title="Zapisz w bibliotece (Ctrl+S)"
-              className="flex-1 h-8 inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+              className="flex-1 h-8 px-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
               <Save size={14} /> Zapisz
+            </button>
+            <button onClick={newDrill} title="Nowe ćwiczenie (puste boisko)" aria-label="Nowe ćwiczenie"
+              className="flex-1 h-8 px-2 inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">
+              Nowe <Plus size={14} />
             </button>
             <div className="relative" onClick={e => e.stopPropagation()}>
               <button onClick={() => setOpenColorPalette(p => (p === 'file' ? null : 'file'))}
-                title="Więcej: nowe ćwiczenie, kopia, eksport, import" aria-haspopup="menu" aria-expanded={openColorPalette === 'file'}
+                title="Więcej: kopia, eksport, import" aria-haspopup="menu" aria-expanded={openColorPalette === 'file'}
                 className={`h-8 w-8 inline-flex items-center justify-center rounded-md text-slate-300 transition-colors ${openColorPalette === 'file' ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'}`}>
                 <MoreHorizontal size={16} />
               </button>
               {openColorPalette === 'file' && (
                 <div role="menu" className="absolute left-0 top-full mt-1 w-60 bg-slate-900 border border-white/15 rounded-lg shadow-2xl py-1 z-50">
-                  {menuItem('Nowe ćwiczenie', newDrill)}
                   {menuItem('Zapisz jako kopię', () => saveDrill(true), !currentDrillId)}
                   <div className="my-1 border-t border-white/10" />
                   {menuItem('Eksportuj ćwiczenie (.json)', exportDrill)}

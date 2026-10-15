@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  drawField, drawPlayer, drawBall, drawZone, drawLine, drawPlayerLabel, interpolatePlayers, findMatchingPlayer,
+  drawField, drawPlayer, drawBall, drawZone, drawLine, drawPlayerLabel, interpolatePlayers, findMatchingPlayer, renderSchemeFrame,
 } from './draw.js';
 
 // Mock canvas context
@@ -30,6 +30,7 @@ function makeCtx(width = 700, height = 1080) {
     translate: () => {},
     rotate: () => {},
     scale: () => {},
+    setTransform: (...a) => calls.push(['setTransform', ...a]),
     fillText: () => {},
     measureText: (t) => ({ width: t.length * 7 }),
     createLinearGradient: () => ({ addColorStop: () => {} }),
@@ -231,5 +232,31 @@ describe('drawPlayer — zaznaczony zawodnik', () => {
     const player = { id: 'st', x: 200, y: 300, number: '9', rotation: 1 };
     expect(() => drawPlayer(ctx, player, true, null, '#00f', '#f00', '5v5', { id: 'st', type: 'team' })).not.toThrow();
     expect(() => drawPlayer(ctx, player, false, null, '#00f', '#f00', '9v9', { id: 'st', type: 'team' })).not.toThrow();
+  });
+});
+
+describe('renderSchemeFrame', () => {
+  const frame = (x) => ({
+    team: [{ id: 'st', x, y: 500, number: '9', rotation: 0 }],
+    opponent: [{ id: 'ost', x: 350, y: 300, number: '9', rotation: Math.PI }],
+    ball: { x, y: 520 },
+    lines: [{ startX: 0, startY: 0, endX: 10, endY: 10, type: 'arrow-solid', color: '#000' }],
+    zones: [{ type: 'rectangle', x: 0, y: 0, width: 10, height: 10, color: '#f00', opacity: 0.2 }],
+  });
+
+  it('rysuje klatkę w podanej skali i nazwy z mapTeam', () => {
+    const { ctx, calls } = makeCtx(1400, 2160);
+    const seen = [];
+    renderSchemeFrame(ctx, frame(100), null, 0, { scale: 2, mapTeam: (p) => { seen.push(p.x); return p; } });
+    expect(calls).toContainEqual(['setTransform', 2, 0, 0, 2, 0, 0]);
+    expect(seen).toEqual([100]);
+  });
+
+  it('interpoluje zawodników między klatkami', () => {
+    const { ctx } = makeCtx();
+    const seen = [];
+    renderSchemeFrame(ctx, frame(100), frame(300), 0.5, { mapTeam: (p) => { seen.push(p.x); return p; } });
+    renderSchemeFrame(ctx, frame(100), frame(300), 1, { mapTeam: (p) => { seen.push(p.x); return p; } });
+    expect(seen).toEqual([200, 300]);
   });
 });

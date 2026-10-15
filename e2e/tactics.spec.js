@@ -97,4 +97,20 @@ test.describe('Taktyka', () => {
     expect(x).toBeLessThanOrEqual(viewport.width);
     expect(y).toBeLessThanOrEqual(viewport.height);
   });
+
+  test('eksport PowerPoint pokazuje postęp i kończy się komunikatem (bez kodera wideo: 1. klatka jako obraz)', async ({ page }) => {
+    await page.route('https://unpkg.com/**', route => route.abort());
+    await newScheme(page);
+    await page.getByLabel('Dodaj klatkę').first().click();
+    await page.getByTitle('Wybierz schematy do eksportu PowerPoint').click();
+    await page.locator('input[type=checkbox]').first().check();
+    const download = page.waitForEvent('download');
+    await page.getByTitle('Pobierz zaznaczone schematy jako PPT').click();
+    await expect(page.getByRole('dialog', { name: /PowerPoint|Prezentacja/ })).toBeVisible();
+    expect((await download).suggestedFilename()).toMatch(/^PlanGry-Taktyka-11v11-.*\.pptx$/);
+    const done = page.getByRole('dialog', { name: 'Prezentacja gotowa' });
+    await expect(done).toContainText('1 slajd');
+    await done.getByRole('button', { name: 'OK' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
 });

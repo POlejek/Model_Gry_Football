@@ -24,10 +24,13 @@ function downloadJson(data, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-// Sessions from a session file or a session-library file, plus the drills they reference.
-function parseSessionFile(data) {
+// Sessions from a session file, a session-library file or a full backup (Dane), plus the drills they reference.
+export function parseSessionFile(data) {
   if (data?.format === SESSION_FORMAT && data.session) return { sessions: [data.session], drills: data.drills || [] };
   if (data?.format === SESSION_LIBRARY_FORMAT && Array.isArray(data.sessions)) return { sessions: data.sessions, drills: data.drills || [] };
+  if (data?.format === 'model-gry-backup' && Array.isArray(data.sections?.sessions)) {
+    return { sessions: data.sections.sessions, drills: Array.isArray(data.sections.drills) ? data.sections.drills : [] };
+  }
   return null;
 }
 
@@ -290,7 +293,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* ── Session list ── */}
-      <aside className="hidden lg:flex w-60 flex-shrink-0 flex-col bg-slate-950/80 border-r border-white/10 min-h-0">
+      <aside className="hidden lg:flex w-72 xl:w-80 2xl:w-96 flex-shrink-0 flex-col bg-slate-950/80 border-r border-white/10 min-h-0">
         <div className="p-3 border-b border-white/10">
           <button onClick={createSession} className="w-full h-9 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium inline-flex items-center justify-center gap-1.5">
             <Plus size={15} /> Nowy konspekt
@@ -313,7 +316,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                       <button onClick={() => setCurrentId(s.id)} className="flex-1 min-w-0 text-left flex gap-2">
                         <span className="w-12 flex-shrink-0 text-xs font-semibold text-slate-300 leading-5 capitalize">{shortDate(s.date) || '—'}</span>
                         <span className="min-w-0">
-                          <span className="block text-sm text-slate-100 leading-5 line-clamp-2">{s.title || 'Bez tytułu'}</span>
+                          <span className="block text-sm text-slate-100 leading-5 line-clamp-3" title={s.title || undefined}>{s.title || 'Bez tytułu'}</span>
                           <span className="block text-xs text-slate-400">{mins} min · {s.blocks.length} bl.</span>
                         </span>
                       </button>
@@ -370,7 +373,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
             </p>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto p-4 lg:p-6 space-y-5">
+          <div className="max-w-6xl mx-auto p-4 lg:p-6 space-y-5">
             {/* Header */}
             <section className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <label className="sm:col-span-2 text-xs text-slate-400">Tytuł
@@ -443,15 +446,15 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                     <p className="text-sm font-semibold text-white tabular-nums">{from}–{to}′</p>
                   </div>
                   {drill && thumbs.get(drill.id) && (
-                    <img src={thumbs.get(drill.id)} alt="" className="hidden sm:block w-36 h-24 object-contain rounded-md bg-white flex-shrink-0" />
+                    <img src={thumbs.get(drill.id)} alt="" className="hidden sm:block w-36 h-24 xl:w-44 xl:h-28 object-contain rounded-md bg-white flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0 space-y-1.5">
                     {b.drillId ? (
                       drill ? (
                         <div className="flex items-start gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-white truncate">{drill.name}</p>
-                            <p className="text-xs text-slate-400 truncate">
+                            <p className="text-sm font-semibold text-white">{drill.name}</p>
+                            <p className="text-xs text-slate-400">
                               {[drill.meta?.category, drill.meta?.players && `${drill.meta.players} zaw.`, ...(drill.meta?.phases || []).map(k => phaseLabel(k, options))].filter(Boolean).join(' · ')}
                             </p>
                           </div>
@@ -468,15 +471,15 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                       <input value={b.title} onChange={e => patchBlock(b.id, { title: e.target.value })} aria-label="Nazwa bloku"
                         className={`${inputCls} font-semibold`} />
                     )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <div className="flex flex-wrap items-start gap-2">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-400 h-9">
                         Czas
                         <input type="number" min={0} value={b.minutes} onChange={e => patchBlock(b.id, { minutes: e.target.value })}
-                          aria-label="Czas w minutach" className={`${inputCls} w-16 text-center`} />
+                          aria-label="Czas w minutach" className={`${inputCls.replace('w-full ', '')} w-16 text-center`} />
                         min
                       </label>
-                      <input value={b.note} onChange={e => patchBlock(b.id, { note: e.target.value })} placeholder="Notatka (np. warianty, grupy)"
-                        aria-label="Notatka" className={`${inputCls} flex-1 min-w-[10rem]`} />
+                      <AutoTextarea minRows={1} watch={`${active}-${currentId}`} value={b.note} onChange={e => patchBlock(b.id, { note: e.target.value })} placeholder="Notatka (np. warianty, grupy)"
+                        aria-label="Notatka" className={`${inputCls} flex-1 min-w-[10rem] text-sm`} />
                     </div>
                   </div>
                   <div className="flex flex-col gap-0.5">

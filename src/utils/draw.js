@@ -1,9 +1,10 @@
 import { getZoneHandles } from './geometry.js';
 // Czyste funkcje rysowania canvas — nie zależą od stanu React
 
-export const drawField = (ctx, gameFormat) => {
-    const width = ctx.canvas.width;  // 700px
-    const height = ctx.canvas.height;  // 1080px
+// size: logical drawing size when the canvas is scaled (e.g. a 2× export); defaults to the canvas size.
+export const drawField = (ctx, gameFormat, size = null) => {
+    const width = size?.w ?? ctx.canvas.width;  // 700px
+    const height = size?.h ?? ctx.canvas.height;  // 1080px
     const margin = 20;
     
     // Wymiary boiska według unifikacji PZPN
@@ -988,3 +989,25 @@ export const drawLine = (ctx, line, isSelected = false) => {
 
     ctx.restore();
   };
+
+// ── Whole-scheme frame (exports: PNG, PowerPoint, MP4) ───────────
+export const SCHEME_W = 700;
+export const SCHEME_H = 1080;
+
+// Draws a scheme frame exactly like the editor (players with arms, lines, zones, ball).
+// With `to` and 0 < progress < 1 the players are interpolated (animation); `scale` gives a sharper image.
+export function renderSchemeFrame(ctx, from, to = null, progress = 0, {
+  gameFormat = '11v11', teamColor = '#1a365d', opponentColor = '#8b0000', scale = 1, mapTeam = (p) => p,
+} = {}) {
+  const shown = to && progress >= 1 ? to : from;
+  const pos = to ? interpolatePlayers(from, to, Math.min(1, Math.max(0, progress))) : from;
+  ctx.save();
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  drawField(ctx, gameFormat, { w: SCHEME_W, h: SCHEME_H });
+  (shown.zones || []).forEach(z => drawZone(ctx, z, false, undefined, undefined, 0));
+  (shown.lines || []).forEach(l => drawLine(ctx, l, false));
+  (pos.team || []).forEach(p => drawPlayer(ctx, mapTeam(p), true, null, teamColor, opponentColor, gameFormat, null));
+  (pos.opponent || []).forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
+  drawBall(ctx, pos.ball || shown.ball || { x: SCHEME_W / 2, y: SCHEME_H / 2 }, gameFormat);
+  ctx.restore();
+}

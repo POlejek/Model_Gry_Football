@@ -7,7 +7,8 @@ import {
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
-import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, drawTextNote, interpolatePlayers, findMatchingPlayer, TEXT_NOTE_SIZE } from './utils/draw.js';
+import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, drawTextNote, interpolatePlayers, findMatchingPlayer, TEXT_NOTE_SIZE, renderSchemeFrame, SCHEME_W, SCHEME_H } from './utils/draw.js';
+import { htmlToLines, htmlToPptRuns, commentFontSize } from './utils/richText.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex,
   hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
@@ -145,6 +146,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   const [draggedFrameIdx, setDraggedFrameIdx] = useState(null); // Indeks przeciąganej klatki
   const [dragOverFrameIdx, setDragOverFrameIdx] = useState(null); // Indeks klatki nad którą jest kursor
   const [errorMessage, setErrorMessage] = useState(null); // Błąd wyświetlany przez ErrorBanner
+  const [pptProgress, setPptProgress] = useState(null); // postęp eksportu PPT: { done, total, label, status: 'working' | 'done' | 'error', text }
 
   // Paleta kolorów szybkiego wyboru
   const quickColorPalette = [
@@ -516,536 +518,6 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [active, selectedLineIndex, selectedZoneIndex, lines, zones, clipboard, currentScheme, currentFrame, players]);
 
-  // Helper: Rysuj klatkę na podanym canvas
-  const drawFrameToCanvas = (frameData, format, canvas, ctx, tColor = '#1a365d', oColor = '#8b0000') => {
-    const width = canvas.width;
-    const height = canvas.height;
-    const margin = 20;
-
-    const fieldDimensions = {
-      '5v5': { length: 40, width: 25, penaltyBoxWidth: 15, penaltyBoxDepth: 7, goalBoxWidth: 6, goalBoxDepth: 2, goalWidth: 3, penaltySpot: 6, centerCircle: 4, arcRadius: 0 },
-      '7v7': { length: 55, width: 37, penaltyBoxWidth: 20, penaltyBoxDepth: 13, goalBoxWidth: 12, goalBoxDepth: 5, goalWidth: 5, penaltySpot: 0, centerCircle: 6, arcRadius: 0 },
-      '9v9': { length: 70, width: 50, penaltyBoxWidth: 30, penaltyBoxDepth: 13, goalBoxWidth: 15, goalBoxDepth: 5, goalWidth: 6, penaltySpot: 9, centerCircle: 7, arcRadius: 7 },
-      '11v11': { length: 105, width: 68, penaltyBoxWidth: 40.32, penaltyBoxDepth: 16.5, goalBoxWidth: 18.32, goalBoxDepth: 5.5, goalWidth: 7.32, penaltySpot: 11, centerCircle: 9.15, arcRadius: 9.15 }
-    };
-
-    const dims = fieldDimensions[format];
-    const fieldLength = dims.length;
-    const fieldWidthMeters = dims.width;
-    const fieldWidth = width - 2 * margin;
-    const fieldHeight = height - 2 * margin;
-
-    // Białe tło
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, width, height);
-
-    // Obramowanie
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(margin, margin, fieldWidth, fieldHeight);
-
-    // Linie boiska
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 2;
-
-    // Linia środkowa
-    ctx.beginPath();
-    ctx.moveTo(margin, height / 2);
-    ctx.lineTo(width - margin, height / 2);
-    ctx.stroke();
-
-    // Okrąg środkowy
-    const centerCircleRadius = (dims.centerCircle / fieldWidthMeters) * fieldWidth;
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, centerCircleRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Punkt środkowy
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#c4a76e';
-    ctx.fill();
-
-    // Pola karne i bramkowe
-    const penaltyBoxWidth = (dims.penaltyBoxWidth / fieldWidthMeters) * fieldWidth;
-    const penaltyBoxDepth = (dims.penaltyBoxDepth / fieldLength) * fieldHeight;
-    const goalBoxWidth = (dims.goalBoxWidth / fieldWidthMeters) * fieldWidth;
-    const goalBoxDepth = (dims.goalBoxDepth / fieldLength) * fieldHeight;
-
-    const penaltyBoxLeft = (width - penaltyBoxWidth) / 2;
-    const goalBoxLeft = (width - goalBoxWidth) / 2;
-
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(penaltyBoxLeft, margin, penaltyBoxWidth, penaltyBoxDepth);
-    ctx.strokeRect(goalBoxLeft, margin, goalBoxWidth, goalBoxDepth);
-    ctx.strokeRect(penaltyBoxLeft, height - margin - penaltyBoxDepth, penaltyBoxWidth, penaltyBoxDepth);
-    ctx.strokeRect(goalBoxLeft, height - margin - goalBoxDepth, goalBoxWidth, goalBoxDepth);
-
-    // Rysuj strefy jeśli są w klatce
-    if (frameData.zones && frameData.zones.length > 0) {
-      frameData.zones.forEach(zone => {
-        ctx.save();
-        ctx.fillStyle = zone.color || '#3b82f6';
-        ctx.globalAlpha = zone.opacity || 0.3;
-        ctx.strokeStyle = zone.color || '#3b82f6';
-        ctx.lineWidth = 2;
-
-        switch (zone.type) {
-          case 'text':
-            drawTextNote(ctx, zone);
-            break;
-
-          case 'rectangle':
-            ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-            ctx.globalAlpha = 1;
-            ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
-            break;
-          
-          case 'circle':
-            ctx.beginPath();
-            ctx.arc(zone.centerX, zone.centerY, zone.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.stroke();
-            break;
-          
-          case 'polygon':
-            if (zone.points && zone.points.length > 0) {
-              ctx.beginPath();
-              ctx.moveTo(zone.points[0].x, zone.points[0].y);
-              for (let i = 1; i < zone.points.length; i++) {
-                ctx.lineTo(zone.points[i].x, zone.points[i].y);
-              }
-              ctx.closePath();
-              ctx.fill();
-              ctx.globalAlpha = 1;
-              ctx.stroke();
-            }
-            break;
-        }
-        ctx.restore();
-      });
-    }
-
-    // Rysuj linie jeśli są w klatce
-    if (frameData.lines && frameData.lines.length > 0) {
-      frameData.lines.forEach(line => {
-        ctx.save();
-        ctx.strokeStyle = line.color;
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        const dx = line.endX - line.startX;
-        const dy = line.endY - line.startY;
-        const angle = Math.atan2(dy, dx);
-        const arrowSize = 15;
-
-        const drawArrowHead = (x, y, angle) => {
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(
-            x - arrowSize * Math.cos(angle - Math.PI / 6),
-            y - arrowSize * Math.sin(angle - Math.PI / 6)
-          );
-          ctx.moveTo(x, y);
-          ctx.lineTo(
-            x - arrowSize * Math.cos(angle + Math.PI / 6),
-            y - arrowSize * Math.sin(angle + Math.PI / 6)
-          );
-          ctx.stroke();
-        };
-
-        const getControlPoint = () => {
-          if (line.controlX !== undefined && line.controlY !== undefined) {
-            return { x: line.controlX, y: line.controlY };
-          }
-          return {
-            x: (line.startX + line.endX) / 2 + (line.endY - line.startY) * 0.3,
-            y: (line.startY + line.endY) / 2 - (line.endX - line.startX) * 0.3
-          };
-        };
-
-        const drawWavyStraight = () => {
-          const lineLength = Math.hypot(dx, dy);
-          if (lineLength === 0) return;
-
-          const amplitude = 6;
-          const wavelength = 24;
-          const straightTail = Math.min(22, lineLength * 0.35);
-          const fadeTail = Math.min(14, Math.max(6, straightTail * 0.7));
-          const tailStartDistance = Math.max(0, lineLength - straightTail);
-          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
-          const tailStartT = tailStartDistance / lineLength;
-          const segments = Math.max(16, Math.ceil(lineLength / 4));
-          const normalX = -dy / lineLength;
-          const normalY = dx / lineLength;
-
-          ctx.beginPath();
-          for (let i = 0; i <= segments; i++) {
-            const rawT = i / segments;
-            const t = Math.min(rawT, tailStartT);
-            const distance = t * lineLength;
-            const baseX = line.startX + dx * t;
-            const baseY = line.startY + dy * t;
-            const phase = (distance * Math.PI * 2) / wavelength;
-
-            let damping = 1;
-            if (distance >= tailStartDistance) {
-              damping = 0;
-            } else if (distance > fadeStartDistance) {
-              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
-            }
-
-            const offset = Math.sin(phase) * amplitude * damping;
-            const x = baseX + normalX * offset;
-            const y = baseY + normalY * offset;
-
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-
-            if (rawT >= tailStartT) break;
-          }
-
-          const tailStartX = line.startX + dx * tailStartT;
-          const tailStartY = line.startY + dy * tailStartT;
-          ctx.lineTo(tailStartX, tailStartY);
-          ctx.lineTo(line.endX, line.endY);
-          ctx.stroke();
-        };
-
-        const getQuadraticPoint = (t, cp) => {
-          const oneMinusT = 1 - t;
-          return {
-            x: oneMinusT * oneMinusT * line.startX + 2 * oneMinusT * t * cp.x + t * t * line.endX,
-            y: oneMinusT * oneMinusT * line.startY + 2 * oneMinusT * t * cp.y + t * t * line.endY
-          };
-        };
-
-        const getQuadraticTangent = (t, cp) => ({
-          x: 2 * (1 - t) * (cp.x - line.startX) + 2 * t * (line.endX - cp.x),
-          y: 2 * (1 - t) * (cp.y - line.startY) + 2 * t * (line.endY - cp.y)
-        });
-
-        const drawWavyCurve = (cp) => {
-          const arcSamples = 80;
-          const arcPoints = [];
-          let curveLength = 0;
-          let previousPoint = getQuadraticPoint(0, cp);
-          arcPoints.push({ t: 0, distance: 0, point: previousPoint });
-
-          for (let i = 1; i <= arcSamples; i++) {
-            const t = i / arcSamples;
-            const point = getQuadraticPoint(t, cp);
-            curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
-            arcPoints.push({ t, distance: curveLength, point });
-            previousPoint = point;
-          }
-
-          const getTAtDistance = (targetDistance) => {
-            if (targetDistance <= 0) return 0;
-            if (targetDistance >= curveLength) return 1;
-
-            for (let i = 1; i < arcPoints.length; i++) {
-              const prev = arcPoints[i - 1];
-              const current = arcPoints[i];
-              if (targetDistance <= current.distance) {
-                const segmentDistance = current.distance - prev.distance || 1;
-                const ratio = (targetDistance - prev.distance) / segmentDistance;
-                return prev.t + (current.t - prev.t) * ratio;
-              }
-            }
-            return 1;
-          };
-
-          const amplitude = 6;
-          const wavelength = 24;
-          const straightTail = Math.min(24, curveLength * 0.35);
-          const fadeTail = Math.min(16, Math.max(6, straightTail * 0.7));
-          const tailStartDistance = Math.max(0, curveLength - straightTail);
-          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
-          const tailStartT = getTAtDistance(tailStartDistance);
-          const segments = Math.max(24, Math.ceil(curveLength / 4));
-
-          ctx.beginPath();
-          for (let i = 0; i <= segments; i++) {
-            const rawT = i / segments;
-            const t = Math.min(rawT, tailStartT);
-            const point = getQuadraticPoint(t, cp);
-            const tangent = getQuadraticTangent(t, cp);
-            const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
-            const normalX = -tangent.y / tangentLength;
-            const normalY = tangent.x / tangentLength;
-            const distance = t * curveLength;
-            const phase = (distance * Math.PI * 2) / wavelength;
-
-            let damping = 1;
-            if (distance >= tailStartDistance) {
-              damping = 0;
-            } else if (distance > fadeStartDistance) {
-              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
-            }
-
-            const offset = Math.sin(phase) * amplitude * damping;
-            const x = point.x + normalX * offset;
-            const y = point.y + normalY * offset;
-
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-
-            if (rawT >= tailStartT) break;
-          }
-
-          const tailPoint = getQuadraticPoint(tailStartT, cp);
-          ctx.lineTo(tailPoint.x, tailPoint.y);
-          ctx.lineTo(line.endX, line.endY);
-          ctx.stroke();
-
-          return Math.atan2(line.endY - tailPoint.y, line.endX - tailPoint.x);
-        };
-
-        switch (line.type) {
-          case 'line-solid':
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            break;
-
-          case 'line-dashed':
-            ctx.setLineDash([10, 5]);
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            break;
-
-          case 'arrow-solid':
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'arrow-dashed':
-            ctx.setLineDash([10, 5]);
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'arrow-wavy':
-            drawWavyStraight();
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'double-arrow-solid':
-            const offset = 4;
-            const perpX = -Math.sin(angle) * offset;
-            const perpY = Math.cos(angle) * offset;
-            const arrowGap = 8;
-            const shortenedEndX = line.endX - arrowGap * Math.cos(angle);
-            const shortenedEndY = line.endY - arrowGap * Math.sin(angle);
-            
-            ctx.beginPath();
-            ctx.moveTo(line.startX + perpX, line.startY + perpY);
-            ctx.lineTo(shortenedEndX + perpX, shortenedEndY + perpY);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(line.startX - perpX, line.startY - perpY);
-            ctx.lineTo(shortenedEndX - perpX, shortenedEndY - perpY);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(line.endX, line.endY);
-            ctx.lineTo(
-              line.endX - (arrowSize + 2) * Math.cos(angle - Math.PI / 6),
-              line.endY - (arrowSize + 2) * Math.sin(angle - Math.PI / 6)
-            );
-            ctx.moveTo(line.endX, line.endY);
-            ctx.lineTo(
-              line.endX - (arrowSize + 2) * Math.cos(angle + Math.PI / 6),
-              line.endY - (arrowSize + 2) * Math.sin(angle + Math.PI / 6)
-            );
-            ctx.stroke();
-            break;
-
-          case 'curve-line':
-            const cp1 = getControlPoint();
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.quadraticCurveTo(cp1.x, cp1.y, line.endX, line.endY);
-            ctx.stroke();
-            break;
-
-          case 'curve-arrow-solid':
-            const cp2 = getControlPoint();
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.quadraticCurveTo(cp2.x, cp2.y, line.endX, line.endY);
-            ctx.stroke();
-            
-            const t = 0.95;
-            const nearEndX = (1-t)*(1-t)*line.startX + 2*(1-t)*t*cp2.x + t*t*line.endX;
-            const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
-            const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
-            drawArrowHead(line.endX, line.endY, curveAngle);
-            break;
-
-          case 'curve-arrow-wavy':
-            const cp3 = getControlPoint();
-            const wavyCurveAngle = drawWavyCurve(cp3);
-            drawArrowHead(line.endX, line.endY, wavyCurveAngle);
-            break;
-        }
-
-        ctx.restore();
-      });
-    }
-
-    // Rysuj zawodników
-    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
-    const playerRadius = playerSizes[format] || 18;
-
-    // Drużyna
-    frameData.team.forEach(player => {
-      const playerColor = player.color || tColor;
-      ctx.save();
-      ctx.fillStyle = playerColor;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, playerRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.font = 'bold 12px Arial';
-      drawPlayerLabel(ctx, player.number, player.x, player.y, playerRadius, playerColor);
-
-      const arrowLength = playerRadius + 8;
-      ctx.strokeStyle = playerColor;
-      ctx.lineWidth = 2;
-      const radians = (player.rotation * Math.PI) / 180;
-      const endX = player.x + Math.cos(radians) * arrowLength;
-      const endY = player.y + Math.sin(radians) * arrowLength;
-      ctx.beginPath();
-      ctx.moveTo(player.x, player.y);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-      ctx.restore();
-    });
-
-    // Przeciwnik
-    frameData.opponent.forEach(player => {
-      const playerColor = player.color || oColor;
-      ctx.save();
-      ctx.fillStyle = playerColor;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, playerRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.font = 'bold 12px Arial';
-      drawPlayerLabel(ctx, player.number, player.x, player.y, playerRadius, playerColor);
-
-      const arrowLength = playerRadius + 8;
-      ctx.strokeStyle = playerColor;
-      ctx.lineWidth = 2;
-      const radians = (player.rotation * Math.PI) / 180;
-      const endX = player.x + Math.cos(radians) * arrowLength;
-      const endY = player.y + Math.sin(radians) * arrowLength;
-      ctx.beginPath();
-      ctx.moveTo(player.x, player.y);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-      ctx.restore();
-    });
-
-    // Piłka z klasycznym wzorem
-    ctx.save();
-    const ballRadius = 8;
-    
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
-    ctx.shadowBlur = 6;
-    
-    // Biała podstawa
-    ctx.beginPath();
-    ctx.arc(frameData.ball.x, frameData.ball.y, ballRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    
-    ctx.shadowColor = 'transparent';
-    
-    // Klasyczny wzór piłki - czarne pięciokąty
-    ctx.fillStyle = '#000000';
-    
-    const pentagonRadius = ballRadius * 0.35;
-    ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 2 * Math.PI / 5) - Math.PI / 2;
-      const x = frameData.ball.x + Math.cos(angle) * pentagonRadius;
-      const y = frameData.ball.y + Math.sin(angle) * pentagonRadius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    
-    // Dodatkowe czarne elementy
-    const hexSize = ballRadius * 0.25;
-    const positions = [
-      { angle: 0, distance: ballRadius * 0.7 },
-      { angle: Math.PI * 0.66, distance: ballRadius * 0.7 },
-      { angle: -Math.PI * 0.66, distance: ballRadius * 0.7 }
-    ];
-    
-    positions.forEach(pos => {
-      const centerX = frameData.ball.x + Math.cos(pos.angle) * pos.distance;
-      const centerY = frameData.ball.y + Math.sin(pos.angle) * pos.distance;
-      
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (i * 2 * Math.PI / 6) + pos.angle;
-        const x = centerX + Math.cos(angle) * hexSize;
-        const y = centerY + Math.sin(angle) * hexSize;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fill();
-    });
-    
-    ctx.restore();
-  };
-
-  // Helper: Narysuj klatkę na canvas i zwróć data URL
-  const getFrameImageDataUrl = (frameData, format) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 700;
-    canvas.height = 1080;
-    const ctx = canvas.getContext('2d');
-    drawFrameToCanvas(frameData, format, canvas, ctx, teamColor, opponentColor);
-    return canvas.toDataURL('image/png');
-  };
-
   const toBlobURL = async (url, mimeType) => {
     const res = await fetch(url);
     const blob = await res.blob();
@@ -1062,857 +534,29 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     }
 
     if (ffmpegLoadingRef.current) {
-      while (!ffmpegLoadedRef.current) {
+      while (ffmpegLoadingRef.current) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
+      if (!ffmpegLoadedRef.current) throw new Error('Nie udało się wczytać kodera wideo');
       return ffmpegRef.current;
     }
 
     ffmpegLoadingRef.current = true;
     const coreUrl = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js';
     const wasmUrl = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm';
-    const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
-    const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
-
-    await ffmpegRef.current.load({
-      coreURL: coreBlobUrl,
-      wasmURL: wasmBlobUrl
-    });
-
-    ffmpegLoadedRef.current = true;
-    ffmpegLoadingRef.current = false;
+    try {
+      const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
+      const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
+      await ffmpegRef.current.load({
+        coreURL: coreBlobUrl,
+        wasmURL: wasmBlobUrl
+      });
+      ffmpegLoadedRef.current = true;
+    } finally {
+      // a failed load must not leave other callers waiting forever
+      ffmpegLoadingRef.current = false;
+    }
     return ffmpegRef.current;
-  };
-
-  const generateMp4FromFrames = async (frames, format) => {
-    if (!frames.length) {
-      throw new Error('Brak klatek do wygenerowania MP4');
-    }
-
-    const ffmpeg = await ensureFfmpegLoaded();
-    const canvas = document.createElement('canvas');
-    canvas.width = 700;
-    canvas.height = 1080;
-    const ctx = canvas.getContext('2d');
-
-    const frameFiles = [];
-    const frameCount = frames.length;
-
-    for (let i = 0; i < frameCount; i++) {
-      drawFrameToCanvas(frames[i], format, canvas, ctx, teamColor, opponentColor);
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (!blob) {
-        throw new Error('Nie mozna wygenerowac klatki PNG');
-      }
-      const arrayBuffer = await blob.arrayBuffer();
-      const fileName = `frame_${String(i).padStart(3, '0')}.png`;
-      await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
-      frameFiles.push(fileName);
-    }
-
-    const outputName = `output_${Date.now()}.mp4`;
-    try {
-      await ffmpeg.exec([
-        '-framerate', '5',
-        '-i', 'frame_%03d.png',
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        outputName
-      ]);
-    } catch (error) {
-      await ffmpeg.exec([
-        '-framerate', '5',
-        '-i', 'frame_%03d.png',
-        '-c:v', 'mpeg4',
-        '-pix_fmt', 'yuv420p',
-        outputName
-      ]);
-    }
-
-    const data = await ffmpeg.readFile(outputName);
-
-    await Promise.all([
-      ...frameFiles.map(fileName => ffmpeg.deleteFile(fileName)),
-      ffmpeg.deleteFile(outputName)
-    ]);
-
-    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('MP4 read error'));
-      reader.readAsDataURL(videoBlob);
-    });
-  };
-
-  const generateAnimatedMp4FromFrames = async (frames, format, tColor, oColor) => {
-    if (frames.length < 2) {
-      throw new Error('Brak wystarczajacej liczby klatek do animacji');
-    }
-
-    const ffmpeg = await ensureFfmpegLoaded();
-    const canvas = document.createElement('canvas');
-    canvas.width = 700;
-    canvas.height = 1080;
-    const ctx = canvas.getContext('2d');
-
-    const frameFiles = [];
-    const framesPerTransition = 15;
-    let frameIndex = 0;
-
-    for (let i = 0; i < frames.length; i++) {
-      const currentFrameData = frames[i];
-      const nextFrameData = i < frames.length - 1 ? frames[i + 1] : null;
-
-      if (nextFrameData) {
-        for (let step = 0; step < framesPerTransition; step++) {
-          const progress = step / framesPerTransition;
-          drawAnimationFrame(ctx, currentFrameData, nextFrameData, progress, format, tColor, oColor);
-
-          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-          if (!blob) {
-            throw new Error('Nie mozna wygenerowac klatki PNG');
-          }
-          const arrayBuffer = await blob.arrayBuffer();
-          const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
-          await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
-          frameFiles.push(fileName);
-          frameIndex++;
-        }
-      } else {
-        drawAnimationFrame(ctx, currentFrameData, null, 0, format, tColor, oColor);
-
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!blob) {
-          throw new Error('Nie mozna wygenerowac klatki PNG');
-        }
-        const arrayBuffer = await blob.arrayBuffer();
-        const fileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
-        await ffmpeg.writeFile(fileName, new Uint8Array(arrayBuffer));
-        frameFiles.push(fileName);
-        frameIndex++;
-      }
-    }
-
-    const outputName = `ppt_animation_${Date.now()}.mp4`;
-
-    try {
-      await ffmpeg.exec([
-        '-framerate', '20',
-        '-i', 'frame_%04d.png',
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
-        outputName
-      ]);
-    } catch (error) {
-      await ffmpeg.exec([
-        '-framerate', '20',
-        '-i', 'frame_%04d.png',
-        '-c:v', 'mpeg4',
-        '-pix_fmt', 'yuv420p',
-        outputName
-      ]);
-    }
-
-    const data = await ffmpeg.readFile(outputName);
-
-    await Promise.all([
-      ...frameFiles.map(fileName => ffmpeg.deleteFile(fileName)),
-      ffmpeg.deleteFile(outputName)
-    ]);
-
-    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('MP4 read error'));
-      reader.readAsDataURL(videoBlob);
-    });
-  };
-
-  // Funkcja pomocnicza do renderowania pełnej klatki animacji z liniami ruchu
-  const drawAnimationFrame = (ctx, currentFrameData, nextFrameData, progress, format, tColor = '#1a365d', oColor = '#8b0000') => {
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
-    const margin = 20;
-
-    const fieldDimensions = {
-      '5v5': { length: 40, width: 25, penaltyBoxWidth: 15, penaltyBoxDepth: 7, goalBoxWidth: 6, goalBoxDepth: 2, goalWidth: 3, penaltySpot: 6, centerCircle: 4, arcRadius: 0 },
-      '7v7': { length: 55, width: 37, penaltyBoxWidth: 20, penaltyBoxDepth: 13, goalBoxWidth: 12, goalBoxDepth: 5, goalWidth: 5, penaltySpot: 0, centerCircle: 6, arcRadius: 0 },
-      '9v9': { length: 70, width: 50, penaltyBoxWidth: 30, penaltyBoxDepth: 13, goalBoxWidth: 15, goalBoxDepth: 5, goalWidth: 6, penaltySpot: 9, centerCircle: 7, arcRadius: 7 },
-      '11v11': { length: 105, width: 68, penaltyBoxWidth: 40.32, penaltyBoxDepth: 16.5, goalBoxWidth: 18.32, goalBoxDepth: 5.5, goalWidth: 7.32, penaltySpot: 11, centerCircle: 9.15, arcRadius: 9.15 }
-    };
-
-    const dims = fieldDimensions[format];
-    const fieldLength = dims.length;
-    const fieldWidthMeters = dims.width;
-    const fieldWidth = width - 2 * margin;
-    const fieldHeight = height - 2 * margin;
-
-    // Białe tło
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, width, height);
-
-    // Obramowanie
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(margin, margin, fieldWidth, fieldHeight);
-
-    // Linie boiska
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 2;
-
-    // Linia środkowa
-    ctx.beginPath();
-    ctx.moveTo(margin, height / 2);
-    ctx.lineTo(width - margin, height / 2);
-    ctx.stroke();
-
-    // Okrąg środkowy
-    const centerCircleRadius = (dims.centerCircle / fieldWidthMeters) * fieldWidth;
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, centerCircleRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Punkt środkowy
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#c4a76e';
-    ctx.fill();
-
-    // Pola karne i bramkowe
-    const penaltyBoxWidth = (dims.penaltyBoxWidth / fieldWidthMeters) * fieldWidth;
-    const penaltyBoxDepth = (dims.penaltyBoxDepth / fieldLength) * fieldHeight;
-    const goalBoxWidth = (dims.goalBoxWidth / fieldWidthMeters) * fieldWidth;
-    const goalBoxDepth = (dims.goalBoxDepth / fieldLength) * fieldHeight;
-
-    const penaltyBoxLeft = (width - penaltyBoxWidth) / 2;
-    const goalBoxLeft = (width - goalBoxWidth) / 2;
-    const penaltyBoxRight = penaltyBoxLeft + penaltyBoxWidth;
-    const goalBoxRight = goalBoxLeft + goalBoxWidth;
-
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(penaltyBoxLeft, margin, penaltyBoxWidth, penaltyBoxDepth);
-    ctx.strokeRect(goalBoxLeft, margin, goalBoxWidth, goalBoxDepth);
-    ctx.strokeRect(penaltyBoxLeft, height - margin - penaltyBoxDepth, penaltyBoxWidth, penaltyBoxDepth);
-    ctx.strokeRect(goalBoxLeft, height - margin - goalBoxDepth, goalBoxWidth, goalBoxDepth);
-
-    // Bramki
-    ctx.strokeStyle = '#c4a76e';
-    ctx.lineWidth = 4;
-    const goalWidth = (dims.goalWidth / fieldWidthMeters) * fieldWidth;
-    const goalLeft = (width - goalWidth) / 2;
-    const goalRight = goalLeft + goalWidth;
-    
-    ctx.beginPath();
-    ctx.moveTo(goalLeft, margin);
-    ctx.lineTo(goalLeft, margin - 5);
-    ctx.lineTo(goalRight, margin - 5);
-    ctx.lineTo(goalRight, margin);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(goalLeft, height - margin);
-    ctx.lineTo(goalLeft, height - margin + 5);
-    ctx.lineTo(goalRight, height - margin + 5);
-    ctx.lineTo(goalRight, height - margin);
-    ctx.stroke();
-
-    // Łuki i punkty karne (dla 9v9 i 11v11)
-    if (dims.arcRadius > 0 && dims.penaltySpot > 0) {
-      ctx.strokeStyle = '#c4a76e';
-      ctx.lineWidth = 2;
-      const arcRadius = (dims.arcRadius / fieldWidthMeters) * fieldWidth;
-      const penaltySpotDistance = (dims.penaltySpot / fieldLength) * fieldHeight;
-      const penaltySpotTop = margin + penaltySpotDistance;
-      const penaltySpotBottom = height - margin - penaltySpotDistance;
-      
-      const distancePenaltySpotToLine = ((dims.penaltyBoxDepth - dims.penaltySpot) / fieldLength) * fieldHeight;
-      const arcAngle = Math.asin(Math.min(distancePenaltySpotToLine / arcRadius, 1));
-      
-      ctx.beginPath();
-      ctx.arc(width / 2, penaltySpotTop, arcRadius, arcAngle, Math.PI - arcAngle);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(width / 2, penaltySpotBottom, arcRadius, Math.PI + arcAngle, Math.PI * 2 - arcAngle);
-      ctx.stroke();
-
-      ctx.fillStyle = '#c4a76e';
-      ctx.beginPath();
-      ctx.arc(width / 2, penaltySpotTop, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(width / 2, penaltySpotBottom, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Wyszarzenie stref
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-    ctx.fillRect(goalBoxLeft, margin, penaltyBoxLeft - goalBoxLeft, fieldHeight);
-    ctx.fillRect(goalBoxRight, margin, penaltyBoxRight - goalBoxRight, fieldHeight);
-
-    // Linie półprzestrzeni
-    ctx.strokeStyle = 'rgba(196, 167, 110, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([10, 10]);
-
-    ctx.beginPath();
-    ctx.moveTo(penaltyBoxLeft, margin);
-    ctx.lineTo(penaltyBoxLeft, height - margin);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(penaltyBoxRight, margin);
-    ctx.lineTo(penaltyBoxRight, height - margin);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(goalBoxLeft, margin);
-    ctx.lineTo(goalBoxLeft, height - margin);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(goalBoxRight, margin);
-    ctx.lineTo(goalBoxRight, height - margin);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
-
-    // Rysuj strefy jeśli są w klatce
-    if (currentFrameData.zones && currentFrameData.zones.length > 0) {
-      currentFrameData.zones.forEach(zone => {
-        ctx.save();
-        ctx.fillStyle = zone.color || '#3b82f6';
-        ctx.globalAlpha = zone.opacity || 0.3;
-        ctx.strokeStyle = zone.color || '#3b82f6';
-        ctx.lineWidth = 2;
-
-        switch (zone.type) {
-          case 'text':
-            drawTextNote(ctx, zone);
-            break;
-
-          case 'rectangle':
-            ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-            ctx.globalAlpha = 1;
-            ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
-            break;
-          
-          case 'circle':
-            ctx.beginPath();
-            ctx.arc(zone.centerX, zone.centerY, zone.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.stroke();
-            break;
-          
-          case 'polygon':
-            if (zone.points && zone.points.length > 0) {
-              ctx.beginPath();
-              ctx.moveTo(zone.points[0].x, zone.points[0].y);
-              for (let i = 1; i < zone.points.length; i++) {
-                ctx.lineTo(zone.points[i].x, zone.points[i].y);
-              }
-              ctx.closePath();
-              ctx.fill();
-              ctx.globalAlpha = 1;
-              ctx.stroke();
-            }
-            break;
-        }
-        ctx.restore();
-      });
-    }
-
-    // Rysuj linie jeśli są w klatce
-    if (currentFrameData.lines && currentFrameData.lines.length > 0) {
-      currentFrameData.lines.forEach(line => {
-        ctx.save();
-        ctx.strokeStyle = line.color;
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        const dx = line.endX - line.startX;
-        const dy = line.endY - line.startY;
-        const angle = Math.atan2(dy, dx);
-        const arrowSize = 15;
-
-        // Funkcja rysująca grot strzałki
-        const drawArrowHead = (x, y, angle) => {
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(
-            x - arrowSize * Math.cos(angle - Math.PI / 6),
-            y - arrowSize * Math.sin(angle - Math.PI / 6)
-          );
-          ctx.moveTo(x, y);
-          ctx.lineTo(
-            x - arrowSize * Math.cos(angle + Math.PI / 6),
-            y - arrowSize * Math.sin(angle + Math.PI / 6)
-          );
-          ctx.stroke();
-        };
-
-        // Funkcja licząca punkt kontrolny dla krzywej
-        const getControlPoint = () => {
-          if (line.controlX !== undefined && line.controlY !== undefined) {
-            return { x: line.controlX, y: line.controlY };
-          }
-          return {
-            x: (line.startX + line.endX) / 2 + (line.endY - line.startY) * 0.3,
-            y: (line.startY + line.endY) / 2 - (line.endX - line.startX) * 0.3
-          };
-        };
-
-        const drawWavyStraight = () => {
-          const lineLength = Math.hypot(dx, dy);
-          if (lineLength === 0) return;
-
-          const amplitude = 6;
-          const wavelength = 24;
-          const straightTail = Math.min(22, lineLength * 0.35);
-          const fadeTail = Math.min(14, Math.max(6, straightTail * 0.7));
-          const tailStartDistance = Math.max(0, lineLength - straightTail);
-          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
-          const tailStartT = tailStartDistance / lineLength;
-          const segments = Math.max(16, Math.ceil(lineLength / 4));
-          const normalX = -dy / lineLength;
-          const normalY = dx / lineLength;
-
-          ctx.beginPath();
-          for (let i = 0; i <= segments; i++) {
-            const rawT = i / segments;
-            const t = Math.min(rawT, tailStartT);
-            const distance = t * lineLength;
-            const baseX = line.startX + dx * t;
-            const baseY = line.startY + dy * t;
-            const phase = (distance * Math.PI * 2) / wavelength;
-
-            let damping = 1;
-            if (distance >= tailStartDistance) {
-              damping = 0;
-            } else if (distance > fadeStartDistance) {
-              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
-            }
-
-            const offset = Math.sin(phase) * amplitude * damping;
-            const x = baseX + normalX * offset;
-            const y = baseY + normalY * offset;
-
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-
-            if (rawT >= tailStartT) break;
-          }
-
-          const tailStartX = line.startX + dx * tailStartT;
-          const tailStartY = line.startY + dy * tailStartT;
-          ctx.lineTo(tailStartX, tailStartY);
-          ctx.lineTo(line.endX, line.endY);
-          ctx.stroke();
-        };
-
-        const getQuadraticPoint = (t, cp) => {
-          const oneMinusT = 1 - t;
-          return {
-            x: oneMinusT * oneMinusT * line.startX + 2 * oneMinusT * t * cp.x + t * t * line.endX,
-            y: oneMinusT * oneMinusT * line.startY + 2 * oneMinusT * t * cp.y + t * t * line.endY
-          };
-        };
-
-        const getQuadraticTangent = (t, cp) => ({
-          x: 2 * (1 - t) * (cp.x - line.startX) + 2 * t * (line.endX - cp.x),
-          y: 2 * (1 - t) * (cp.y - line.startY) + 2 * t * (line.endY - cp.y)
-        });
-
-        const drawWavyCurve = (cp) => {
-          const arcSamples = 80;
-          const arcPoints = [];
-          let curveLength = 0;
-          let previousPoint = getQuadraticPoint(0, cp);
-          arcPoints.push({ t: 0, distance: 0, point: previousPoint });
-
-          for (let i = 1; i <= arcSamples; i++) {
-            const t = i / arcSamples;
-            const point = getQuadraticPoint(t, cp);
-            curveLength += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
-            arcPoints.push({ t, distance: curveLength, point });
-            previousPoint = point;
-          }
-
-          const getTAtDistance = (targetDistance) => {
-            if (targetDistance <= 0) return 0;
-            if (targetDistance >= curveLength) return 1;
-
-            for (let i = 1; i < arcPoints.length; i++) {
-              const prev = arcPoints[i - 1];
-              const current = arcPoints[i];
-              if (targetDistance <= current.distance) {
-                const segmentDistance = current.distance - prev.distance || 1;
-                const ratio = (targetDistance - prev.distance) / segmentDistance;
-                return prev.t + (current.t - prev.t) * ratio;
-              }
-            }
-            return 1;
-          };
-
-          const amplitude = 6;
-          const wavelength = 24;
-          const straightTail = Math.min(24, curveLength * 0.35);
-          const fadeTail = Math.min(16, Math.max(6, straightTail * 0.7));
-          const tailStartDistance = Math.max(0, curveLength - straightTail);
-          const fadeStartDistance = Math.max(0, tailStartDistance - fadeTail);
-          const tailStartT = getTAtDistance(tailStartDistance);
-          const segments = Math.max(24, Math.ceil(curveLength / 4));
-
-          ctx.beginPath();
-          for (let i = 0; i <= segments; i++) {
-            const rawT = i / segments;
-            const t = Math.min(rawT, tailStartT);
-            const point = getQuadraticPoint(t, cp);
-            const tangent = getQuadraticTangent(t, cp);
-            const tangentLength = Math.hypot(tangent.x, tangent.y) || 1;
-            const normalX = -tangent.y / tangentLength;
-            const normalY = tangent.x / tangentLength;
-            const distance = t * curveLength;
-            const phase = (distance * Math.PI * 2) / wavelength;
-
-            let damping = 1;
-            if (distance >= tailStartDistance) {
-              damping = 0;
-            } else if (distance > fadeStartDistance) {
-              damping = (tailStartDistance - distance) / Math.max(1, tailStartDistance - fadeStartDistance);
-            }
-
-            const offset = Math.sin(phase) * amplitude * damping;
-            const x = point.x + normalX * offset;
-            const y = point.y + normalY * offset;
-
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-
-            if (rawT >= tailStartT) break;
-          }
-
-          const tailPoint = getQuadraticPoint(tailStartT, cp);
-          ctx.lineTo(tailPoint.x, tailPoint.y);
-          ctx.lineTo(line.endX, line.endY);
-          ctx.stroke();
-
-          return Math.atan2(line.endY - tailPoint.y, line.endX - tailPoint.x);
-        };
-
-        switch (line.type) {
-          case 'line-solid':
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            break;
-
-          case 'line-dashed':
-            ctx.setLineDash([10, 5]);
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            break;
-
-          case 'arrow-solid':
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'arrow-dashed':
-            ctx.setLineDash([10, 5]);
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.lineTo(line.endX, line.endY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'arrow-wavy':
-            drawWavyStraight();
-            drawArrowHead(line.endX, line.endY, angle);
-            break;
-
-          case 'double-arrow-solid':
-            const offset = 4;
-            const perpX = -Math.sin(angle) * offset;
-            const perpY = Math.cos(angle) * offset;
-            const arrowGap = 8;
-            const shortenedEndX = line.endX - arrowGap * Math.cos(angle);
-            const shortenedEndY = line.endY - arrowGap * Math.sin(angle);
-            
-            ctx.beginPath();
-            ctx.moveTo(line.startX + perpX, line.startY + perpY);
-            ctx.lineTo(shortenedEndX + perpX, shortenedEndY + perpY);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(line.startX - perpX, line.startY - perpY);
-            ctx.lineTo(shortenedEndX - perpX, shortenedEndY - perpY);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(line.endX, line.endY);
-            ctx.lineTo(
-              line.endX - (arrowSize + 2) * Math.cos(angle - Math.PI / 6),
-              line.endY - (arrowSize + 2) * Math.sin(angle - Math.PI / 6)
-            );
-            ctx.moveTo(line.endX, line.endY);
-            ctx.lineTo(
-              line.endX - (arrowSize + 2) * Math.cos(angle + Math.PI / 6),
-              line.endY - (arrowSize + 2) * Math.sin(angle + Math.PI / 6)
-            );
-            ctx.stroke();
-            break;
-
-          case 'curve-line':
-            const cp1 = getControlPoint();
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.quadraticCurveTo(cp1.x, cp1.y, line.endX, line.endY);
-            ctx.stroke();
-            break;
-
-          case 'curve-arrow-solid':
-            const cp2 = getControlPoint();
-            ctx.beginPath();
-            ctx.moveTo(line.startX, line.startY);
-            ctx.quadraticCurveTo(cp2.x, cp2.y, line.endX, line.endY);
-            ctx.stroke();
-            
-            const t = 0.95;
-            const nearEndX = (1-t)*(1-t)*line.startX + 2*(1-t)*t*cp2.x + t*t*line.endX;
-            const nearEndY = (1-t)*(1-t)*line.startY + 2*(1-t)*t*cp2.y + t*t*line.endY;
-            const curveAngle = Math.atan2(line.endY - nearEndY, line.endX - nearEndX);
-            drawArrowHead(line.endX, line.endY, curveAngle);
-            break;
-
-          case 'curve-arrow-wavy':
-            const cp3 = getControlPoint();
-            const wavyCurveAngle = drawWavyCurve(cp3);
-            drawArrowHead(line.endX, line.endY, wavyCurveAngle);
-            break;
-        }
-
-        ctx.restore();
-      });
-    }
-
-    // Rysuj linie ruchu jeśli mamy następną klatkę
-    if (nextFrameData) {
-      (currentFrameData.team || []).forEach((player, i) => {
-        const target = findMatchingPlayer(nextFrameData.team, player, i);
-        if (target) {
-          ctx.save();
-          ctx.strokeStyle = 'rgba(26, 54, 93, 0.3)';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-          
-          ctx.beginPath();
-          ctx.moveTo(player.x, player.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.stroke();
-          
-          ctx.setLineDash([]);
-          ctx.restore();
-        }
-      });
-
-      (currentFrameData.opponent || []).forEach((player, i) => {
-        const target = findMatchingPlayer(nextFrameData.opponent, player, i);
-        if (target) {
-          ctx.save();
-          ctx.strokeStyle = 'rgba(139, 0, 0, 0.3)';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-          
-          ctx.beginPath();
-          ctx.moveTo(player.x, player.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.stroke();
-          
-          ctx.setLineDash([]);
-          ctx.restore();
-        }
-      });
-    }
-
-    // Interpoluj pozycje zawodników jeśli jest progress
-    let interpolatedData = currentFrameData;
-    if (nextFrameData && progress > 0) {
-      interpolatedData = interpolatePlayers(currentFrameData, nextFrameData, progress);
-    }
-
-    // Rysuj zawodników
-    const playerSizes = { '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 };
-    const playerRadius = playerSizes[format] || 18;
-    const fontSize = Math.floor(playerRadius * 0.65);
-
-    // Drużyna
-    interpolatedData.team.forEach(player => {
-      const playerColor = player.color || tColor;
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(player.rotation || 0);
-      
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 2;
-      
-      ctx.beginPath();
-      ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
-      ctx.fillStyle = playerColor;
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      
-      ctx.shadowColor = 'transparent';
-      
-      // Ręce zawodnika
-      ctx.strokeStyle = playerColor;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      
-      ctx.beginPath();
-      ctx.moveTo(-playerRadius * 0.5, -playerRadius * 0.3);
-      ctx.lineTo(-playerRadius * 1.3, -playerRadius * 0.8);
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.moveTo(playerRadius * 0.5, -playerRadius * 0.3);
-      ctx.lineTo(playerRadius * 1.3, -playerRadius * 0.8);
-      ctx.stroke();
-      
-      ctx.rotate(-(player.rotation || 0));
-      ctx.font = `bold ${fontSize}px Arial`;
-      drawPlayerLabel(ctx, player.number, 0, 0, playerRadius, playerColor);
-      
-      ctx.restore();
-    });
-
-    // Przeciwnik
-    interpolatedData.opponent.forEach(player => {
-      const playerColor = player.color || oColor;
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(player.rotation || 0);
-      
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 2;
-      
-      ctx.beginPath();
-      ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
-      ctx.fillStyle = playerColor;
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      
-      ctx.shadowColor = 'transparent';
-      
-      // Ręce zawodnika
-      ctx.strokeStyle = playerColor;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      
-      ctx.beginPath();
-      ctx.moveTo(-playerRadius * 0.5, -playerRadius * 0.3);
-      ctx.lineTo(-playerRadius * 1.3, -playerRadius * 0.8);
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.moveTo(playerRadius * 0.5, -playerRadius * 0.3);
-      ctx.lineTo(playerRadius * 1.3, -playerRadius * 0.8);
-      ctx.stroke();
-      
-      ctx.rotate(-(player.rotation || 0));
-      ctx.font = `bold ${fontSize}px Arial`;
-      drawPlayerLabel(ctx, player.number, 0, 0, playerRadius, playerColor);
-      
-      ctx.restore();
-    });
-
-    // Piłka z klasycznym wzorem
-    const ballSizes = { '5v5': 11, '7v7': 10, '9v9': 9, '11v11': 8 };
-    const ballRadius = ballSizes[format] || 8;
-    
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
-    ctx.shadowBlur = 6;
-    
-    // Biała podstawa
-    ctx.beginPath();
-    ctx.arc(interpolatedData.ball.x, interpolatedData.ball.y, ballRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    
-    ctx.shadowColor = 'transparent';
-    
-    // Klasyczny wzór piłki - czarne pięciokąty
-    ctx.fillStyle = '#000000';
-    
-    const pentagonRadius = ballRadius * 0.35;
-    ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 2 * Math.PI / 5) - Math.PI / 2;
-      const x = interpolatedData.ball.x + Math.cos(angle) * pentagonRadius;
-      const y = interpolatedData.ball.y + Math.sin(angle) * pentagonRadius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    
-    // Dodatkowe czarne elementy
-    const hexSize = ballRadius * 0.25;
-    const positions = [
-      { angle: 0, distance: ballRadius * 0.7 },
-      { angle: Math.PI * 0.66, distance: ballRadius * 0.7 },
-      { angle: -Math.PI * 0.66, distance: ballRadius * 0.7 }
-    ];
-    
-    positions.forEach(pos => {
-      const centerX = interpolatedData.ball.x + Math.cos(pos.angle) * pos.distance;
-      const centerY = interpolatedData.ball.y + Math.sin(pos.angle) * pos.distance;
-      
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (i * 2 * Math.PI / 6) + pos.angle;
-        const x = centerX + Math.cos(angle) * hexSize;
-        const y = centerY + Math.sin(angle) * hexSize;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fill();
-    });
-    
-    ctx.restore();
   };
 
   // Eksport animacji do MP4
@@ -1944,7 +588,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             const progress = step / framesPerTransition;
             
             // Rysuj klatkę z liniami ruchu
-            drawAnimationFrame(ctx, currentFrameData, nextFrameData, progress, gameFormat, teamColor, opponentColor);
+            renderSchemeFrame(ctx, currentFrameData, nextFrameData, progress, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p) });
             
             // Zapisz klatkę
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1959,7 +603,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           }
         } else {
           // Ostatnia klatka - narysuj ją bez interpolacji
-          drawAnimationFrame(ctx, currentFrameData, null, 0, gameFormat, teamColor, opponentColor);
+          renderSchemeFrame(ctx, currentFrameData, null, 0, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p) });
           
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
           if (!blob) {
@@ -2023,349 +667,154 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   };
 
   // Eksport do PowerPoint
-  const exportToPowerPoint = async (schemeIdFilter = null) => {
-    try {
-      const pres = new PptxGenJs();
-      pres.layout = 'LAYOUT_WIDE';
-      let schemeCount = 0;
-      let processedSchemes = 0;
+  // Każdy schemat = slajd: pasek faz, animacja (MP4 z okładką = 1. klatka) albo obraz, nazwa i sformatowany komentarz.
+  const schemeImage = (frame, tColor, oColor, scale = 2) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = SCHEME_W * scale;
+    canvas.height = SCHEME_H * scale;
+    renderSchemeFrame(canvas.getContext('2d'), frame, null, 0,
+      { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p) });
+    return canvas.toDataURL('image/png');
+  };
 
-      const slideWidth = 13.333;
-      const slideHeight = 7.5;
-      const marginX = 0.4;
-      const topRowY = 0.2;
-      const topRowH = 0.35;
-      const rowGap = 0.1;
-      const subRowY = topRowY + topRowH + rowGap;
-      const subRowH = 0.32;
-      const contentTop = subRowY + subRowH + 0.3;
-      const contentBottom = 0.4;
-      const contentHeight = slideHeight - contentTop - contentBottom;
-      const leftPanelW = 6.2;
-      const panelGap = 0.4;
-      const rightPanelX = marginX + leftPanelW + panelGap;
-      const rightPanelW = slideWidth - rightPanelX - marginX;
-
-      const phaseKeys = Object.keys(phases);
-      const phaseGap = 0.18;
-      const phaseCellW = (slideWidth - (2 * marginX) - (phaseKeys.length - 1) * phaseGap) / phaseKeys.length;
-      const activeFill = '8BC34A';
-      const inactiveFill = 'FFFFFF';
-      const borderColor = '1F2937';
-      
-      // Najpierw policz ile będzie schematów
-      Object.keys(schemes[gameFormat]).forEach(key => {
-        const list = schemes[gameFormat][key];
-        schemeCount += schemeIdFilter ? list.filter(s => schemeIdFilter.has(s.id)).length : list.length;
-      });
-
-      if (schemeCount === 0) {
-        alert('Brak schematów do eksportu!');
-        return;
-      }
-      
-      // Przejdź przez wszystkie schematy w kolejności faz i subfaz
-      for (const phase of phaseKeys) {
-        const subPhases = phases[phase] || [];
-        
-        // Jeśli faza ma subfazy
-        if (subPhases.length > 0) {
-          for (const subPhase of subPhases) {
-            const key = `${phase}-${subPhase}`;
-            const schemeList = (schemes[gameFormat][key] || []).filter(s => !schemeIdFilter || schemeIdFilter.has(s.id));
-
-            for (const scheme of schemeList) {
-              processedSchemes++;
-
-              // Dodaj slajd
-              const slide = pres.addSlide();
-
-              phaseKeys.forEach((phaseKey, idx) => {
-                const phaseX = marginX + idx * (phaseCellW + phaseGap);
-                const isActivePhase = phaseKey === phase;
-
-                slide.addText(phaseKey, {
-                  x: phaseX,
-                  y: topRowY,
-                  w: phaseCellW,
-                  h: topRowH,
-                  fontSize: 14,
-                  bold: true,
-                  align: 'center',
-                  valign: 'mid',
-                  color: '0F172A',
-                  fill: { color: isActivePhase ? activeFill : inactiveFill },
-                  line: { color: borderColor, width: 1 }
-                });
-              });
-
-              // Wyświetl subfazy tylko dla wybranej fazy, na całej szerokości
-              const selectedPhaseSubfases = phases[phase] || [];
-              if (selectedPhaseSubfases.length > 0) {
-                const subGap = 0.08;
-                const subCellW = (slideWidth - (2 * marginX) - (selectedPhaseSubfases.length - 1) * subGap) / selectedPhaseSubfases.length;
-
-                selectedPhaseSubfases.forEach((subPhaseKey, subIdx) => {
-                  const subX = marginX + subIdx * (subCellW + subGap);
-                  const isActiveSub = subPhaseKey === subPhase;
-
-                  slide.addText(subPhaseKey, {
-                    x: subX,
-                    y: subRowY,
-                    w: subCellW,
-                    h: subRowH,
-                    fontSize: 11,
-                    bold: true,
-                    align: 'center',
-                    valign: 'mid',
-                    color: '0F172A',
-                    fill: { color: isActiveSub ? activeFill : inactiveFill },
-                    line: { color: borderColor, width: 1 }
-                  });
-                });
-              }
-              
-              // Lewy panel - animacja jak w "Pobierz animacje" lub klatka 1
-              const schemeTeamColor = scheme.teamColor || teamColor;
-              const schemeOpponentColor = scheme.opponentColor || opponentColor;
-          const leftPanelX = marginX;
-          const leftTitleH = 0.35;
-          const leftMediaY = contentTop + leftTitleH + 0.15;
-          const leftMediaH = contentHeight - leftTitleH - 0.15;
-
-          slide.addText('Animacja', {
-            x: leftPanelX,
-            y: contentTop,
-            w: leftPanelW,
-            h: leftTitleH,
-            fontSize: 18,
-            bold: true,
-            color: '111827'
-          });
-
-          try {
-            const mp4DataUrl = await generateAnimatedMp4FromFrames(
-              scheme.frames,
-              gameFormat,
-              schemeTeamColor,
-              schemeOpponentColor
-            );
-            slide.addMedia({
-              type: 'video',
-              data: mp4DataUrl,
-              x: leftPanelX,
-              y: leftMediaY,
-              w: leftPanelW,
-              h: leftMediaH
-            });
-          } catch (mp4Error) {
-            console.warn('Błąd przy tworzeniu MP4, używam klatki 1', mp4Error);
-
-            if (scheme.frames.length > 0) {
-              const imageDataUrl = (() => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 700;
-                canvas.height = 1080;
-                const ctx = canvas.getContext('2d');
-                drawFrameToCanvas(scheme.frames[0], gameFormat, canvas, ctx, schemeTeamColor, schemeOpponentColor);
-                return canvas.toDataURL('image/png');
-              })();
-
-              slide.addImage({
-                data: imageDataUrl,
-                x: leftPanelX,
-                y: leftMediaY,
-                w: leftPanelW,
-                h: leftMediaH,
-                border: { pt: 1, color: '9CA3AF' }
-              });
-            }
-          }
-
-          // Prawy panel - nazwa schematu i komentarze
-          const schemeName = scheme.name || 'Schemat bez nazwy';
-          slide.addText(schemeName, {
-            x: rightPanelX,
-            y: contentTop,
-            w: rightPanelW,
-            h: 0.6,
-            fontSize: 26,
-            bold: true,
-            color: '111827'
-          });
-
-          const commentLabelY = contentTop + 0.85;
-          slide.addText('Komentarze/Zadania', {
-            x: rightPanelX,
-            y: commentLabelY,
-            w: rightPanelW,
-            h: 0.35,
-            fontSize: 14,
-            bold: true,
-            color: '1f2937'
-          });
-          
-          // Usuń tagi HTML z komentarza
-          const plainComments = scheme.comments
-            .replace(/<[^>]*>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .trim();
-
-          slide.addText(plainComments || '(brak komentarza)', {
-            x: rightPanelX,
-            y: commentLabelY + 0.4,
-            w: rightPanelW,
-            h: slideHeight - (commentLabelY + 0.4) - contentBottom,
-            fontSize: 12,
-            color: '374151',
-            valign: 'top',
-            wrap: true
-          });
-            }
-          }
-        } else {
-          // Faza bez subfaz
-          const key = phase;
-          const schemeList = (schemes[gameFormat][key] || []).filter(s => !schemeIdFilter || schemeIdFilter.has(s.id));
-
-          for (const scheme of schemeList) {
-            processedSchemes++;
-
-            // Dodaj slajd
-            const slide = pres.addSlide();
-
-            phaseKeys.forEach((phaseKey, idx) => {
-              const phaseX = marginX + idx * (phaseCellW + phaseGap);
-              const isActivePhase = phaseKey === phase;
-
-              slide.addText(phaseKey, {
-                x: phaseX,
-                y: topRowY,
-                w: phaseCellW,
-                h: topRowH,
-                fontSize: 14,
-                bold: true,
-                align: 'center',
-                valign: 'mid',
-                color: '0F172A',
-                fill: { color: isActivePhase ? activeFill : inactiveFill },
-                line: { color: borderColor, width: 1 }
-              });
-            });
-
-            // Lewy panel - animacja
-            const schemeTeamColor = scheme.teamColor || teamColor;
-            const schemeOpponentColor = scheme.opponentColor || opponentColor;
-            const leftPanelX = marginX;
-            const leftTitleH = 0.35;
-            const leftMediaY = contentTop + leftTitleH + 0.15;
-            const leftMediaH = contentHeight - leftTitleH - 0.15;
-
-            slide.addText('Animacja', {
-              x: leftPanelX,
-              y: contentTop,
-              w: leftPanelW,
-              h: leftTitleH,
-              fontSize: 18,
-              bold: true,
-              color: '111827'
-            });
-
-            try {
-              const mp4DataUrl = await generateAnimatedMp4FromFrames(
-                scheme.frames,
-                gameFormat,
-                schemeTeamColor,
-                schemeOpponentColor
-              );
-              slide.addMedia({
-                type: 'video',
-                data: mp4DataUrl,
-                x: leftPanelX,
-                y: leftMediaY,
-                w: leftPanelW,
-                h: leftMediaH
-              });
-            } catch (mp4Error) {
-              console.warn('Błąd przy tworzeniu MP4, używam klatki 1', mp4Error);
-
-              if (scheme.frames.length > 0) {
-                const imageDataUrl = (() => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = 700;
-                  canvas.height = 1080;
-                  const ctx = canvas.getContext('2d');
-                  drawFrameToCanvas(scheme.frames[0], gameFormat, canvas, ctx, schemeTeamColor, schemeOpponentColor);
-                  return canvas.toDataURL('image/png');
-                })();
-
-                slide.addImage({
-                  data: imageDataUrl,
-                  x: leftPanelX,
-                  y: leftMediaY,
-                  w: leftPanelW,
-                  h: leftMediaH,
-                  border: { pt: 1, color: '9CA3AF' }
-                });
-              }
-            }
-
-            // Prawy panel - nazwa schematu i komentarze
-            const schemeName = scheme.name || 'Schemat bez nazwy';
-            slide.addText(schemeName, {
-              x: rightPanelX,
-              y: contentTop,
-              w: rightPanelW,
-              h: 0.6,
-              fontSize: 26,
-              bold: true,
-              color: '111827'
-            });
-
-            const commentLabelY = contentTop + 0.85;
-            slide.addText('Komentarze/Zadania', {
-              x: rightPanelX,
-              y: commentLabelY,
-              w: rightPanelW,
-              h: 0.35,
-              fontSize: 14,
-              bold: true,
-              color: '1f2937'
-            });
-            
-            // Usuń tagi HTML z komentarza
-            const plainComments = scheme.comments
-              .replace(/<[^>]*>/g, '')
-              .replace(/&nbsp;/g, ' ')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .trim();
-
-            slide.addText(plainComments || '(brak komentarza)', {
-              x: rightPanelX,
-              y: commentLabelY + 0.4,
-              w: rightPanelW,
-              h: slideHeight - (commentLabelY + 0.4) - contentBottom,
-              fontSize: 12,
-              color: '374151',
-              valign: 'top',
-              wrap: true
-            });
-          }
+  // MP4 of a whole scheme drawn exactly like the editor; holds the first and last frame for a moment.
+  const schemeMp4 = async (frames, tColor, oColor) => {
+    const ffmpeg = await ensureFfmpegLoaded();
+    const scale = 1.5; // 1050×1620 – sharp on a slide, even dimensions for H.264
+    const canvas = document.createElement('canvas');
+    canvas.width = SCHEME_W * scale;
+    canvas.height = SCHEME_H * scale;
+    const ctx = canvas.getContext('2d');
+    const opts = { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p) };
+    const files = [];
+    const push = async () => {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Nie można wygenerować klatki');
+      const name = `ppt_${String(files.length).padStart(4, '0')}.png`;
+      await ffmpeg.writeFile(name, new Uint8Array(await blob.arrayBuffer()));
+      files.push(name);
+    };
+    const fps = 20, hold = 10, transition = 20;
+    for (let i = 0; i < frames.length; i++) {
+      renderSchemeFrame(ctx, frames[i], null, 0, opts);
+      for (let k = 0; k < hold; k++) await push();
+      if (i < frames.length - 1) {
+        for (let step = 1; step < transition; step++) {
+          const t = step / transition;
+          renderSchemeFrame(ctx, frames[i], frames[i + 1], t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, opts);
+          await push();
         }
       }
-      
-      // Pobierz plik
-      pres.writeFile({
-        fileName: `Taktyka-${gameFormat}-${new Date().toISOString().split('T')[0]}`
+    }
+    const out = `ppt_${Date.now()}.mp4`;
+    try {
+      await ffmpeg.exec(['-framerate', String(fps), '-i', 'ppt_%04d.png', '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
+    } catch {
+      await ffmpeg.exec(['-framerate', String(fps), '-i', 'ppt_%04d.png', '-c:v', 'mpeg4', '-q:v', '2', '-pix_fmt', 'yuv420p', out]);
+    }
+    const data = await ffmpeg.readFile(out);
+    await Promise.all([...files.map(f => ffmpeg.deleteFile(f)), ffmpeg.deleteFile(out)]);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Błąd odczytu MP4'));
+      reader.readAsDataURL(new Blob([data.buffer], { type: 'video/mp4' }));
+    });
+  };
+
+  const exportToPowerPoint = async (schemeIdFilter = null) => {
+    const list = [];
+    Object.keys(phases).forEach(phase => {
+      const subs = phases[phase] || [];
+      (subs.length ? subs.map(sub => [`${phase}-${sub}`, phase, sub]) : [[phase, phase, null]]).forEach(([key, ph, sub]) => {
+        (schemes[gameFormat][key] || []).filter(sc => !schemeIdFilter || schemeIdFilter.has(sc.id)).forEach(scheme => list.push({ scheme, phase: ph, sub }));
       });
-      
-      alert(`Eksportowano ${processedSchemes} schematów do PowerPoint!`);
+    });
+    if (!list.length) {
+      setPptProgress({ status: 'error', done: 0, total: 0, text: 'Zaznacz co najmniej jeden schemat do eksportu.' });
+      return;
+    }
+    const tick = () => new Promise(r => setTimeout(r, 0)); // let the progress window repaint
+
+    try {
+      setPptProgress({ status: 'working', done: 0, total: list.length, label: 'Przygotowuję prezentację…' });
+      await tick();
+      const pres = new PptxGenJs();
+      pres.layout = 'LAYOUT_WIDE';
+
+      const slideW = 13.333, slideH = 7.5, marginX = 0.4;
+      const topRowY = 0.2, topRowH = 0.35, subRowY = 0.65, subRowH = 0.32;
+      const contentTop = 1.3, contentBottom = 0.35;
+      const mediaTitleH = 0.35;
+      const mediaY = contentTop + mediaTitleH + 0.1;
+      const mediaH = slideH - mediaY - contentBottom;
+      const mediaW = mediaH * SCHEME_W / SCHEME_H; // keep the pitch proportions – no stretching
+      const rightX = marginX + mediaW + 0.5;
+      const rightW = slideW - rightX - marginX;
+      const phaseKeys = Object.keys(phases);
+      const activeFill = '8BC34A', inactiveFill = 'FFFFFF', borderColor = '1F2937';
+
+      for (let i = 0; i < list.length; i++) {
+        const { scheme, phase, sub } = list[i];
+        const name = scheme.name || 'Schemat bez nazwy';
+        setPptProgress({ status: 'working', done: i, total: list.length, label: `Slajd ${i + 1} z ${list.length}: ${name}` });
+        await tick();
+
+        const slide = pres.addSlide();
+        const phaseGap = 0.18;
+        const phaseW = (slideW - 2 * marginX - (phaseKeys.length - 1) * phaseGap) / phaseKeys.length;
+        phaseKeys.forEach((key, idx) => slide.addText(key, {
+          x: marginX + idx * (phaseW + phaseGap), y: topRowY, w: phaseW, h: topRowH, fontSize: 13, bold: true, align: 'center', valign: 'mid',
+          color: '0F172A', fill: { color: key === phase ? activeFill : inactiveFill }, line: { color: borderColor, width: 1 },
+        }));
+        const subs = phases[phase] || [];
+        if (subs.length) {
+          const subGap = 0.08;
+          const subW = (slideW - 2 * marginX - (subs.length - 1) * subGap) / subs.length;
+          subs.forEach((key, idx) => slide.addText(key, {
+            x: marginX + idx * (subW + subGap), y: subRowY, w: subW, h: subRowH, fontSize: 11, bold: true, align: 'center', valign: 'mid',
+            color: '0F172A', fill: { color: key === sub ? activeFill : inactiveFill }, line: { color: borderColor, width: 1 },
+          }));
+        }
+
+        const tColor = scheme.teamColor || teamColor;
+        const oColor = scheme.opponentColor || opponentColor;
+        const cover = schemeImage(scheme.frames[0], tColor, oColor);
+        const animated = scheme.frames.length > 1;
+        slide.addText(animated ? `Animacja (${scheme.frames.length} klatki – kliknij, aby odtworzyć)` : 'Ustawienie', {
+          x: marginX, y: contentTop, w: mediaW + 2, h: mediaTitleH, fontSize: 14, bold: true, color: '111827',
+        });
+        let placed = false;
+        if (animated) {
+          try {
+            setPptProgress({ status: 'working', done: i, total: list.length, label: `Slajd ${i + 1} z ${list.length}: ${name} – nagrywam animację…` });
+            await tick();
+            const mp4 = await schemeMp4(scheme.frames, tColor, oColor);
+            slide.addMedia({ type: 'video', data: mp4, cover, x: marginX, y: mediaY, w: mediaW, h: mediaH });
+            placed = true;
+          } catch (mp4Error) {
+            console.warn('[PPT] animacja niedostępna, wstawiam 1. klatkę', mp4Error);
+          }
+        }
+        if (!placed) slide.addImage({ data: cover, x: marginX, y: mediaY, w: mediaW, h: mediaH, line: { color: '9CA3AF', width: 1 } });
+
+        slide.addText(name, { x: rightX, y: contentTop, w: rightW, h: 0.7, fontSize: 24, bold: true, color: '111827', valign: 'top' });
+        slide.addText('Komentarze / zadania', { x: rightX, y: contentTop + 0.8, w: rightW, h: 0.35, fontSize: 13, bold: true, color: '1F2937' });
+        const lines = htmlToLines(scheme.comments || '');
+        const fontSize = commentFontSize(lines);
+        slide.addText(lines.length ? htmlToPptRuns(scheme.comments, { fontSize }) : [{ text: '(brak komentarza)', options: { fontSize, color: '9CA3AF' } }], {
+          x: rightX, y: contentTop + 1.2, w: rightW, h: slideH - (contentTop + 1.2) - contentBottom, valign: 'top', fit: 'shrink',
+        });
+      }
+
+      setPptProgress({ status: 'working', done: list.length, total: list.length, label: 'Zapisuję plik…' });
+      await tick();
+      const fileName = `PlanGry-Taktyka-${gameFormat}-${new Date().toISOString().split('T')[0]}`;
+      await pres.writeFile({ fileName });
+      setPptProgress({ status: 'done', done: list.length, total: list.length, text: `Gotowe: ${list.length} ${list.length === 1 ? 'slajd' : 'slajdów'} w pliku ${fileName}.pptx (sprawdź folder Pobrane).` });
     } catch (error) {
       console.error('Błąd podczas eksportu PowerPoint:', error);
-      setErrorMessage('Błąd eksportu PowerPoint: ' + error.message);
+      setPptProgress({ status: 'error', done: 0, total: list.length, text: `Nie udało się utworzyć prezentacji: ${error.message}` });
     }
   };
 
@@ -4401,6 +2850,31 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   return (
     <>
       <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />
+      {pptProgress && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="ppt-progress-title">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl text-slate-100">
+            <h2 id="ppt-progress-title" className="text-lg font-semibold mb-3">
+              {pptProgress.status === 'working' ? 'Tworzę prezentację PowerPoint…' : pptProgress.status === 'done' ? 'Prezentacja gotowa' : 'Eksport PowerPoint'}
+            </h2>
+            {pptProgress.status === 'working' ? (
+              <>
+                <div className="h-2.5 rounded-full bg-white/10 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={pptProgress.total} aria-valuenow={pptProgress.done}>
+                  <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${pptProgress.total ? Math.max(4, (pptProgress.done / pptProgress.total) * 100) : 4}%` }} />
+                </div>
+                <p className="mt-3 text-sm text-slate-300" aria-live="polite">{pptProgress.label}</p>
+                <p className="mt-1 text-xs text-slate-400">Animacje są nagrywane w przeglądarce – to może potrwać kilka sekund na schemat. Nie zamykaj karty.</p>
+              </>
+            ) : (
+              <>
+                <p className={`text-sm ${pptProgress.status === 'error' ? 'text-red-300' : 'text-slate-300'}`} aria-live="polite">{pptProgress.text}</p>
+                <div className="mt-4 flex justify-end">
+                  <button type="button" autoFocus onClick={() => setPptProgress(null)} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-medium">OK</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {textEditor && (
         <input
           autoFocus
@@ -5154,7 +3628,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   setPptSelectionMode(false);
                   setSelectedSchemesForPpt(new Set());
                 }}
-                disabled={selectedSchemesForPpt.size === 0}
+                disabled={selectedSchemesForPpt.size === 0 || pptProgress?.status === 'working'}
                 className="flex-1 px-4 py-2 bg-red-600/40 hover:bg-red-600/60 border border-red-500/60 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Pobierz zaznaczone schematy jako PPT"
               >

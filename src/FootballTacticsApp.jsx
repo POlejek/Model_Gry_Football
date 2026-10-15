@@ -4921,7 +4921,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   {phases[phase].map(subPhase => (
                     <div 
                       key={subPhase} 
-                      className="flex items-center gap-2"
+                      className="flex flex-wrap items-center gap-2"
                       draggable={editingSubPhase !== `${phase}-${subPhase}`}
                       onDragStart={(e) => handleSubPhaseDragStart(e, phase, subPhase)}
                       onDragOver={handleSubPhaseDragOver}
@@ -4979,7 +4979,8 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                                 }
                               }
                             }}
-                            className={`flex-1 px-3 py-2 rounded-lg text-left text-sm transition-all ${
+                            title={subPhase}
+                            className={`flex-1 min-w-0 px-3 py-2 rounded-lg text-left text-sm transition-all ${
                               selectedSubPhase === subPhase && selectedPhase === phase
                                 ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
                                 : 'bg-white/5 hover:bg-white/10 text-slate-300'
@@ -4997,7 +4998,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                           </button>
                           <button
                             onClick={() => deleteSubPhase(phase, subPhase)}
-                            className="p-2 bg-red-600/30 hover:bg-red-600/50 rounded-lg transition-all"
+                            className="flex-shrink-0 p-2 bg-red-600/30 hover:bg-red-600/50 rounded-lg transition-all"
                             title="Usuń subfazę"
                           >
                             <Trash2 size={14} />
@@ -5007,7 +5008,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                       
                       {/* Schematy dla tej subfazy */}
                       {selectedPhase === phase && selectedSubPhase === subPhase && (
-                        <div className="ml-6 mt-2 space-y-2">
+                        <div className="basis-full ml-4 mb-1 space-y-1.5">
                           {schemes[gameFormat][`${phase}-${subPhase}`]?.map(scheme => (
                             <div
                               key={scheme.id}
@@ -5043,13 +5044,13 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                                   </label>
                                 ) : (
                                   <>
-                                    <span className="font-medium text-xs">{scheme.name}</span>
+                                    <span className="min-w-0 break-words font-medium text-xs leading-snug">{scheme.name}</span>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         deleteScheme(scheme.id, `${phase}-${subPhase}`);
                                       }}
-                                      className="text-red-400 hover:text-red-300 transition-colors"
+                                      className="flex-shrink-0 ml-2 text-red-400 hover:text-red-300 transition-colors" title="Usuń schemat" aria-label="Usuń schemat"
                                     >
                                       <Trash2 size={12} />
                                     </button>
@@ -5103,13 +5104,13 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                           </label>
                         ) : (
                           <>
-                            <span className="font-medium text-xs">{scheme.name}</span>
+                            <span className="min-w-0 break-words font-medium text-xs leading-snug">{scheme.name}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deleteScheme(scheme.id, phase);
                               }}
-                              className="text-red-400 hover:text-red-300 transition-colors"
+                              className="flex-shrink-0 ml-2 text-red-400 hover:text-red-300 transition-colors" title="Usuń schemat" aria-label="Usuń schemat"
                             >
                               <Trash2 size={12} />
                             </button>

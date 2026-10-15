@@ -535,6 +535,20 @@ export function renderDrillImage(drill, scale = 0.5) {
   return canvas.toDataURL('image/png');
 }
 
+// Library thumbnails: rendered once per drill version and scale (null where canvas is unavailable, e.g. tests).
+const thumbCache = new Map();
+function drillThumb(drill, scale) {
+  const key = `${drill.id}|${drill.updatedAt}|${scale}`;
+  if (!thumbCache.has(key)) {
+    let url = null;
+    try { url = renderDrillImage(drill, scale); } catch { url = null; }
+    thumbCache.set(key, url);
+  }
+  return thumbCache.get(key);
+}
+
+const isDesktop = () => typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)').matches;
+
 export default function TrainingDrillApp({ active = true, squad = [], openDrillRequest = null }) {
   const [initial] = useState(loadDraft);
 
@@ -598,6 +612,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const [savedDrills, setSavedDrills] = useState(readLibrary);
   useEffect(() => { if (active) setSavedDrills(readLibrary()); }, [active]);
   const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryPreviewId, setLibraryPreviewId] = useState(null);
+  const [rightTab, setRightTab] = useState('opis');
+  const hasSelection = selectedIds.length > 0;
+  // Selecting something on the pitch shows its properties; the description stays one click away.
+  useEffect(() => { if (hasSelection) setRightTab('ustawienia'); }, [hasSelection]);
   const [libraryPhase, setLibraryPhase] = useState('');
   const [hoverCursor, setHoverCursor] = useState('default');
   const [savedSig, setSavedSig] = useState(() => {
@@ -1518,7 +1537,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             <button onClick={() => setShowLibrary(true)} className={`${btn} inline-flex items-center justify-center gap-1`} title="Zapisane ćwiczenia">
               <FolderOpen size={13} /> Biblioteka
             </button>
-            <button onClick={() => setShowMeta(true)} className={`${btn} inline-flex items-center justify-center gap-1`} title="Cel, organizacja, punkty trenerskie…">
+            <button onClick={() => (isDesktop() ? setRightTab('opis') : setShowMeta(true))} className={`${btn} inline-flex items-center justify-center gap-1`} title="Cel, organizacja, punkty trenerskie…">
               <FileText size={13} /> Opis
             </button>
           </div>
@@ -1544,6 +1563,58 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
       </div>
     </div>
   ));
+
+  // Drill description fields: shared by the desktop side panel (compact) and the phone/tablet dialog.
+  const renderMetaFields = (compact) => {
+    const half = compact ? 'col-span-1' : '';
+    return (
+      <>
+              <label className={`text-xs text-slate-400 ${half}`}>Kategoria
+                <select value={meta.category} onChange={e => setMeta(m => ({ ...m, category: e.target.value }))} className={`${inputCls} mt-1`}>
+                  <option value="" className="bg-slate-800">—</option>
+                  {meta.category && !CATEGORIES.includes(meta.category) && <option value={meta.category} className="bg-slate-800">{meta.category}</option>}
+                  {CATEGORIES.map(c => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
+                </select>
+              </label>
+              <label className={`text-xs text-slate-400 ${half}`}>Czas (min)
+                <input type="number" min={1} value={meta.duration} onChange={e => setMeta(m => ({ ...m, duration: e.target.value }))} className={`${inputCls} mt-1`} />
+              </label>
+              <label className={`text-xs text-slate-400 ${half}`}>Liczba zawodników
+                <input type="text" value={meta.players} placeholder="np. 8 (4v4)" onChange={e => setMeta(m => ({ ...m, players: e.target.value }))} className={`${inputCls} mt-1`} />
+              </label>
+              <label className={`text-xs text-slate-400 ${half}`}>Wymiary pola
+                <input type="text" value={meta.area}
+                  placeholder={pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : 'np. 30×20 m'}
+                  onChange={e => setMeta(m => ({ ...m, area: e.target.value }))} className={`${inputCls} mt-1`} />
+              </label>
+              <div className="col-span-2 text-xs text-slate-400">
+                Faza modelu gry <span className="text-slate-500">— które fazy z zakładki Taktyka trenuje to ćwiczenie</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {modelPhaseOptions.map(o => {
+                    const on = (meta.phases || []).includes(o.key);
+                    return (
+                      <button key={o.key} type="button" aria-pressed={on}
+                        onClick={() => setMeta(m => ({ ...m, phases: on ? (m.phases || []).filter(k => k !== o.key) : [...(m.phases || []), o.key] }))}
+                        className={`px-2 py-1 rounded-md text-xs transition-colors ${on ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {META_FIELDS.map(([key, label, placeholder]) => (
+                <label key={key} className="col-span-2 text-xs text-slate-400">{label}
+                  <textarea value={meta[key]} rows={compact ? 4 : 3} placeholder={placeholder}
+                    onChange={e => setMeta(m => ({ ...m, [key]: e.target.value }))}
+                    className={`${inputCls} mt-1 resize-y`} />
+                </label>
+              ))}
+              {equipmentSummary(frames) && (
+                <p className="col-span-2 text-xs text-slate-400">Sprzęt (automatycznie): <span className="text-slate-300">{equipmentSummary(frames)}</span></p>
+              )}
+      </>
+    );
+  };
 
   const renderInspector = (withTitle = true) => (
     <>
@@ -2011,9 +2082,22 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
       </main>
 
       {/* ── Right: inspector (desktop) ── */}
-      <aside className="hidden lg:flex w-52 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col min-h-0">
+      <aside className="hidden lg:flex w-60 min-[1440px]:w-80 flex-shrink-0 bg-slate-950/80 border-l border-white/10 flex flex-col min-h-0">
+        <div role="tablist" aria-label="Panel ćwiczenia" className="flex gap-1 p-2 border-b border-white/10">
+          {[['opis', 'Opis ćwiczenia'], ['ustawienia', hasSelection ? 'Właściwości' : 'Boisko i kolory']].map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={rightTab === id} onClick={() => setRightTab(id)}
+              className={`flex-1 h-8 rounded-md text-xs font-medium transition-colors ${rightTab === id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
-          {renderInspector()}
+          {rightTab === 'opis' ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">{renderMetaFields(true)}</div>
+              <button onClick={exportCard} className={`${btn} inline-flex items-center justify-center gap-1.5`}><FileText size={13} /> Pobierz kartę PNG</button>
+            </>
+          ) : renderInspector(false)}
         </div>
         {renderFrameFooter()}
       </aside>
@@ -2058,65 +2142,106 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
       )}
 
       {/* ── Library modal ── */}
-      {showLibrary && (
+      {showLibrary && (() => {
+        const framesLabel = (n) => (n === 1 ? '1 klatka' : `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'klatki' : 'klatek'}`);
+        const preview = filteredDrills.find(d => d.id === libraryPreviewId) || filteredDrills.find(d => d.id === currentDrillId) || filteredDrills[0];
+        const facts = (d) => [d.meta?.category, d.meta?.duration && `${d.meta.duration} min`, d.meta?.players && `${d.meta.players} zaw.`, d.meta?.area].filter(Boolean);
+        return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowLibrary(false)}>
           <div role="dialog" aria-modal="true" aria-label="Biblioteka ćwiczeń"
-            className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col"
+            className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-xl lg:max-w-7xl max-h-[92vh] lg:h-[92vh] flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
               <h2 className="text-lg font-semibold text-white">Biblioteka ćwiczeń <span className="text-sm font-normal text-slate-400">({savedDrills.length})</span></h2>
               <button onClick={() => setShowLibrary(false)} className="p-1 text-slate-400 hover:text-white" aria-label="Zamknij"><X size={18} /></button>
             </div>
-            <div className="px-5 pt-3 relative">
-              <Search size={14} className="absolute left-7 top-1/2 mt-1.5 -translate-y-1/2 text-slate-500" />
-              <input autoFocus type="search" value={librarySearch} onChange={e => setLibrarySearch(e.target.value)}
-                placeholder="Szukaj po nazwie, kategorii lub fazie…" className={`${inputCls} pl-8`} />
-            </div>
-            <div className="px-5 pt-2">
-              <select value={libraryPhase} onChange={e => setLibraryPhase(e.target.value)} aria-label="Filtruj po fazie modelu gry" className={inputCls}>
+            <div className="px-5 pt-3 flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input autoFocus type="search" value={librarySearch} onChange={e => setLibrarySearch(e.target.value)}
+                  placeholder="Szukaj po nazwie, kategorii lub fazie…" className={`${inputCls} pl-8`} />
+              </div>
+              <select value={libraryPhase} onChange={e => setLibraryPhase(e.target.value)} aria-label="Filtruj po fazie modelu gry" className={`${inputCls} sm:w-72`}>
                 <option value="" className="bg-slate-800">Wszystkie fazy modelu gry</option>
                 {modelPhaseOptions.map(o => <option key={o.key} value={o.key} className="bg-slate-800">{o.label}</option>)}
               </select>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-              {savedDrills.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-10">
-                  Biblioteka jest pusta.<br />
-                  <span className="text-slate-500">Zapisz bieżące ćwiczenie przyciskiem „Zapisz” albo zaimportuj pliki.</span>
-                </p>
-              )}
-              {savedDrills.length > 0 && filteredDrills.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-10">Brak ćwiczeń pasujących do „{librarySearch}”.</p>
-              )}
-              {filteredDrills.map(d => {
-                const isCurrent = d.id === currentDrillId;
-                const n = d.frames?.length || 1;
-                const framesLabel = n === 1 ? '1 klatka' : `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'klatki' : 'klatek'}`;
-                return (
-                  <div key={d.id}
-                    className={`flex items-center gap-2 rounded-lg px-2 py-2 ${isCurrent ? 'bg-blue-600/15 ring-1 ring-blue-500/50' : 'hover:bg-white/5'}`}>
-                    <button onClick={() => openDrill(d)} className="flex-1 min-w-0 text-left">
-                      <p className="text-sm text-slate-100 truncate">
-                        {d.name}
-                        {isCurrent && <span className="ml-2 text-[10px] uppercase tracking-wide text-blue-300">otwarte</span>}
-                      </p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {[d.meta?.category, framesLabel, new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })].filter(Boolean).join(' · ')}
-                      </p>
-                      <p className="flex flex-wrap gap-1 mt-0.5">
-                        {(d.meta?.phases || []).map(k => (
-                          <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px]">{phaseLabel(k, modelPhaseOptions)}</span>
-                        ))}
-                      </p>
-                    </button>
-                    <button onClick={() => openDrill(d)} className={btn}>Otwórz</button>
-                    <button onClick={() => deleteDrill(d.id)} title="Usuń z biblioteki" aria-label={`Usuń ${d.name}`}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+            <div className="flex-1 min-h-0 flex">
+              <div className="flex-1 min-w-0 overflow-y-auto px-3 py-3">
+                {savedDrills.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-10">
+                    Biblioteka jest pusta.<br />
+                    <span className="text-slate-500">Zapisz bieżące ćwiczenie przyciskiem „Zapisz” albo zaimportuj pliki.</span>
+                  </p>
+                )}
+                {savedDrills.length > 0 && filteredDrills.length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-10">Brak ćwiczeń pasujących do „{librarySearch}”.</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {filteredDrills.map(d => {
+                    const isCurrent = d.id === currentDrillId;
+                    const isPreview = preview && d.id === preview.id;
+                    const thumb = drillThumb(d, 0.32);
+                    return (
+                      <div key={d.id}
+                        onMouseEnter={() => setLibraryPreviewId(d.id)} onFocus={() => setLibraryPreviewId(d.id)}
+                        className={`group flex flex-col rounded-xl border transition-colors ${isCurrent ? 'border-blue-500/60 bg-blue-600/10'
+                          : isPreview ? 'border-white/30 bg-white/[0.06]' : 'border-white/10 bg-white/[0.03] hover:border-white/25'}`}>
+                        <button onClick={() => openDrill(d)} className="text-left flex flex-col min-w-0" aria-label={`${d.name} – wczytaj do edytora`}>
+                          <div className="aspect-[16/10] rounded-t-xl bg-slate-800/80 overflow-hidden flex items-center justify-center">
+                            {thumb
+                              ? <img src={thumb} alt="" className="max-w-full max-h-full object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
+                              : <span className="text-xs text-slate-500">brak podglądu</span>}
+                          </div>
+                          <div className="px-3 pt-2">
+                            <p className="text-sm text-slate-100 leading-snug line-clamp-2">
+                              {d.name}
+                              {isCurrent && <span className="ml-2 text-[10px] uppercase tracking-wide text-blue-300">otwarte</span>}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{[...facts(d), framesLabel(d.frames?.length || 1)].join(' · ')}</p>
+                            <p className="flex flex-wrap gap-1 mt-1">
+                              {(d.meta?.phases || []).map(k => (
+                                <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px]">{phaseLabel(k, modelPhaseOptions)}</span>
+                              ))}
+                            </p>
+                          </div>
+                        </button>
+                        <div className="mt-auto flex items-center gap-2 px-3 py-2">
+                          <span className="flex-1 text-[11px] text-slate-500">{new Date(d.updatedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          <button onClick={() => openDrill(d)} className={btn}>Otwórz</button>
+                          <button onClick={() => deleteDrill(d.id)} title="Usuń z biblioteki" aria-label={`Usuń ${d.name}`}
+                            className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {preview && (
+                <aside aria-label="Podgląd ćwiczenia" className="hidden lg:flex w-[440px] xl:w-[520px] flex-shrink-0 flex-col border-l border-white/10 overflow-y-auto">
+                  <div className="p-4 flex flex-col gap-3">
+                    <div className="rounded-xl bg-slate-800/80 overflow-hidden flex items-center justify-center">
+                      {drillThumb(preview, 0.75)
+                        ? <img src={drillThumb(preview, 0.75)} alt={`Rysunek: ${preview.name}`} className="max-w-full max-h-[46vh] object-contain" />
+                        : <span className="text-xs text-slate-500 py-16">brak podglądu</span>}
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-white leading-snug">{preview.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{[...facts(preview), framesLabel(preview.frames?.length || 1)].join(' · ')}</p>
+                    </div>
+                    {[['Cel', preview.meta?.objective], ['Organizacja', preview.meta?.organization], ['Przebieg', preview.meta?.description], ['Punkty trenerskie', preview.meta?.coachingPoints]]
+                      .filter(([, v]) => v).map(([label, v]) => (
+                        <div key={label}>
+                          <p className={sectionTitle}>{label}</p>
+                          <p className="text-xs text-slate-300 whitespace-pre-line line-clamp-[12]">{v}</p>
+                        </div>
+                      ))}
+                    <button onClick={() => openDrill(preview)} className="px-3 py-2 rounded-md text-sm bg-blue-600 hover:bg-blue-500 text-white">Wczytaj do edytora</button>
                   </div>
-                );
-              })}
+                </aside>
+              )}
             </div>
             <div className="px-5 py-3 border-t border-white/10 flex items-center gap-2">
               <button onClick={() => importInputRef.current?.click()} className={`${btn} text-sm px-3 inline-flex items-center gap-1.5`} title="Jeden lub wiele plików .json">
@@ -2130,7 +2255,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Drill description modal ── */}
       {showMeta && (
@@ -2146,48 +2272,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
               <label className="col-span-2 text-xs text-slate-400">Nazwa
                 <input type="text" value={drillName} onChange={e => setDrillName(e.target.value)} className={`${inputCls} mt-1`} />
               </label>
-              <label className="text-xs text-slate-400">Kategoria
-                <select value={meta.category} onChange={e => setMeta(m => ({ ...m, category: e.target.value }))} className={`${inputCls} mt-1`}>
-                  <option value="" className="bg-slate-800">—</option>
-                  {CATEGORIES.map(c => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-slate-400">Czas (min)
-                <input type="number" min={1} value={meta.duration} onChange={e => setMeta(m => ({ ...m, duration: e.target.value }))} className={`${inputCls} mt-1`} />
-              </label>
-              <label className="text-xs text-slate-400">Liczba zawodników
-                <input type="text" value={meta.players} placeholder="np. 8 (4v4)" onChange={e => setMeta(m => ({ ...m, players: e.target.value }))} className={`${inputCls} mt-1`} />
-              </label>
-              <label className="text-xs text-slate-400">Wymiary pola
-                <input type="text" value={meta.area}
-                  placeholder={pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : 'np. 30×20 m'}
-                  onChange={e => setMeta(m => ({ ...m, area: e.target.value }))} className={`${inputCls} mt-1`} />
-              </label>
-              <div className="col-span-2 text-xs text-slate-400">
-                Faza modelu gry <span className="text-slate-500">— które fazy z zakładki Taktyka trenuje to ćwiczenie</span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {modelPhaseOptions.map(o => {
-                    const on = (meta.phases || []).includes(o.key);
-                    return (
-                      <button key={o.key} type="button" aria-pressed={on}
-                        onClick={() => setMeta(m => ({ ...m, phases: on ? (m.phases || []).filter(k => k !== o.key) : [...(m.phases || []), o.key] }))}
-                        className={`px-2 py-1 rounded-md text-xs transition-colors ${on ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {META_FIELDS.map(([key, label, placeholder]) => (
-                <label key={key} className="col-span-2 text-xs text-slate-400">{label}
-                  <textarea value={meta[key]} rows={3} placeholder={placeholder}
-                    onChange={e => setMeta(m => ({ ...m, [key]: e.target.value }))}
-                    className={`${inputCls} mt-1 resize-y`} />
-                </label>
-              ))}
-              {equipmentSummary(frames) && (
-                <p className="col-span-2 text-xs text-slate-400">Sprzęt (automatycznie): <span className="text-slate-300">{equipmentSummary(frames)}</span></p>
-              )}
+              {renderMetaFields(false)}
             </div>
             <div className="px-5 py-3 border-t border-white/10 flex justify-end gap-2">
               <button onClick={exportCard} className={`${btn} text-sm px-3 inline-flex items-center gap-1.5`}><FileText size={14} /> Pobierz kartę PNG</button>

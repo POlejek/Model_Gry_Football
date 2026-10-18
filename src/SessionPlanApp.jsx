@@ -4,7 +4,7 @@ import {
   Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
-import { TYPE_LABELS, META_FIELDS, safeFileName } from './utils/drill.js';
+import { TYPE_LABELS, safeFileName } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
 import PhasePicker from './components/PhasePicker.jsx';
 
@@ -273,15 +273,31 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
 
   // Print: the plan lives in a body-level portal; the body class makes print CSS show only the plan,
   // so the browser's own Ctrl+P on other tabs still prints the app as before.
+  // Images for the printout are rendered at full resolution only when printing (thumbnails are too small
+  // for a full-width picture); printing starts once they are in the DOM and decoded.
+  const [printImages, setPrintImages] = useState(null);
   const printPlan = () => {
+    const map = new Map();
+    current.blocks.forEach(b => {
+      const d = drillById.get(b.drillId);
+      if (d && !map.has(d.id)) {
+        try { map.set(d.id, renderDrillImage(d, 1)); } catch { /* broken drill: printed without picture */ }
+      }
+    });
+    setPrintImages(map);
+  };
+  useEffect(() => {
+    if (!printImages) return;
     document.body.classList.add('printing-session');
     const cleanup = () => {
       document.body.classList.remove('printing-session');
       window.removeEventListener('afterprint', cleanup);
+      setPrintImages(null);
     };
     window.addEventListener('afterprint', cleanup);
-    window.print();
-  };
+    const imgs = [...document.querySelectorAll('.print-root img')];
+    Promise.all(imgs.map(img => (img.decode ? img.decode().catch(() => {}) : null))).then(() => window.print());
+  }, [printImages]);
 
   let minute = 0;
   const timed = current ? current.blocks.map(b => {
@@ -555,8 +571,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
 
       {active && current && createPortal(
         <div className="print-root text-black bg-white">
-          <header style={{ borderBottom: '3px solid #1e3a8a', paddingBottom: 8, marginBottom: 12 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
+          <header style={{ borderBottom: '3px solid #1e3a8a', paddingBottom: 6, marginBottom: 8 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
             <p style={{ fontSize: 12, color: '#475569', margin: '4px 0 0' }}>
               {[formatDate(current.date), current.group, `Czas: ${total} min`].filter(Boolean).join('   ·   ')}
             </p>
@@ -567,33 +583,47 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
               <strong>Fazy modelu gry: </strong>{[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
             </p>
           )}
-          {equipment && <p style={{ fontSize: 13, margin: '0 0 12px' }}><strong>Sprzęt: </strong>{equipment}</p>}
-          {timed.map(({ block: b, from, to, drill }, i) => (
-            <section key={b.id} style={{ breakInside: 'avoid', borderTop: '1px solid #cbd5e1', padding: '10px 0', display: 'flex', gap: 12 }}>
-              <div style={{ width: 70, flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: '#64748b' }}>#{i + 1}</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{from}–{to}′</div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>{minutesOf(b)} min</div>
+          {equipment && <p style={{ fontSize: 13, margin: '0 0 10px' }}><strong>Sprzęt: </strong>{equipment}</p>}
+          {timed.map(({ block: b, from, to, drill }, i) => {
+            const img = drill && (printImages?.get(drill.id) || thumbs.get(drill.id));
+            const meta = drill?.meta || {};
+            // long texts take the full width and may continue on the next page; short ones stay in one piece
+            const box = (label, text, wide) => text && (
+              <div key={label} style={{ breakInside: text.length > 1200 ? 'auto' : 'avoid', gridColumn: wide || text.length > 700 ? '1 / -1' : undefined, border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 8px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#1e3a8a', marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{text}</div>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>{drill ? drill.name : (b.title || 'Blok')}</h2>
-                {drill && (
-                  <p style={{ fontSize: 11, color: '#475569', margin: '0 0 6px' }}>
-                    {[drill.meta?.category, drill.meta?.players && `Zawodnicy: ${drill.meta.players}`, drill.meta?.area && `Pole: ${drill.meta.area}`].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-                <div style={{ display: 'flex', gap: 12 }}>
-                  {drill && thumbs.get(drill.id) && <img src={thumbs.get(drill.id)} alt="" style={{ width: 230, maxHeight: 230, objectFit: 'contain', border: '1px solid #e2e8f0' }} />}
-                  <div style={{ fontSize: 11.5, lineHeight: 1.45 }}>
-                    {drill && META_FIELDS.filter(([key]) => ['organization', 'coachingPoints', 'variations'].includes(key) && drill.meta?.[key]).map(([key, label]) => (
-                      <p key={key} style={{ margin: '0 0 6px', whiteSpace: 'pre-wrap' }}><strong>{label}: </strong>{drill.meta[key]}</p>
-                    ))}
-                    {b.note && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}><strong>Notatka: </strong>{b.note}</p>}
+            );
+            return (
+              <section key={b.id} className="print-block" style={{ borderTop: '2px solid #1e3a8a', paddingTop: 8, marginTop: i ? 14 : 0 }}>
+                {/* title + picture stay together; the modules below may continue on the next page */}
+                <div style={{ breakInside: 'avoid', breakAfter: 'avoid' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>#{i + 1} · {from}–{to}′</span>
+                    <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{drill ? drill.name : (b.title || 'Blok')}</h2>
                   </div>
+                  {drill && (
+                    <p style={{ fontSize: 11, color: '#475569', margin: '2px 0 6px' }}>
+                      {[`${minutesOf(b)} min`, meta.category, meta.players && `Zawodnicy: ${meta.players}`, meta.area && `Pole: ${meta.area}`].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  {meta.objective && <p style={{ fontSize: 11.5, margin: '0 0 6px' }}><strong>Cel: </strong>{meta.objective}</p>}
+                  {img && <img src={img} alt="" className="print-drill-img" style={{ display: 'block', width: '100%', maxHeight: '125mm', objectFit: 'contain', border: '1px solid #e2e8f0', margin: '0 auto 8px' }} />}
                 </div>
-              </div>
-            </section>
-          ))}
+                {drill ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {box('Przebieg', meta.description, true)}
+                    {box('Organizacja', meta.organization)}
+                    {box('Punkty trenerskie', meta.coachingPoints)}
+                    {box('Warianty / progresje', meta.variations, true)}
+                    {box('Notatka', b.note, true)}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 11.5, margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>{minutesOf(b)} min{b.note ? ` · ${b.note}` : ''}</p>
+                )}
+              </section>
+            );
+          })}
           {current.notes && <p style={{ fontSize: 12, borderTop: '1px solid #cbd5e1', paddingTop: 8, whiteSpace: 'pre-wrap' }}><strong>Notatki: </strong>{current.notes}</p>}
         </div>,
         document.body,

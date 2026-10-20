@@ -1004,7 +1004,8 @@ export function renderSchemeFrame(ctx, from, to = null, progress = 0, {
   ctx.save();
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   drawField(ctx, gameFormat, { w: SCHEME_W, h: SCHEME_H });
-  (shown.zones || []).forEach(z => drawZone(ctx, z, false, undefined, undefined, 0));
+  const zs = shown.zones || [];
+  [...zs.filter(z => z.type !== 'text'), ...zs.filter(z => z.type === 'text')].forEach(z => drawZone(ctx, z, false, undefined, undefined, 0));
   (shown.lines || []).forEach(l => drawLine(ctx, l, false));
   (pos.team || []).forEach(p => drawPlayer(ctx, mapTeam(p), true, null, teamColor, opponentColor, gameFormat, null));
   (pos.opponent || []).forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));

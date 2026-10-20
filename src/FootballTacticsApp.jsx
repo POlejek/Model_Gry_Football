@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, ArrowDownToLine, ArrowUpToLine,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -90,6 +90,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   const opponentColorInputRef = useRef(null);
   const lineColorInputRef = useRef(null);
   const zoneColorInputRef = useRef(null);
+  const selZoneColorInputRef = useRef(null);
   const playerColorInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPlayer, setDraggedPlayer] = useState(null);
@@ -1545,7 +1546,10 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     drawField(ctx, gameFormat);
     
     // Rysuj strefy (pod liniami i zawodnikami)
-    zones.forEach((zone, index) => drawZone(ctx, zone, index === selectedZoneIndex, zoneColor, zoneOpacity, isCoarsePointer ? 1.6 : 1));
+    // strefy na spodzie, notatki tekstowe nad nimi
+    [false, true].forEach(textPass => zones.forEach((zone, index) => {
+      if ((zone.type === 'text') === textPass) drawZone(ctx, zone, index === selectedZoneIndex, zoneColor, zoneOpacity, isCoarsePointer ? 1.6 : 1);
+    }));
     if (currentZone) {
       drawZone(ctx, currentZone, false, zoneColor, zoneOpacity);
     }
@@ -1862,7 +1866,9 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       }
       
       // Sprawdź czy kliknięto na którąś strefę (do zaznaczenia)
-      for (let i = zones.length - 1; i >= 0; i--) {
+      // kolejność jak na ekranie: najpierw notatki tekstowe (są na wierzchu), potem strefy od góry warstw
+      const order = [...zones.keys()].reverse().sort((a, b) => (zones[b].type === 'text') - (zones[a].type === 'text'));
+      for (const i of order) {
         if (isPointInZone(x, y, zones[i])) {
           setSelectedZoneIndex(i);
           setSelectedLineIndex(null); // Odznacz linię
@@ -2584,6 +2590,25 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     }
   };
 
+  // Zaznaczona strefa: zmiana koloru / krycia i kolejności warstw (na spód / na wierzch)
+  const patchSelectedZone = (patch) => {
+    if (selectedZoneIndex === null || !zones[selectedZoneIndex]) return;
+    checkpointScheme();
+    const newZones = zones.map((z, i) => (i === selectedZoneIndex ? { ...z, ...patch } : z));
+    setZones(newZones);
+    saveDrawingsToScheme(lines, newZones);
+  };
+  const moveSelectedZone = (toBack) => {
+    if (selectedZoneIndex === null || !zones[selectedZoneIndex]) return;
+    checkpointScheme();
+    const zone = zones[selectedZoneIndex];
+    const rest = zones.filter((_, i) => i !== selectedZoneIndex);
+    const newZones = toBack ? [zone, ...rest] : [...rest, zone];
+    setZones(newZones);
+    setSelectedZoneIndex(toBack ? 0 : newZones.length - 1);
+    saveDrawingsToScheme(lines, newZones);
+  };
+
   const clearAllLines = () => { checkpointScheme(); setLines([]); setSelectedLineIndex(null); saveDrawingsToScheme([], zones); };
   const clearAllZones = () => { checkpointScheme(); setZones([]); setSelectedZoneIndex(null); saveDrawingsToScheme(lines, []); };
 
@@ -2797,7 +2822,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     const ctx = canvas.getContext('2d');
     // same drawing as the editor (without selection), so the image matches the screen
     drawField(ctx, gameFormat);
-    zones.forEach(zone => drawZone(ctx, zone, false, zoneColor, zoneOpacity, 0));
+    [...zones.filter(z => z.type !== 'text'), ...zones.filter(z => z.type === 'text')].forEach(zone => drawZone(ctx, zone, false, zoneColor, zoneOpacity, 0));
     lines.forEach(line => drawLine(ctx, line, false));
     players.team.forEach(p => drawPlayer(ctx, displayPlayer(p), true, null, teamColor, opponentColor, gameFormat, null));
     players.opponent.forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
@@ -3027,6 +3052,28 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             <button className={TOOLBAR_BTN} onClick={deleteSelectedDrawing} disabled={!hasDrawingSelection} title="Usuń zaznaczoną linię lub strefę (Delete)" aria-label="Usuń">
               <Trash2 size={14} /> <span className="hidden sm:inline">Usuń</span>
             </button>
+            {selectedZoneIndex !== null && zones[selectedZoneIndex] && (
+              <>
+                <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
+                {colorSwatch('selzone', zones[selectedZoneIndex].color || zoneColor, (c) => patchSelectedZone({ color: c }), selZoneColorInputRef, zones[selectedZoneIndex].type === 'text' ? 'Kolor zaznaczonego tekstu' : 'Kolor zaznaczonej strefy', 'left')}
+                {zones[selectedZoneIndex].type !== 'text' && (
+                  <label className="ml-1 hidden md:flex items-center gap-1.5 text-xs text-slate-400" title="Krycie zaznaczonej strefy">
+                    Krycie
+                    <input type="range" min="0.1" max="1" step="0.1" aria-label="Krycie zaznaczonej strefy"
+                      value={zones[selectedZoneIndex].opacity ?? zoneOpacity}
+                      onChange={(e) => patchSelectedZone({ opacity: parseFloat(e.target.value) })} className="w-16" />
+                  </label>
+                )}
+                <button className={TOOLBAR_BTN} onClick={() => moveSelectedZone(true)} disabled={selectedZoneIndex === 0}
+                  title="Przenieś zaznaczoną strefę pod pozostałe strefy" aria-label="Na spód">
+                  <ArrowDownToLine size={14} /> <span className="hidden lg:inline">Na spód</span>
+                </button>
+                <button className={TOOLBAR_BTN} onClick={() => moveSelectedZone(false)} disabled={selectedZoneIndex === zones.length - 1}
+                  title="Przenieś zaznaczoną strefę nad pozostałe strefy" aria-label="Na wierzch">
+                  <ArrowUpToLine size={14} /> <span className="hidden lg:inline">Na wierzch</span>
+                </button>
+              </>
+            )}
             {selectedZoneIndex !== null && zones[selectedZoneIndex]?.type === 'rectangle' && (
               <button className={TOOLBAR_BTN} aria-label="Swobodne rogi"
                 title="Zamienia prostokąt w wielokąt — każdy róg przesuniesz niezależnie"

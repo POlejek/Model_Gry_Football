@@ -70,6 +70,38 @@ test.describe('Taktyka', () => {
     expect(scheme.frames[0].lines).toHaveLength(1);
   });
 
+  test('zaznaczona strefa: zmiana koloru i krycia, przeniesienie na spód i na wierzch', async ({ page }) => {
+    await newScheme(page);
+    await page.keyboard.press('s');
+    await dragOnCanvas(page, [200, 200], [400, 400]);
+    await dragOnCanvas(page, [300, 300], [500, 500]);
+    await page.keyboard.press('Escape');
+    let zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones).toHaveLength(2);
+
+    // zaznacz górną strefę (druga narysowana) w obszarze, gdzie się nakładają
+    await clickOnCanvas(page, 350, 350);
+    await page.getByRole('button', { name: 'Kolor zaznaczonej strefy' }).click();
+    await page.getByTitle('Niebieski', { exact: true }).first().click();
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[1].color).not.toBe(zones[0].color);
+    const recolored = zones[1].color;
+
+    await page.getByRole('button', { name: 'Na spód' }).click();
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[0].color).toBe(recolored);
+    expect(zones[0].x).toBeGreaterThan(zones[1].x);
+    await expect(page.getByRole('button', { name: 'Na spód' })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Na wierzch' }).click();
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[1].color).toBe(recolored);
+
+    await page.getByLabel('Krycie zaznaczonej strefy').fill('0.8');
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[1].opacity).toBe(0.8);
+  });
+
   test('zapisane schematy nie są nadpisywane podczas uruchamiania aplikacji', async ({ page }) => {
     await newScheme(page);
     // otwiera aplikację od nowa i sprawdza magazyn od razu, zanim interfejs zdąży się zaktualizować

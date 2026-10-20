@@ -494,11 +494,11 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               }));
             }
             
-            const newZones = [...zones, newZone];
+            const newZones = [newZone, ...zones]; // nowa strefa na spodzie warstw
             setZones(newZones);
             
             // Zaznacz nową strefę
-            setSelectedZoneIndex(newZones.length - 1);
+            setSelectedZoneIndex(0);
             setSelectedLineIndex(null);
             
             if (currentScheme) {
@@ -1740,7 +1740,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               color: zoneColor,
               opacity: zoneOpacity
             };
-            const newZones = [...zones, newZone];
+            const newZones = [newZone, ...zones]; // nowa strefa na spodzie warstw
             setZones(newZones);
             setPolygonPoints([]);
             
@@ -1827,6 +1827,11 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       }
     }
 
+    // Zawodnik i piłka są nad strefami – kliknięcie w nich ma pierwszeństwo przed strefą
+    const hitR = ({ '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 }[gameFormat] || 18) + 5;
+    const hitsPlayerOrBall = Math.hypot(x - players.ball.x, y - players.ball.y) < ({ '5v5': 11, '7v7': 10, '9v9': 9, '11v11': 8 }[gameFormat] || 8) + 5
+      || [...players.team, ...players.opponent].some(p => Math.hypot(x - p.x, y - p.y) < hitR);
+
     // Tryb przesuwania - sprawdź czy kliknięto na strefę
     if (!isDrawingMode && zones.length > 0) {
       // Najpierw sprawdź wierzchołki zaznaczonego wielokąta (do edycji)
@@ -1849,7 +1854,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       }
 
       // Sprawdź czy kliknięto w zaznaczoną strefę (do przesuwania)
-      if (selectedZoneIndex !== null && isPointInZone(x, y, zones[selectedZoneIndex])) {
+      if (!hitsPlayerOrBall && selectedZoneIndex !== null && isPointInZone(x, y, zones[selectedZoneIndex])) {
         const zone = zones[selectedZoneIndex];
         setIsDraggingZone(true);
         
@@ -1868,7 +1873,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       // Sprawdź czy kliknięto na którąś strefę (do zaznaczenia)
       // kolejność jak na ekranie: najpierw notatki tekstowe (są na wierzchu), potem strefy od góry warstw
       const order = [...zones.keys()].reverse().sort((a, b) => (zones[b].type === 'text') - (zones[a].type === 'text'));
-      for (const i of order) {
+      for (const i of hitsPlayerOrBall ? [] : order) {
         if (isPointInZone(x, y, zones[i])) {
           setSelectedZoneIndex(i);
           setSelectedLineIndex(null); // Odznacz linię
@@ -2198,7 +2203,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       }
       
       if (shouldAdd) {
-        const newZones = [...zones, currentZone];
+        const newZones = [currentZone, ...zones]; // nowa strefa na spodzie warstw
         setZones(newZones);
         
         // Zapisz strefy do schematu
@@ -2567,9 +2572,9 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       if (newZone.type === 'rectangle') { newZone.x += 20; newZone.y += 20; }
       else if (newZone.type === 'circle') { newZone.centerX += 20; newZone.centerY += 20; }
       else if (newZone.points) newZone.points = newZone.points.map(pt => ({ x: pt.x + 20, y: pt.y + 20 }));
-      const newZones = [...zones, newZone];
+      const newZones = [newZone, ...zones]; // nowa strefa na spodzie warstw
       setZones(newZones);
-      setSelectedZoneIndex(newZones.length - 1);
+      setSelectedZoneIndex(0);
       setSelectedLineIndex(null);
       saveDrawingsToScheme(lines, newZones);
     }

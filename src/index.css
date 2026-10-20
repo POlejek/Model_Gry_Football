@@ -23,6 +23,8 @@ canvas {
 
 /* Printing a session plan: show only the printable plan rendered into a portal. */
 .print-root { display: none; }
+/* compact print: lay the plan out off-screen at A4 content width to measure drill heights */
+body.measuring-print .print-root { display: block; position: absolute; left: -10000px; top: 0; width: 186mm; font-family: Arial, sans-serif; }
 @media print {
   @page { size: A4; margin: 12mm; }
   html, body { overflow: visible !important; height: auto !important; background: #fff !important; }

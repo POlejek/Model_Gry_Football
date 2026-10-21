@@ -70,8 +70,9 @@ describe('Konspekt zgodny z certyfikacją PZPN', () => {
     expect(sheet).toHaveTextContent('Temat zajęćWyjście spod pressingu');
     expect(sheet).toHaveTextContent('Data zajęć19-10-2026');
     expect(sheet).toHaveTextContent('Zawodnicy16 osób');
-    expect(sheet).toHaveTextContent('Część wstępna · 40 min');
-    expect(sheet).toHaveTextContent('Część końcowa · 5 min');
+    expect(sheet).toHaveTextContent('Część wstępna1. RozgrzewkaCzas10 min');
+    expect(sheet).toHaveTextContent('Część wstępna2. Gra 8v8Czas30 min');
+    expect(sheet).toHaveTextContent('Część końcowa3. RozciąganieCzas5 min');
     expect(sheet).toHaveTextContent('SprzętZnaczniki');
     expect(document.body).toHaveClass('printing-session');
 

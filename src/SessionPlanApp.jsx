@@ -4,7 +4,7 @@ import {
   Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
-import { safeFileName } from './utils/drill.js';
+import { safeFileName, horizontalFullPitch } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
 import { PARTS, certOf, blockPart, equipmentRows } from './utils/certPlan.js';
 import { clubTitle, EMPTY_CLUB } from './utils/club.js';
@@ -279,7 +279,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
     current.blocks.forEach(b => {
       const d = drillById.get(b.drillId);
       if (d && !map.has(d.id)) {
-        try { map.set(d.id, renderDrillImage(d, 1)); } catch { /* broken drill: printed without picture */ }
+        try { map.set(d.id, renderDrillImage(mode === 'cert' ? horizontalFullPitch(d) : d, 1)); } catch { /* broken drill: printed without picture */ }
       }
     });
     setPrintImages(map);
@@ -669,7 +669,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         <div className="print-root text-black bg-white">
           <CertPlanPrint session={current} club={club} timed={timed} total={total} drills={sessionDrills}
             phaseText={[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
-            imageFor={(id) => printImages?.get(id) || thumbs.get(id)} />
+            phaseName={k => phaseLabel(k, options)} imageFor={(id) => printImages?.get(id) || thumbs.get(id)} />
         </div>,
         document.body,
       )}

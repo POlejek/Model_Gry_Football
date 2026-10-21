@@ -15,7 +15,7 @@ import {
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import {
-  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, transformFrame, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY,
+  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, rotateFrames,
 } from './utils/drill.js';
 
 const newPitch = () => ({
@@ -860,14 +860,9 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     const next = { ...pitch, ...patch };
     next.width = clamp(Number(next.width) || 5, 5, 120);
     next.length = clamp(Number(next.length) || 5, 5, 120);
-    const oldSize = getPitchSize(pitch);
     const newSize = getPitchSize(next);
     let fs = frames;
-    if (next.orientation !== pitch.orientation) {
-      const toHorizontal = next.orientation === 'horizontal';
-      const fn = toHorizontal ? (x, y) => [oldSize.h - y, x] : (x, y) => [y, oldSize.w - x];
-      fs = fs.map(f => transformFrame(f, fn, toHorizontal ? Math.PI / 2 : -Math.PI / 2));
-    }
+    if (next.orientation !== pitch.orientation) fs = rotateFrames(fs, pitch, next.orientation === 'horizontal');
     fs = fitFramesTo(fs, newSize.w, newSize.h);
     setPitch(next);
     setFrames(fs);

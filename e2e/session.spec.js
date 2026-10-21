@@ -33,8 +33,9 @@ test.describe('Konspekt', () => {
     expect(printed).toContain('Olejniczak Paweł');
     expect(printed).toContain('Wyjście spod pressingu');
     expect(printed).toContain('14 osób');
-    expect(printed).toMatch(/Część wstępna · 10 min/i);
-    expect(printed).toMatch(/Część końcowa · 10 min/i);
+    expect(printed).toContain('Część wstępna1. Rozgrzewka');
+    expect(printed).toContain('Część główna2. Rozgrzewka');
+    expect(printed).toContain('Część końcowa3. Rozgrzewka');
   });
 
   test('plik upuszczony na aplikację otwiera import, a „Wyczyść wszystko” usuwa dane z możliwością cofnięcia', async ({ page }) => {

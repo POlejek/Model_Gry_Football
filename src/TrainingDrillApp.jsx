@@ -9,12 +9,13 @@ import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import PhasePicker from './components/PhasePicker.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
+import { isClearing } from './utils/backup.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import {
-  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, transformFrame, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary,
+  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, rotateFrames,
 } from './utils/drill.js';
 
 const newPitch = () => ({
@@ -431,7 +432,6 @@ const LIBRARY_KEY = 'trainingDrillLibrary';
 const readLibrary = () => {
   try { return JSON.parse(localStorage.getItem(LIBRARY_KEY)) || []; } catch { return []; }
 };
-const DRAFT_KEY = 'trainingDrillDraft';
 
 function loadDraft() {
   try {
@@ -672,6 +672,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const draftRef = useRef(null);
   draftRef.current = { name: drillName, drillId: currentDrillId, frames, pitch, meta, teamAColor, teamBColor };
   const saveDraft = () => {
+    if (isClearing()) return; // "Wyczyść wszystko" is reloading the page: do not bring the drill back
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draftRef.current)); }
     catch { /* storage full: draft is best-effort */ }
   };
@@ -859,14 +860,9 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     const next = { ...pitch, ...patch };
     next.width = clamp(Number(next.width) || 5, 5, 120);
     next.length = clamp(Number(next.length) || 5, 5, 120);
-    const oldSize = getPitchSize(pitch);
     const newSize = getPitchSize(next);
     let fs = frames;
-    if (next.orientation !== pitch.orientation) {
-      const toHorizontal = next.orientation === 'horizontal';
-      const fn = toHorizontal ? (x, y) => [oldSize.h - y, x] : (x, y) => [y, oldSize.w - x];
-      fs = fs.map(f => transformFrame(f, fn, toHorizontal ? Math.PI / 2 : -Math.PI / 2));
-    }
+    if (next.orientation !== pitch.orientation) fs = rotateFrames(fs, pitch, next.orientation === 'horizontal');
     fs = fitFramesTo(fs, newSize.w, newSize.h);
     setPitch(next);
     setFrames(fs);

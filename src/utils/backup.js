@@ -1,6 +1,7 @@
 // Full backup of everything the app stores on this device, plus import of every file format the
 // app has produced (backup, tactics export, drill / drill-library, session / session-library).
-import { DRILL_FORMAT, LIBRARY_FORMAT, parseDrillFile } from './drill.js';
+import { DRILL_FORMAT, LIBRARY_FORMAT, parseDrillFile, DRAFT_KEY } from './drill.js';
+import { CLUB_KEY, normalizeClub, isEmptyClub, clubTitle } from './club.js';
 
 export const BACKUP_FORMAT = 'model-gry-backup';
 export const KEYS = {
@@ -8,6 +9,7 @@ export const KEYS = {
   drills: 'trainingDrillLibrary',
   sessions: 'trainingSessions',
   squad: 'modelGrySquad',
+  club: CLUB_KEY,
 };
 const LAST_BACKUP_KEY = 'modelGryLastBackup';
 const UNDO_KEY = 'modelGryUndoImport';
@@ -21,6 +23,7 @@ export const SECTIONS = [
   { id: 'sessions', label: 'Konspekty', hint: 'plany jednostek treningowych' },
   { id: 'squad', label: 'Kadra', hint: 'zawodnicy: numery, nazwiska, pozycje' },
   { id: 'settings', label: 'Ustawienia', hint: 'kolory drużyn, format gry, nazwiska na boisku' },
+  { id: 'club', label: 'Szkółka', hint: 'nazwa, logo, trener i asystent do konspektu' },
 ];
 
 const readJson = (key, fallback) => {
@@ -45,8 +48,11 @@ export function readAll() {
     sessions: asArray(readJson(KEYS.sessions, [])),
     squad: asArray(readJson(KEYS.squad, [])),
     settings: Object.keys(settings).length ? settings : null,
+    club: clubOrNull(readJson(KEYS.club, null)),
   };
 }
+
+const clubOrNull = (raw) => (raw && !isEmptyClub(raw) ? normalizeClub(raw) : null);
 
 const countSchemes = (schemes) => Object.values(schemes || {})
   .reduce((sum, byKey) => sum + Object.values(byKey || {}).reduce((s, list) => s + asArray(list).length, 0), 0);
@@ -60,7 +66,7 @@ const P = {
   sessions: n => plural(n, 'konspekt', 'konspekty', 'konspektów'),
   squad: n => plural(n, 'zawodnik', 'zawodników', 'zawodników'),
 };
-export const SECTION_SLUGS = { tactics: 'taktyka', drills: 'cwiczenia', sessions: 'konspekty', squad: 'kadra', settings: 'ustawienia' };
+export const SECTION_SLUGS = { tactics: 'taktyka', drills: 'cwiczenia', sessions: 'konspekty', squad: 'kadra', settings: 'ustawienia', club: 'szkolka' };
 
 // Short human description of a section's content, e.g. "14 schematów · 8 faz".
 export function describe(sectionId, data) {
@@ -74,6 +80,7 @@ export function describe(sectionId, data) {
     case 'sessions': return data.sessions?.length ? plural(data.sessions.length, 'konspekt', 'konspekty', 'konspektów') : null;
     case 'squad': return data.squad?.length ? plural(data.squad.length, 'zawodnik', 'zawodników', 'zawodników') : null;
     case 'settings': return data.settings ? 'zapisane' : null;
+    case 'club': return data.club ? [clubTitle(data.club) || 'zapisane', data.club.logo && 'logo'].filter(Boolean).join(' · ') : null;
     default: return null;
   }
 }
@@ -98,6 +105,7 @@ export function buildBackup(selected, data = readAll()) {
   }
   if (selected.has('squad')) sections.squad = data.squad;
   if (selected.has('settings') && data.settings) sections.settings = data.settings;
+  if (selected.has('club') && data.club) sections.club = data.club;
   return {
     backup: { format: BACKUP_FORMAT, version: 1, exportedAt: new Date().toISOString(), sections },
     addedDrills,
@@ -122,13 +130,14 @@ export function needsBackup() {
 // Returns the same shape as readAll() (missing sections are null/empty) or null for unknown files.
 export function parseAnyFile(json, fileName = '') {
   if (!json || typeof json !== 'object') return null;
-  const empty = { tactics: null, drills: [], sessions: [], squad: [], settings: null };
+  const empty = { tactics: null, drills: [], sessions: [], squad: [], settings: null, club: null };
 
   if (json.format === BACKUP_FORMAT && json.sections) {
     const s = json.sections;
     return {
       tactics: s.tactics ? { phases: s.tactics.phases || {}, schemes: s.tactics.schemes || {} } : null,
       drills: asArray(s.drills), sessions: asArray(s.sessions), squad: asArray(s.squad), settings: s.settings || null,
+      club: clubOrNull(s.club),
     };
   }
   if (json.format === SESSION_FORMAT && json.session) return { ...empty, sessions: [json.session], drills: asArray(json.drills) };
@@ -148,13 +157,14 @@ export function parseAnyFile(json, fileName = '') {
 
 // Several files → one combined import (later files add to earlier ones).
 export function combineParsed(list) {
-  const out = { tactics: null, drills: [], sessions: [], squad: [], settings: null };
+  const out = { tactics: null, drills: [], sessions: [], squad: [], settings: null, club: null };
   list.forEach(p => {
     if (p.tactics) out.tactics = out.tactics ? mergeTactics(out.tactics, p.tactics).result : p.tactics;
     out.drills.push(...p.drills);
     out.sessions.push(...p.sessions);
     out.squad.push(...p.squad);
     if (p.settings) out.settings = { ...(out.settings || {}), ...p.settings };
+    if (p.club) out.club = p.club;
   });
   return out;
 }
@@ -203,11 +213,12 @@ export function replaceLosses(choices, current = readAll()) {
 }
 
 // ── Undo ──────────────────────────────────────────────────────────
-function saveUndo() {
+// kind: 'import' or 'clear' ("Wyczyść wszystko"); both are undone the same way.
+function saveUndo(kind = 'import') {
   const snapshot = {};
   Object.values(KEYS).forEach(k => { snapshot[k] = localStorage.getItem(k); });
   try {
-    localStorage.setItem(UNDO_KEY, JSON.stringify({ at: new Date().toISOString(), snapshot }));
+    localStorage.setItem(UNDO_KEY, JSON.stringify({ at: new Date().toISOString(), kind, snapshot }));
     return true;
   } catch {
     return false;
@@ -250,6 +261,10 @@ export function applyImport(incoming, choices) {
       summary.push('Ustawienia wczytane');
     }
     if (summary.length) writeJson(KEYS.tactics, { ...tacticsData, _version: tacticsData._version || 2 });
+    if (choices.club === 'replace' && incoming.club) {
+      writeJson(KEYS.club, normalizeClub(incoming.club));
+      summary.push('Szkółka wczytana');
+    }
 
     const listSection = (id, label, merge) => {
       const words = P[id];
@@ -271,6 +286,21 @@ export function applyImport(incoming, choices) {
     return { ok: false, summary: ['Brak miejsca w pamięci przeglądarki — import przerwany, dane bez zmian.'], undoSaved: false };
   }
   return { ok: true, summary, undoSaved };
+}
+
+// ── Clearing everything ───────────────────────────────────────────
+// Removes all app data from this browser. The previous state is kept for "Cofnij" like an import;
+// when that copy does not fit in storage nothing is removed unless `withoutUndo` is set.
+// Returns { ok, undoSaved }.
+let clearing = false;
+export const isClearing = () => clearing;
+export function clearAll({ withoutUndo = false } = {}) {
+  const undoSaved = saveUndo('clear');
+  if (!undoSaved && !withoutUndo) return { ok: false, undoSaved };
+  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+  localStorage.removeItem(DRAFT_KEY);
+  clearing = true; // the page reloads next; editors must not save their in-memory state back
+  return { ok: true, undoSaved };
 }
 
 // ── Storage usage ─────────────────────────────────────────────────

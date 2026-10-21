@@ -3,9 +3,11 @@ import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
 import SquadModal from './components/SquadModal.jsx';
+import ClubModal from './components/ClubModal.jsx';
 import DataModal, { IMPORT_RESULT_KEY } from './components/DataModal.jsx';
 import { needsBackup, backupAgeDays } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
+import { loadClub, saveClub } from './utils/club.js';
 
 const TABS = [
   { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
@@ -72,6 +74,10 @@ export default function AppWrapper() {
   const [showSquad, setShowSquad] = useState(false);
   const [drillRequest, setDrillRequest] = useState(null);
   const [showData, setShowData] = useState(false);
+  const [club, setClub] = useState(loadClub);
+  const [showClub, setShowClub] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState(null);
+  const [draggingFiles, setDraggingFiles] = useState(false);
   const [backupDue, setBackupDue] = useState(() => needsBackup());
   // result of an import/undo, shown once after the reload that applied it
   const [notice, setNotice] = useState(() => {
@@ -89,6 +95,40 @@ export default function AppWrapper() {
     return () => clearTimeout(t);
   }, [notice]);
   const updateSquad = (list) => { setSquad(list); saveSquad(list); };
+  const updateClub = (data) => { setClub(data); saveClub(data); };
+
+  // Files dragged from the computer and dropped anywhere open the import in "Dane" (add / replace / skip).
+  // Drags inside the app (equipment, frames, schemes) carry no files and are left alone; places that
+  // take a file themselves (the logo field) stop the event before it gets here.
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    const onEnter = (e) => { if (hasFiles(e)) { depth++; setDraggingFiles(true); } };
+    const onLeave = (e) => { if (hasFiles(e) && --depth <= 0) { depth = 0; setDraggingFiles(false); } };
+    const onOver = (e) => { if (hasFiles(e)) e.preventDefault(); };
+    // capture phase: also runs for drops that a field handled and stopped
+    const onDropAnywhere = () => { depth = 0; setDraggingFiles(false); };
+    const onDrop = (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // otherwise the browser opens the file instead of the app
+      const files = [...e.dataTransfer.files];
+      if (!files.length) return;
+      setDroppedFiles({ files, nonce: Date.now() });
+      setShowData(true);
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('drop', onDropAnywhere, true);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('drop', onDropAnywhere, true);
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
 
   // Errors thrown outside React rendering (timers, animation, event handlers) would otherwise be
   // invisible; surface them so a broken action is visible and can be reported precisely.
@@ -163,6 +203,16 @@ export default function AppWrapper() {
         >
           <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-400">({squad.length})</span> : null}
         </button>
+        <button
+          onClick={() => setShowClub(true)}
+          title="Szkółka: nazwa, logo, trener i asystent (nagłówek konspektu)" aria-label="Szkółka"
+          className="self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
+        >
+          {club.logo
+            ? <img src={club.logo} alt="" className="w-5 h-5 object-contain rounded-sm bg-white" />
+            : <span aria-hidden="true">🏫</span>}
+          <span className="hidden sm:inline">Szkółka</span>
+        </button>
       </div>
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}
@@ -174,11 +224,21 @@ export default function AppWrapper() {
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'session' ? 'flex' : 'hidden'}`}>
         <TabErrorBoundary name="Konspekt">
-          <SessionPlanApp active={activeTab === 'session'} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} />
+          <SessionPlanApp active={activeTab === 'session'} club={club} onEditClub={() => setShowClub(true)}
+            onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} />
         </TabErrorBoundary>
       </div>
 
-      {showData && <DataModal onClose={() => { setShowData(false); setBackupDue(needsBackup()); }} />}
+      {showData && <DataModal droppedFiles={droppedFiles} onClose={() => { setShowData(false); setDroppedFiles(null); setBackupDue(needsBackup()); }} />}
+      {showClub && <ClubModal club={club} onChange={updateClub} onClose={() => setShowClub(false)} />}
+      {draggingFiles && !showClub && (
+        <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center bg-blue-950/60 border-4 border-dashed border-blue-400/70">
+          <div className="px-6 py-4 rounded-2xl bg-slate-900/95 border border-blue-400/40 text-center shadow-2xl">
+            <p className="text-lg font-semibold text-white">Upuść pliki, aby je zaimportować</p>
+            <p className="text-sm text-slate-300">kopia zapasowa, taktyka, ćwiczenia lub konspekty (.json) — potem wybierzesz: dodaj / zastąp / pomiń</p>
+          </div>
+        </div>
+      )}
       {notice && (
         <div role="status" aria-live="polite"
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[min(92vw,40rem)] px-4 py-3 rounded-xl bg-slate-900/95 border border-emerald-500/40 text-sm text-emerald-100 shadow-2xl flex items-start gap-3">

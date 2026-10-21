@@ -65,6 +65,13 @@ export function transformFrame(f, fn, dRot) {
   };
 }
 
+// Frames turned by a quarter when the pitch switches orientation (everything keeps its place on the pitch).
+export function rotateFrames(frames, pitch, toHorizontal) {
+  const { w, h } = getPitchSize(pitch);
+  const fn = toHorizontal ? (x, y) => [h - y, x] : (x, y) => [y, w - x];
+  return frames.map(f => transformFrame(f, fn, toHorizontal ? Math.PI / 2 : -Math.PI / 2));
+}
+
 // Keeps content where it is if it fits; otherwise shifts it inside or scales it down to fit.
 export function fitFramesTo(frames, w, h, margin = 30) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -154,7 +161,7 @@ export const TYPE_LABELS = {
 
 export const DEFAULT_META = {
   category: '', duration: '', players: '', area: '',
-  objective: '', organization: '', description: '', coachingPoints: '', variations: '',
+  objective: '', organization: '', description: '', load: '', coachingPoints: '', variations: '',
   phases: [], // keys of game-model phases from the tactics editor, e.g. 'Atak-Budowanie'
 };
 
@@ -162,6 +169,7 @@ export const META_FIELDS = [
   ['objective', 'Cel', 'Czego uczy ćwiczenie?'],
   ['organization', 'Organizacja', 'Ustawienie, podział na grupy, rotacje…'],
   ['description', 'Przebieg', 'Jak przebiega ćwiczenie, zasady…'],
+  ['load', 'Obciążenie', 'Czas pracy i przerw, serie, powtórzenia, intensywność… np. 4 × 4′, przerwa 2′'],
   ['coachingPoints', 'Punkty trenerskie', 'Na co zwracać uwagę…'],
   ['variations', 'Warianty / progresje', 'Utrudnienia, ułatwienia…'],
 ];
@@ -213,6 +221,14 @@ export function normalizeDrill(d = {}) {
   };
 }
 
+// Session plans for the certification show a full pitch lying horizontally; any other pitch size
+// stays as the drill has it.
+export function horizontalFullPitch(drill) {
+  const n = normalizeDrill(drill);
+  if (n.pitch.type !== 'full' || n.pitch.orientation === 'horizontal') return drill;
+  return { ...drill, frames: rotateFrames(n.frames, n.pitch, true), pitch: { ...n.pitch, orientation: 'horizontal' } };
+}
+
 export const DRILL_FORMAT = 'model-gry-training-drill';
 
 export const LIBRARY_FORMAT = 'model-gry-training-library';
@@ -257,6 +273,9 @@ export function wrapText(ctx, text, maxWidth) {
   });
   return out;
 }
+
+// The drill being edited in the Trening tab, kept between visits.
+export const DRAFT_KEY = 'trainingDrillDraft';
 
 export function equipmentSummary(frames) {
   const byType = {};

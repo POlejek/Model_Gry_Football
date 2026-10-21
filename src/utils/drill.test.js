@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getPitchSize, normAngle, transformObj, translateObj, transformFrame, fitFramesTo, objectsInRect, findObj,
   interpolateFrames, normalizeDrill, safeFileName, parseDrillFile, toLibraryEntry, equipmentSummary,
-  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH,
+  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch,
 } from './drill.js';
 
 const player = (id, x, y, extra = {}) => ({ id, type: 'player', x, y, rotation: 0, scale: 1, team: 'A', label: String(id), ...extra });
@@ -224,5 +224,29 @@ describe('wrapText (opis na karcie PNG)', () => {
   it('łamie wiersze po słowach i zachowuje nowe linie', () => {
     expect(wrapText(ctx, 'aaa bbb ccc', 70)).toEqual(['aaa bbb', 'ccc']);
     expect(wrapText(ctx, 'jeden\ndwa', 1000)).toEqual(['jeden', 'dwa']);
+  });
+});
+
+describe('boisko w poziomie na wydruku', () => {
+  const frame = { items: [{ id: 1, type: 'player', x: 100, y: 50, rotation: 0 }, { id: 2, type: 'text', x: 10, y: 20, text: 'A' }], lines: [], zones: [] };
+
+  it('obrót tam i z powrotem zostawia elementy w tym samym miejscu', () => {
+    const there = rotateFrames([frame], LEGACY_PITCH, true);
+    expect(there[0].items[0]).toMatchObject({ x: 1080 - 50, y: 100 });
+    expect(there[0].items[1].rotation).toBeUndefined();
+    const back = rotateFrames(there, { ...LEGACY_PITCH, orientation: 'horizontal' }, false);
+    expect(back[0].items[0]).toMatchObject({ x: 100, y: 50 });
+  });
+
+  it('całe boisko pionowe kładzie poziomo, inne wymiary zostawia jak w ćwiczeniu', () => {
+    const full = horizontalFullPitch({ id: 'd', frames: [frame], pitch: LEGACY_PITCH });
+    expect(full.pitch.orientation).toBe('horizontal');
+    expect(full.frames[0].items[0]).toMatchObject({ x: 1030, y: 100 });
+    const flat = { id: 'h', frames: [frame], pitch: { ...LEGACY_PITCH, orientation: 'horizontal' } };
+    expect(horizontalFullPitch(flat)).toBe(flat);
+    const half = { id: 'p', frames: [frame], pitch: { ...LEGACY_PITCH, type: 'half' } };
+    expect(horizontalFullPitch(half)).toBe(half);
+    const custom = { id: 'c', frames: [frame], pitch: { type: 'custom', orientation: 'vertical', width: 20, length: 30 } };
+    expect(horizontalFullPitch(custom)).toBe(custom);
   });
 });

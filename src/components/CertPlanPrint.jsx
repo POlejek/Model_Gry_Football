@@ -77,7 +77,6 @@ export default function CertPlanPrint({ session, club, timed, total, drills, pha
         ].filter(([, t]) => t && String(t).trim());
         const tags = drill ? [session.group, meta.category, ...(meta.phases || []).map(phaseName)].filter(Boolean) : [];
         const facts = drill ? [
-          ['Obciążenie', meta.load],
           ['Zawodnicy', meta.players],
           ['Pole', meta.area],
           ['Sprzęt', equipmentSummary(normalizeDrill(drill).frames) || 'b/d'],
@@ -116,7 +115,11 @@ export default function CertPlanPrint({ session, club, timed, total, drills, pha
                   )}
                   {facts.map(([k, t]) => <p key={k} style={{ margin: '0 0 2px', fontSize: 9.5 }}><strong>{k}: </strong>{t}</p>)}
                 </td>
-                <td style={{ ...value, verticalAlign: 'top', textAlign: 'center', fontWeight: 700 }}>{minutesOf(b)} min</td>
+                {/* the load breakdown (e.g. "3 × 7′, przerwa 2′") sits with the time, as on the form */}
+                <td style={{ ...value, verticalAlign: 'top', textAlign: 'center', fontWeight: 700 }}>
+                  {meta.load?.trim() && <div style={{ fontSize: 9.5, marginBottom: 2 }}>{meta.load}</div>}
+                  <div>{minutesOf(b)} min</div>
+                </td>
               </tr>
             </tbody>
           </table>

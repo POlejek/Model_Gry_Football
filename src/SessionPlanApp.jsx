@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload,
+  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
-import { TYPE_LABELS, safeFileName } from './utils/drill.js';
+import { safeFileName } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
+import { PARTS, certOf, blockPart, equipmentRows } from './utils/certPlan.js';
+import { clubTitle, EMPTY_CLUB } from './utils/club.js';
 import PhasePicker from './components/PhasePicker.jsx';
+import CertPlanPrint from './components/CertPlanPrint.jsx';
 
 const SESSIONS_KEY = 'trainingSessions';
 const DRILLS_KEY = 'trainingDrillLibrary';
@@ -47,8 +50,10 @@ const readSessions = () => {
 
 const uid = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const today = () => new Date().toISOString().slice(0, 10);
-const newSession = () => ({
+// `certified`: the new plan starts with the certification fields switched on (as the previous one had).
+const newSession = (certified = false) => ({
   id: uid('session'), title: '', date: today(), group: '', goal: '', notes: '', phases: [], blocks: [],
+  ...(certified ? { cert: { enabled: true } } : {}),
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 });
 const minutesOf = (b) => Math.max(0, parseInt(b.minutes, 10) || 0);
@@ -93,25 +98,14 @@ function AutoTextarea({ value, minRows = 2, className, watch, ...props }) {
   return <textarea ref={ref} rows={minRows} value={value} className={`${className} resize-none overflow-hidden`} {...props} />;
 }
 
-// Equipment needed for the whole session: for each type the largest amount any single drill uses.
-function sessionEquipment(drills) {
-  const max = {};
-  drills.forEach(d => {
-    const perType = {};
-    (d.frames || []).forEach(f => (f.items || []).forEach(i => {
-      if (['player', 'text', 'step', 'coach'].includes(i.type) || !TYPE_LABELS[i.type]) return;
-      (perType[i.type] ||= new Set()).add(i.id);
-    }));
-    Object.entries(perType).forEach(([t, ids]) => { max[t] = Math.max(max[t] || 0, ids.size); });
-  });
-  return Object.entries(max).map(([t, n]) => `${TYPE_LABELS[t]} ×${n}`).join(', ');
-}
+// Equipment needed for the whole session, e.g. "Stożek ×8, Piłka ×6".
+const sessionEquipment = (drills) => equipmentRows(drills).map(e => `${e.name} ×${e.count}`).join(', ');
 
 const inputCls = 'w-full px-2 py-1.5 bg-white/10 border border-white/15 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400';
 const btn = 'px-2.5 py-1.5 rounded-md text-sm bg-white/5 hover:bg-white/10 text-slate-200 transition-colors inline-flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none';
 const iconBtn = 'p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none';
 
-export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
+export default function SessionPlanApp({ active = true, onOpenDrill = null, club = EMPTY_CLUB, onEditClub = null }) {
   const [sessions, setSessions] = useState(readSessions);
   const [currentId, setCurrentId] = useState(() => readSessions()[0]?.id || null);
   const [showPicker, setShowPicker] = useState(false);
@@ -145,9 +139,11 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
     s.id === currentId ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
   )));
   const patchBlocks = (fn) => patchSession({ blocks: fn(current.blocks) });
+  const cert = certOf(current);
+  const patchCert = (patch) => patchSession({ cert: { ...cert, ...patch } });
 
   const createSession = () => {
-    const s = newSession();
+    const s = newSession(cert.enabled);
     setSessions(list => [s, ...list]);
     setCurrentId(s.id);
   };
@@ -276,7 +272,9 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
   // Images for the printout are rendered at full resolution only when printing (thumbnails are too small
   // for a full-width picture); printing starts once they are in the DOM and decoded.
   const [printImages, setPrintImages] = useState(null);
-  const printPlan = () => {
+  const [printMode, setPrintMode] = useState('plan'); // 'plan' (szczegółowy) | 'cert' (certyfikacja PZPN)
+  const printPlan = (mode = 'plan') => {
+    setPrintMode(mode);
     const map = new Map();
     current.blocks.forEach(b => {
       const d = drillById.get(b.drillId);
@@ -293,6 +291,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
       document.body.classList.remove('printing-session');
       window.removeEventListener('afterprint', cleanup);
       setPrintImages(null);
+      setPrintMode('plan');
     };
     window.addEventListener('afterprint', cleanup);
     const imgs = [...document.querySelectorAll('.print-root img')];
@@ -426,6 +425,87 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                   </div>
                 )}
               </div>
+              <div className={`sm:col-span-4 rounded-lg border ${cert.enabled ? 'border-red-500/40 bg-red-500/[0.04]' : 'border-white/10 bg-white/[0.03]'}`}>
+                <label className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={cert.enabled} onChange={e => patchCert({ enabled: e.target.checked })} />
+                  <span><span className="font-semibold text-slate-300">Konspekt zgodny z certyfikacją PZPN</span> — dodatkowe pola i wydruk w układzie formularza</span>
+                </label>
+                {cert.enabled && (
+                  <div className="px-3 pb-3 space-y-3">
+                    <p className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2">
+                      <span>Szkółka: <span className="text-slate-200">{clubTitle(club) || 'nie ustawiono'}</span></span>
+                      {onEditClub && (
+                        <button onClick={onEditClub} className="underline text-slate-300 hover:text-white">
+                          {clubTitle(club) ? 'zmień nazwę, logo, trenera' : 'ustaw nazwę, logo i trenera'}
+                        </button>
+                      )}
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        ['coach', 'Trener', club.coach || 'np. Jan Kowalski', 'col-span-2'],
+                        ['assistant', 'Asystent', club.assistant || 'opcjonalnie', 'col-span-2'],
+                        ['topic', 'Temat zajęć', current.goal || 'np. Wyjście spod pressingu', 'col-span-2 sm:col-span-4'],
+                        ['microcycle', 'Mikrocykl', 'np. Mikrocykl 3 — budowanie gry przez środek', 'col-span-2 sm:col-span-4'],
+                      ].map(([key, label, placeholder, span]) => (
+                        <label key={key} className={`${span} text-xs text-slate-400`}>{label}
+                          <input value={cert[key]} onChange={e => patchCert({ [key]: e.target.value })} placeholder={placeholder} className={`${inputCls} mt-1`} />
+                        </label>
+                      ))}
+                      {[
+                        ['technique', 'Technika / działania indywidualne'],
+                        ['motor', 'Motoryka'],
+                        ['teamplay', 'Działania grupowe / zespołowe'],
+                        ['mental', 'Mentalność / wiedza'],
+                      ].map(([key, label]) => (
+                        <label key={key} className="col-span-2 text-xs text-slate-400">{label}
+                          <AutoTextarea minRows={1} watch={`${active}-${currentId}`} value={cert[key]} onChange={e => patchCert({ [key]: e.target.value })} className={`${inputCls} mt-1`} />
+                        </label>
+                      ))}
+                      <label className="text-xs text-slate-400">Godzina
+                        <input type="time" value={cert.time} onChange={e => patchCert({ time: e.target.value })} className={`${inputCls} mt-1`} />
+                      </label>
+                      <label className="text-xs text-slate-400">Miejsce
+                        <input value={cert.place} onChange={e => patchCert({ place: e.target.value })} placeholder="np. Orlik" className={`${inputCls} mt-1`} />
+                      </label>
+                      <label className="text-xs text-slate-400">Nr zajęć
+                        <input value={cert.number} onChange={e => patchCert({ number: e.target.value })} placeholder="np. 1" className={`${inputCls} mt-1`} />
+                      </label>
+                      <label className="text-xs text-slate-400">Zawodnicy
+                        <input type="number" min={0} value={cert.players} onChange={e => patchCert({ players: e.target.value })} placeholder="liczba" className={`${inputCls} mt-1`} />
+                      </label>
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 mb-1">
+                        <span>Sprzęt i liczba</span>
+                        <span className="flex gap-1">
+                          <button onClick={() => patchCert({ equipment: equipmentRows(sessionDrills) })} disabled={!equipment} className={`${btn} text-xs`}
+                            title="Zastąp listę sprzętem policzonym z ćwiczeń konspektu">Wstaw z ćwiczeń</button>
+                          <button onClick={() => patchCert({ equipment: [...cert.equipment, { name: '', count: '' }] })} className={`${btn} text-xs`}>
+                            <Plus size={13} /> Dodaj
+                          </button>
+                        </span>
+                      </div>
+                      {cert.equipment.length === 0 && (
+                        <p className="text-xs text-slate-500">{equipment ? `Na wydruku: sprzęt z ćwiczeń (${equipment}).` : 'Brak sprzętu — dodaj ręcznie albo użyj ćwiczeń z przyrządami.'}</p>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                        {cert.equipment.map((e, i) => (
+                          <div key={i} className="flex gap-1.5">
+                            <input value={e.name} placeholder="np. Znaczniki" aria-label={`Sprzęt ${i + 1}`} className={inputCls}
+                              onChange={ev => patchCert({ equipment: cert.equipment.map((x, j) => (j === i ? { ...x, name: ev.target.value } : x)) })} />
+                            <input value={e.count} placeholder="liczba" aria-label={`Liczba ${i + 1}`} className={`${inputCls.replace('w-full ', '')} w-20 text-center`}
+                              onChange={ev => patchCert({ equipment: cert.equipment.map((x, j) => (j === i ? { ...x, count: ev.target.value } : x)) })} />
+                            <button onClick={() => patchCert({ equipment: cert.equipment.filter((_, j) => j !== i) })} className={`${iconBtn} hover:text-red-400`} aria-label={`Usuń sprzęt ${i + 1}`}>
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500">Data, kategoria (pole „Grupa / drużyna”) i czas ćwiczeń są brane z konspektu. Część treningu (wstępna / główna / końcowa) ustawisz przy każdym bloku.</p>
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* Summary + actions */}
@@ -440,10 +520,16 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                 <button onClick={exportSession} className={btn} aria-label="Pobierz" title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
                   <Download size={14} /> <span className="hidden sm:inline">Pobierz</span>
                 </button>
-                <button onClick={printPlan} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
+                <button onClick={() => printPlan('plan')} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
                   title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
                   <Printer size={14} /> Drukuj / PDF
                 </button>
+                {cert.enabled && (
+                  <button onClick={() => printPlan('cert')} className={`${btn} bg-red-600/80 hover:bg-red-500 text-white`} aria-label="Drukuj konspekt do certyfikacji"
+                    title="Konspekt w układzie wymaganym w certyfikacji PZPN — druk albo PDF">
+                    <BadgeCheck size={14} /> <span className="hidden sm:inline">Certyfikacja</span>
+                  </button>
+                )}
               </div>
             </section>
             {equipment && <p className="text-xs text-slate-400 -mt-2">Sprzęt na trening: <span className="text-slate-200">{equipment}</span></p>}
@@ -494,6 +580,16 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                           aria-label="Czas w minutach" className={`${inputCls.replace('w-full ', '')} w-16 text-center`} />
                         min
                       </label>
+                      {cert.enabled && (
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400 h-9">
+                          Część
+                          <select value={blockPart(b, i, timed.length)} onChange={e => patchBlock(b.id, { part: e.target.value })} aria-label="Część treningu"
+                            title={b.part ? undefined : 'Ustawione automatycznie według kolejności bloków'}
+                            className={`${inputCls.replace('w-full ', '')} w-auto ${b.part ? '' : 'italic text-slate-300'}`}>
+                            {PARTS.map(p => <option key={p.id} value={p.id} className="bg-slate-800 not-italic">{p.label.replace('Część ', '')}</option>)}
+                          </select>
+                        </label>
+                      )}
                       <AutoTextarea minRows={1} watch={`${active}-${currentId}`} value={b.note} onChange={e => patchBlock(b.id, { note: e.target.value })} placeholder="Notatka (np. warianty, grupy)"
                         aria-label="Notatka" className={`${inputCls} flex-1 min-w-[10rem] text-sm`} />
                     </div>
@@ -569,7 +665,15 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
         </div>
       )}
 
-      {active && current && createPortal(
+      {active && current && printMode === 'cert' && createPortal(
+        <div className="print-root text-black bg-white">
+          <CertPlanPrint session={current} club={club} timed={timed} total={total} drills={sessionDrills}
+            phaseText={[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
+            imageFor={(id) => printImages?.get(id) || thumbs.get(id)} />
+        </div>,
+        document.body,
+      )}
+      {active && current && printMode !== 'cert' && createPortal(
         <div className="print-root text-black bg-white">
           <header style={{ borderBottom: '3px solid #1e3a8a', paddingBottom: 6, marginBottom: 8 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
@@ -614,6 +718,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     {box('Przebieg', meta.description, true)}
                     {box('Organizacja', meta.organization)}
+                    {box('Obciążenie', meta.load)}
                     {box('Punkty trenerskie', meta.coachingPoints)}
                     {box('Warianty / progresje', meta.variations, true)}
                     {box('Notatka', b.note, true)}

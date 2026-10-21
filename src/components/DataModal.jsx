@@ -1,9 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { X, Download, Upload, Undo2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Download, Upload, Undo2, AlertTriangle, CheckCircle2, Eraser } from 'lucide-react';
 import {
   SECTIONS, readAll, describe, buildBackup, markBackupDone, backupAgeDays, parseAnyFile, combineParsed,
-  applyImport, replaceLosses, undoInfo, undoLastImport, storageUsage, STORAGE_LIMIT, plural, SECTION_SLUGS,
+  applyImport, replaceLosses, undoInfo, undoLastImport, storageUsage, STORAGE_LIMIT, plural, SECTION_SLUGS, clearAll,
 } from '../utils/backup.js';
+
+// Sections that are a single value: they can only be skipped or loaded, not merged.
+const SINGLE = new Set(['settings', 'club']);
 
 export const IMPORT_RESULT_KEY = 'modelGryImportResult';
 
@@ -28,7 +31,8 @@ const card = 'rounded-xl border border-white/10 bg-white/[0.03] p-4';
 const btnPrimary = 'h-9 px-4 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none';
 const btnSecondary = 'h-9 px-3 rounded-md text-sm bg-white/10 hover:bg-white/15 text-slate-200 inline-flex items-center gap-1.5';
 
-export default function DataModal({ onClose }) {
+// droppedFiles: { files, nonce } — files dropped onto the app, shown straight away as an import.
+export default function DataModal({ onClose, droppedFiles = null }) {
   const current = useMemo(() => readAll(), []);
   const available = SECTIONS.filter(s => describe(s.id, current));
   const [selected, setSelected] = useState(() => new Set(available.map(s => s.id)));
@@ -59,9 +63,8 @@ export default function DataModal({ onClose }) {
       : full ? 'Pobrano pełną kopię zapasową.' : 'Pobrano wybrane dane.');
   };
 
-  const readFiles = async (e) => {
-    const files = [...(e.target.files || [])];
-    e.target.value = '';
+  const readFiles = async (list) => {
+    const files = [...(list || [])];
     if (!files.length) return;
     const parsed = [];
     const bad = [];
@@ -76,8 +79,13 @@ export default function DataModal({ onClose }) {
     const data = combineParsed(parsed);
     const present = SECTIONS.filter(s => describe(s.id, data));
     setIncoming({ data, files: files.length - bad.length, bad });
-    setChoices(Object.fromEntries(present.map(s => [s.id, s.id === 'settings' ? 'skip' : 'add'])));
+    // a school saved in the file is loaded when this device has none yet
+    setChoices(Object.fromEntries(present.map(s => [s.id, s.id === 'settings' ? 'skip' : s.id === 'club' ? (current.club ? 'skip' : 'replace') : 'add'])));
   };
+
+  useEffect(() => {
+    if (droppedFiles?.files?.length) readFiles(droppedFiles.files);
+  }, [droppedFiles]);
 
   const doImport = () => {
     const full = Object.fromEntries(SECTIONS.map(s => [s.id, choices[s.id] || 'skip']));
@@ -90,9 +98,22 @@ export default function DataModal({ onClose }) {
     reloadWith(`Import zakończony${undoNote}: ${result.summary.join(' · ')}`);
   };
 
+  const undoCleared = undo?.kind === 'clear';
   const doUndo = () => {
-    if (!window.confirm('Przywrócić dane sprzed ostatniego importu? Zmiany wprowadzone po imporcie zostaną utracone.')) return;
-    if (undoLastImport()) reloadWith('Przywrócono dane sprzed ostatniego importu.');
+    const what = undoCleared ? 'wyczyszczenia' : 'ostatniego importu';
+    if (!window.confirm(`Przywrócić dane sprzed ${what}? Zmiany wprowadzone później zostaną utracone.`)) return;
+    if (undoLastImport()) reloadWith(`Przywrócono dane sprzed ${what}.`);
+  };
+
+  const doClear = () => {
+    const what = available.map(s => `${s.label} (${describe(s.id, current)})`).join(', ');
+    if (!window.confirm(`Usunąć WSZYSTKIE dane z tej przeglądarki?\n\n${what}\n\nNajpierw warto pobrać pełną kopię. Do następnego importu można to cofnąć przyciskiem „Cofnij”.`)) return;
+    let result = clearAll();
+    if (!result.ok) {
+      if (!window.confirm('Za mało miejsca, by zachować dane do cofnięcia. Usunąć mimo to — bez możliwości cofnięcia?')) return;
+      result = clearAll({ withoutUndo: true });
+    }
+    reloadWith(result.undoSaved ? 'Wyczyszczono wszystkie dane. Możesz to cofnąć w oknie „Dane”.' : 'Wyczyszczono wszystkie dane.');
   };
 
   const incomingSections = incoming ? SECTIONS.filter(s => describe(s.id, incoming.data)) : [];
@@ -159,8 +180,12 @@ export default function DataModal({ onClose }) {
             <p className="text-xs text-slate-400 mb-3">
               Wczytaj kopię zapasową albo dowolny plik z aplikacji (eksport Taktyki, ćwiczenia, konspekty) — można kilka naraz.
             </p>
-            <input ref={fileRef} type="file" accept=".json,application/json" multiple onChange={readFiles} className="hidden" aria-label="Pliki do importu" />
-            <button onClick={() => fileRef.current?.click()} className={btnSecondary}><Upload size={15} /> Wybierz pliki…</button>
+            <input ref={fileRef} type="file" accept=".json,application/json" multiple className="hidden" aria-label="Pliki do importu"
+              onChange={e => { const files = [...(e.target.files || [])]; e.target.value = ''; readFiles(files); }} />
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => fileRef.current?.click()} className={btnSecondary}><Upload size={15} /> Wybierz pliki…</button>
+              <span className="text-xs text-slate-500">albo przeciągnij i upuść pliki w dowolnym miejscu aplikacji</span>
+            </div>
 
             {incoming && (
               <div className="mt-3 space-y-2">
@@ -173,7 +198,7 @@ export default function DataModal({ onClose }) {
                   <>
                     <p className="text-xs text-slate-400">Zawartość ({plural(incoming.files, 'plik', 'pliki', 'plików')}) — wybierz, co zrobić z każdą częścią:</p>
                     {incomingSections.map(s => {
-                      const opts = s.id === 'settings' ? [['skip', 'Pomiń'], ['replace', 'Wczytaj']] : [['skip', 'Pomiń'], ['add', 'Dodaj'], ['replace', 'Zastąp']];
+                      const opts = SINGLE.has(s.id) ? [['skip', 'Pomiń'], ['replace', 'Wczytaj']] : [['skip', 'Pomiń'], ['add', 'Dodaj'], ['replace', 'Zastąp']];
                       return (
                         <div key={s.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md bg-white/5">
                           <span className="flex-1 min-w-[10rem]">
@@ -209,11 +234,22 @@ export default function DataModal({ onClose }) {
           {undo && (
             <section className={`${card} flex flex-wrap items-center gap-3`}>
               <p className="flex-1 text-sm text-slate-300">
-                Ostatni import: {new Date(undo.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
+                {undoCleared ? 'Wyczyszczono dane' : 'Ostatni import'}: {new Date(undo.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
               </p>
-              <button onClick={doUndo} className={btnSecondary}><Undo2 size={15} /> Cofnij ostatni import</button>
+              <button onClick={doUndo} className={btnSecondary}><Undo2 size={15} /> {undoCleared ? 'Cofnij wyczyszczenie' : 'Cofnij ostatni import'}</button>
             </section>
           )}
+
+          {/* Clear everything */}
+          <section className="rounded-xl border border-red-500/30 bg-red-500/[0.04] p-4 flex flex-wrap items-center gap-3" aria-labelledby="clear-title">
+            <div className="flex-1 min-w-[12rem]">
+              <h3 id="clear-title" className="font-semibold text-red-200">Wyczyść wszystko</h3>
+              <p className="text-xs text-slate-400">Usuwa z tej przeglądarki taktykę, ćwiczenia, konspekty, kadrę, ustawienia i dane szkółki.</p>
+            </div>
+            <button onClick={doClear} disabled={!available.length} className="h-9 px-3 rounded-md text-sm bg-red-600/80 hover:bg-red-500 text-white inline-flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
+              <Eraser size={15} /> Wyczyść wszystko
+            </button>
+          </section>
         </div>
       </div>
     </div>

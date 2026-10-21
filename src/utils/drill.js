@@ -154,7 +154,7 @@ export const TYPE_LABELS = {
 
 export const DEFAULT_META = {
   category: '', duration: '', players: '', area: '',
-  objective: '', organization: '', description: '', coachingPoints: '', variations: '',
+  objective: '', organization: '', description: '', load: '', coachingPoints: '', variations: '',
   phases: [], // keys of game-model phases from the tactics editor, e.g. 'Atak-Budowanie'
 };
 
@@ -162,6 +162,7 @@ export const META_FIELDS = [
   ['objective', 'Cel', 'Czego uczy ćwiczenie?'],
   ['organization', 'Organizacja', 'Ustawienie, podział na grupy, rotacje…'],
   ['description', 'Przebieg', 'Jak przebiega ćwiczenie, zasady…'],
+  ['load', 'Obciążenie', 'Czas pracy i przerw, serie, powtórzenia, intensywność… np. 4 × 4′, przerwa 2′'],
   ['coachingPoints', 'Punkty trenerskie', 'Na co zwracać uwagę…'],
   ['variations', 'Warianty / progresje', 'Utrudnienia, ułatwienia…'],
 ];
@@ -257,6 +258,9 @@ export function wrapText(ctx, text, maxWidth) {
   });
   return out;
 }
+
+// The drill being edited in the Trening tab, kept between visits.
+export const DRAFT_KEY = 'trainingDrillDraft';
 
 export function equipmentSummary(frames) {
   const byType = {};

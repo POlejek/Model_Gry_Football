@@ -28,4 +28,6 @@ canvas {
   html, body { overflow: visible !important; height: auto !important; background: #fff !important; }
   body.printing-session #root { display: none !important; }
   body.printing-session .print-root { display: block !important; font-family: Arial, sans-serif; }
+  /* label colours of the certification form are backgrounds, which browsers skip unless asked */
+  .print-root { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

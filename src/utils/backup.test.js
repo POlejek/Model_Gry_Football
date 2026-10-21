@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   KEYS, BACKUP_FORMAT, readAll, describe as describeSection, buildBackup, parseAnyFile, combineParsed, applyImport,
-  replaceLosses, undoInfo, undoLastImport, markBackupDone, backupAgeDays, needsBackup, storageUsage, plural,
+  replaceLosses, undoInfo, undoLastImport, markBackupDone, backupAgeDays, needsBackup, storageUsage, plural, clearAll, isClearing,
 } from './backup.js';
+import { vi } from 'vitest';
 
 const scheme = (id) => ({ id, name: `Schemat ${id}`, frames: [] });
 const drill = (id, name = id) => ({ id, name, frames: [{ items: [], lines: [], zones: [] }], updatedAt: '2026-01-01' });
@@ -153,5 +154,60 @@ describe('przypomnienie o kopii i zajętość pamięci', () => {
   it('liczy zajętość pamięci w bajtach', () => {
     localStorage.setItem('k', 'abcd');
     expect(storageUsage()).toBe(('k'.length + 4) * 2);
+  });
+});
+
+describe('szkółka w kopii zapasowej', () => {
+  const club = { name: 'AP BKS Naprzód Brwinów', team: '2013', logo: 'data:image/png;base64,AA', coach: 'Jan', assistant: '' };
+
+  it('eksport, rozpoznanie w pliku i „Wczytaj” przy imporcie', () => {
+    localStorage.setItem(KEYS.club, JSON.stringify(club));
+    const data = readAll();
+    expect(describeSection('club', data)).toBe('AP BKS Naprzód Brwinów - 2013 · logo');
+    const { backup } = buildBackup(new Set(['club']));
+    expect(backup.sections.club).toEqual(club);
+
+    localStorage.clear();
+    const parsed = combineParsed([parseAnyFile(backup)]);
+    expect(parsed.club).toEqual(club);
+    const r = applyImport(parsed, { club: 'replace' });
+    expect(r.summary).toContain('Szkółka wczytana');
+    expect(stored(KEYS.club)).toEqual(club);
+  });
+
+  it('pusta szkółka nie jest eksportowana, a „Pomiń” jej nie zmienia', () => {
+    localStorage.setItem(KEYS.club, JSON.stringify({ name: ' ' }));
+    expect(readAll().club).toBeNull();
+    expect(describeSection('club', readAll())).toBeNull();
+    applyImport({ club }, { club: 'skip' });
+    expect(stored(KEYS.club)).toEqual({ name: ' ' });
+  });
+});
+
+describe('Wyczyść wszystko', () => {
+  it('usuwa wszystkie dane i szkic ćwiczenia, a „Cofnij” je przywraca', () => {
+    seed({ schemes: { '11v11': { Obrona: [scheme(1)] } }, drills: [drill('d1')], sessions: [session('s1')], squad: [{ id: 'p', number: '9' }] });
+    localStorage.setItem(KEYS.club, JSON.stringify({ name: 'Szkółka' }));
+    localStorage.setItem('trainingDrillDraft', '{}');
+
+    expect(clearAll()).toEqual({ ok: true, undoSaved: true });
+    expect(isClearing()).toBe(true);
+    Object.values(KEYS).forEach(k => expect(localStorage.getItem(k)).toBeNull());
+    expect(localStorage.getItem('trainingDrillDraft')).toBeNull();
+    expect(undoInfo().kind).toBe('clear');
+
+    expect(undoLastImport()).toBe(true);
+    expect(stored(KEYS.drills).map(d => d.id)).toEqual(['d1']);
+    expect(stored(KEYS.club)).toEqual({ name: 'Szkółka' });
+  });
+
+  it('gdy kopia do cofnięcia się nie mieści, niczego nie usuwa bez zgody', () => {
+    seed({ drills: [drill('d1')] });
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    expect(clearAll()).toEqual({ ok: false, undoSaved: false });
+    expect(stored(KEYS.drills)).toHaveLength(1);
+    expect(clearAll({ withoutUndo: true })).toEqual({ ok: true, undoSaved: false });
+    setItem.mockRestore();
+    expect(localStorage.getItem(KEYS.drills)).toBeNull();
   });
 });

@@ -70,6 +70,59 @@ test.describe('Taktyka', () => {
     expect(scheme.frames[0].lines).toHaveLength(1);
   });
 
+  test('nowa strefa trafia na spód; zawodnik w strefie ma pierwszeństwo przy kliknięciu', async ({ page }) => {
+    await newScheme(page);
+    await page.keyboard.press('s');
+    await dragOnCanvas(page, [200, 200], [400, 400]);
+    await dragOnCanvas(page, [300, 300], [500, 500]);
+    await page.keyboard.press('Escape');
+    let zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones).toHaveLength(2);
+    // druga narysowana strefa leży pod pierwszą
+    expect(zones[0].x).toBeGreaterThan(zones[1].x);
+
+    // strefa pod napastnikiem (nr 9 w punkcie 350, 570): kliknięcie i przeciągnięcie rusza zawodnika, nie strefę
+    await page.keyboard.press('s');
+    await dragOnCanvas(page, [280, 500], [420, 640]);
+    await page.keyboard.press('Escape');
+    await dragOnCanvas(page, [350, 570], [380, 520]);
+    const scheme = await firstScheme(page);
+    zones = scheme.frames[0].zones;
+    expect(scheme.frames[0].team.find(p => p.id === 'st').y).toBeLessThan(550);
+    expect(zones[0]).toMatchObject({ x: expect.any(Number) });
+    expect(Math.round(zones[0].x)).toBeLessThanOrEqual(281);
+  });
+
+  test('zaznaczona strefa: zmiana koloru i krycia, przeniesienie na wierzch i na spód', async ({ page }) => {
+    await newScheme(page);
+    await page.keyboard.press('s');
+    await dragOnCanvas(page, [200, 200], [400, 400]);
+    await dragOnCanvas(page, [300, 300], [500, 500]);
+    await page.keyboard.press('Escape');
+
+    // w części wspólnej na wierzchu jest pierwsza strefa (indeks 1)
+    await clickOnCanvas(page, 380, 330);
+    await page.getByRole('button', { name: 'Kolor zaznaczonej strefy' }).click();
+    await page.getByTitle('Niebieski', { exact: true }).first().click();
+    let zones = (await firstScheme(page)).frames[0].zones;
+    const recolored = zones[1].color;
+    expect(recolored).not.toBe(zones[0].color);
+    await expect(page.getByRole('button', { name: 'Na wierzch' })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Na spód' }).click();
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[0].color).toBe(recolored);
+    await expect(page.getByRole('button', { name: 'Na spód' })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Na wierzch' }).click();
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[1].color).toBe(recolored);
+
+    await page.getByLabel('Krycie zaznaczonej strefy').fill('0.8');
+    zones = (await firstScheme(page)).frames[0].zones;
+    expect(zones[1].opacity).toBe(0.8);
+  });
+
   test('zapisane schematy nie są nadpisywane podczas uruchamiania aplikacji', async ({ page }) => {
     await newScheme(page);
     // otwiera aplikację od nowa i sprawdza magazyn od razu, zanim interfejs zdąży się zaktualizować

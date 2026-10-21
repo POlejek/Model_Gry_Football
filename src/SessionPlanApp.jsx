@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck,
+  Image as ImageIcon, ImageOff,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
 import { safeFileName, horizontalFullPitch } from './utils/drill.js';
@@ -10,6 +11,7 @@ import { PARTS, certOf, blockPart, equipmentRows } from './utils/certPlan.js';
 import { clubTitle, EMPTY_CLUB } from './utils/club.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
+import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink } from './utils/printLayout.js';
 
 const SESSIONS_KEY = 'trainingSessions';
 const DRILLS_KEY = 'trainingDrillLibrary';
@@ -272,31 +274,66 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   // Images for the printout are rendered at full resolution only when printing (thumbnails are too small
   // for a full-width picture); printing starts once they are in the DOM and decoded.
   const [printImages, setPrintImages] = useState(null);
-  const [printMode, setPrintMode] = useState('plan'); // 'plan' (szczegółowy) | 'cert' (certyfikacja PZPN)
-  const printPlan = (mode = 'plan') => {
+  const [printMode, setPrintMode] = useState(() => {
+    try { return localStorage.getItem('sessionPrintMode') === 'compact' ? 'compact' : 'full'; } catch { return 'full'; }
+  });
+  const choosePrintMode = (mode) => {
     setPrintMode(mode);
+    try { localStorage.setItem('sessionPrintMode', mode); } catch { /* storage unavailable */ }
+  };
+  const [printKind, setPrintKind] = useState('plan'); // 'plan' (konspekt) | 'cert' (certyfikacja PZPN)
+  // compact layout: measure → shrink too tall drills → measure again → page breaks → print
+  const [printLayout, setPrintLayout] = useState(null); // { stage, shrink: Set, breaks: Set }
+  const printPlan = (kind = 'plan') => {
+    setPrintKind(kind);
     const map = new Map();
     current.blocks.forEach(b => {
       const d = drillById.get(b.drillId);
-      if (d && !map.has(d.id)) {
-        try { map.set(d.id, renderDrillImage(mode === 'cert' ? horizontalFullPitch(d) : d, 1)); } catch { /* broken drill: printed without picture */ }
+      if (d && b.printImage !== false && !map.has(d.id)) {
+        try { map.set(d.id, renderDrillImage(kind === 'cert' ? horizontalFullPitch(d) : d, 1)); } catch { /* broken drill: printed without picture */ }
       }
     });
+    setPrintLayout(kind === 'plan' && printMode === 'compact' ? { stage: 'measure', shrink: new Set(), breaks: new Set() } : null);
     setPrintImages(map);
   };
+  const measureUnits = () => {
+    document.body.classList.add('measuring-print');
+    const units = [...document.querySelectorAll('.print-root [data-print-unit]')].map(el => ({
+      id: el.dataset.printUnit,
+      h: el.getBoundingClientRect().height + 10, // + gap between units
+      shrinkable: el.dataset.shrinkable === '1',
+    }));
+    document.body.classList.remove('measuring-print');
+    return units;
+  };
   useEffect(() => {
-    if (!printImages) return;
-    document.body.classList.add('printing-session');
-    const cleanup = () => {
-      document.body.classList.remove('printing-session');
-      window.removeEventListener('afterprint', cleanup);
-      setPrintImages(null);
-      setPrintMode('plan');
-    };
-    window.addEventListener('afterprint', cleanup);
+    if (!printImages) return undefined;
+    let cancelled = false;
     const imgs = [...document.querySelectorAll('.print-root img')];
-    Promise.all(imgs.map(img => (img.decode ? img.decode().catch(() => {}) : null))).then(() => window.print());
-  }, [printImages]);
+    Promise.all(imgs.map(img => (img.decode ? img.decode().catch(() => {}) : null))).then(() => {
+      if (cancelled) return;
+      const pageH = A4_CONTENT_MM * MM * 0.97; // small safety margin
+      if (printLayout?.stage === 'measure') {
+        setPrintLayout({ stage: 'measure2', shrink: new Set(unitsToShrink(measureUnits(), pageH)), breaks: new Set() });
+        return;
+      }
+      if (printLayout?.stage === 'measure2') {
+        setPrintLayout({ stage: 'ready', shrink: printLayout.shrink, breaks: new Set(pageBreaks(measureUnits(), pageH)) });
+        return;
+      }
+      document.body.classList.add('printing-session');
+      const cleanup = () => {
+        document.body.classList.remove('printing-session');
+        window.removeEventListener('afterprint', cleanup);
+        setPrintImages(null);
+        setPrintLayout(null);
+        setPrintKind('plan');
+      };
+      window.addEventListener('afterprint', cleanup);
+      window.print();
+    });
+    return () => { cancelled = true; };
+  }, [printImages, printLayout]);
 
   let minute = 0;
   const timed = current ? current.blocks.map(b => {
@@ -520,6 +557,12 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
                 <button onClick={exportSession} className={btn} aria-label="Pobierz" title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
                   <Download size={14} /> <span className="hidden sm:inline">Pobierz</span>
                 </button>
+                <select value={printMode} onChange={e => choosePrintMode(e.target.value)} aria-label="Tryb wydruku"
+                  title="Pełny – duże grafiki i opisy; Kompaktowy – 1 ćwiczenie na stronę (2, jeśli się zmieszczą), z nagłówkiem"
+                  className="h-8 px-2 rounded-md text-sm bg-white/5 border border-white/10 text-slate-200">
+                  <option value="full" className="bg-slate-800">Wydruk: pełny</option>
+                  <option value="compact" className="bg-slate-800">Wydruk: kompaktowy</option>
+                </select>
                 <button onClick={() => printPlan('plan')} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
                   title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
                   <Printer size={14} /> Drukuj / PDF
@@ -592,6 +635,13 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
                       )}
                       <AutoTextarea minRows={1} watch={`${active}-${currentId}`} value={b.note} onChange={e => patchBlock(b.id, { note: e.target.value })} placeholder="Notatka (np. warianty, grupy)"
                         aria-label="Notatka" className={`${inputCls} flex-1 min-w-[10rem] text-sm`} />
+                      {drill && (
+                        <button type="button" onClick={() => patchBlock(b.id, { printImage: b.printImage === false })} aria-pressed={b.printImage !== false}
+                          aria-label={`Grafika w wydruku: ${drill.name}`} title={b.printImage === false ? 'Wydruk bez grafiki – kliknij, aby drukować z grafiką' : 'Wydruk z grafiką – kliknij, aby drukować bez grafiki'}
+                          className={`h-9 px-2 rounded-md text-xs inline-flex items-center gap-1.5 border ${b.printImage === false ? 'border-white/10 text-slate-400 bg-transparent' : 'border-blue-500/40 text-blue-200 bg-blue-600/15'}`}>
+                          {b.printImage === false ? <ImageOff size={14} /> : <ImageIcon size={14} />} <span className="hidden sm:inline">{b.printImage === false ? 'Bez grafiki' : 'Z grafiką'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-0.5">
@@ -665,7 +715,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         </div>
       )}
 
-      {active && current && printMode === 'cert' && createPortal(
+      {active && current && printKind === 'cert' && createPortal(
         <div className="print-root text-black bg-white">
           <CertPlanPrint session={current} club={club} timed={timed} total={total} drills={sessionDrills}
             phaseText={[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
@@ -673,63 +723,83 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         </div>,
         document.body,
       )}
-      {active && current && printMode !== 'cert' && createPortal(
-        <div className="print-root text-black bg-white">
-          <header style={{ borderBottom: '3px solid #1e3a8a', paddingBottom: 6, marginBottom: 8 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
-            <p style={{ fontSize: 12, color: '#475569', margin: '4px 0 0' }}>
-              {[formatDate(current.date), current.group, `Czas: ${total} min`].filter(Boolean).join('   ·   ')}
-            </p>
-          </header>
-          {current.goal && <p style={{ fontSize: 13, margin: '0 0 6px' }}><strong>Cel: </strong>{current.goal}</p>}
-          {(current.phases.length > 0 || trainedPhases.length > 0) && (
-            <p style={{ fontSize: 13, margin: '0 0 6px' }}>
-              <strong>Fazy modelu gry: </strong>{[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
-            </p>
-          )}
-          {equipment && <p style={{ fontSize: 13, margin: '0 0 10px' }}><strong>Sprzęt: </strong>{equipment}</p>}
-          {timed.map(({ block: b, from, to, drill }, i) => {
-            const img = drill && (printImages?.get(drill.id) || thumbs.get(drill.id));
-            const meta = drill?.meta || {};
-            // long texts take the full width and may continue on the next page; short ones stay in one piece
-            const box = (label, text, wide) => text && (
-              <div key={label} style={{ breakInside: text.length > 1200 ? 'auto' : 'avoid', gridColumn: wide || text.length > 700 ? '1 / -1' : undefined, border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 8px' }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#1e3a8a', marginBottom: 3 }}>{label}</div>
-                <div style={{ fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{text}</div>
+      {active && current && printKind !== 'cert' && createPortal(
+        <div className={`print-root text-black bg-white ${printMode === 'compact' ? 'print-compact' : ''}`}>
+          {(() => {
+            const compact = printMode === 'compact';
+            const unit = (id, shrinkable) => (compact ? { 'data-print-unit': id, 'data-shrinkable': shrinkable ? '1' : '0' } : {});
+            const pageStyle = (id) => (compact ? { breakBefore: printLayout?.breaks?.has(id) ? 'page' : 'auto' } : {});
+            const fs = (full, small) => (compact ? small : full);
+            const header = (
+              <div {...unit('header')} style={pageStyle('header')}>
+                <header style={{ borderBottom: '3px solid #1e3a8a', paddingBottom: fs(6, 4), marginBottom: fs(8, 5) }}>
+                  <h1 style={{ fontSize: fs(20, 16), fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
+                  <p style={{ fontSize: fs(12, 10.5), color: '#475569', margin: '3px 0 0' }}>
+                    {[formatDate(current.date), current.group, `Czas: ${total} min`].filter(Boolean).join('   ·   ')}
+                  </p>
+                </header>
+                {current.goal && <p style={{ fontSize: fs(13, 11), margin: '0 0 4px' }}><strong>Cel: </strong>{current.goal}</p>}
+                {(current.phases.length > 0 || trainedPhases.length > 0) && (
+                  <p style={{ fontSize: fs(13, 11), margin: '0 0 4px' }}>
+                    <strong>Fazy modelu gry: </strong>{[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}
+                  </p>
+                )}
+                {equipment && <p style={{ fontSize: fs(13, 11), margin: '0 0 8px' }}><strong>Sprzęt: </strong>{equipment}</p>}
               </div>
             );
-            return (
-              <section key={b.id} className="print-block" style={{ borderTop: '2px solid #1e3a8a', paddingTop: 8, marginTop: i ? 14 : 0 }}>
-                {/* title + picture stay together; the modules below may continue on the next page */}
-                <div style={{ breakInside: 'avoid', breakAfter: 'avoid' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>#{i + 1} · {from}–{to}′</span>
-                    <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{drill ? drill.name : (b.title || 'Blok')}</h2>
-                  </div>
-                  {drill && (
-                    <p style={{ fontSize: 11, color: '#475569', margin: '2px 0 6px' }}>
-                      {[`${minutesOf(b)} min`, meta.category, meta.players && `Zawodnicy: ${meta.players}`, meta.area && `Pole: ${meta.area}`].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                  {meta.objective && <p style={{ fontSize: 11.5, margin: '0 0 6px' }}><strong>Cel: </strong>{meta.objective}</p>}
-                  {img && <img src={img} alt="" className="print-drill-img" style={{ display: 'block', width: '100%', maxHeight: '125mm', objectFit: 'contain', border: '1px solid #e2e8f0', margin: '0 auto 8px' }} />}
+            const blocks = timed.map(({ block: b, from, to, drill }, i) => {
+              const showImg = b.printImage !== false;
+              const img = drill && showImg && (printImages?.get(drill.id) || thumbs.get(drill.id));
+              const meta = drill?.meta || {};
+              const small = compact && printLayout?.shrink?.has(b.id);
+              const tx = compact ? (small ? 9 : 10.5) : 11;
+              // full: long texts take the full width and may continue on the next page; short ones stay in one piece
+              const box = (label, text, wide) => text && (compact ? (
+                <div key={label} style={{ breakInside: text.length > 500 ? 'auto' : 'avoid', marginBottom: 5 }}>
+                  <div style={{ fontSize: tx - 0.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, color: '#1e3a8a', marginBottom: 1 }}>{label}</div>
+                  <div style={{ fontSize: tx, lineHeight: small ? 1.25 : 1.32, whiteSpace: 'pre-wrap' }}>{text}</div>
                 </div>
-                {drill ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    {box('Przebieg', meta.description, true)}
-                    {box('Organizacja', meta.organization)}
-                    {box('Obciążenie', meta.load)}
-                    {box('Punkty trenerskie', meta.coachingPoints)}
-                    {box('Warianty / progresje', meta.variations, true)}
-                    {box('Notatka', b.note, true)}
+              ) : (
+                <div key={label} style={{ breakInside: text.length > 1200 ? 'auto' : 'avoid', gridColumn: wide || text.length > 700 ? '1 / -1' : undefined, border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 8px' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#1e3a8a', marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{text}</div>
+                </div>
+              ));
+              const modules = [box('Przebieg', meta.description, true), box('Organizacja', meta.organization), box('Obciążenie', meta.load), box('Punkty trenerskie', meta.coachingPoints), box('Warianty / progresje', meta.variations, true), box('Notatka', b.note, true)];
+              return (
+                <section key={b.id} className="print-block" {...unit(b.id, !!drill)}
+                  style={{ borderTop: '2px solid #1e3a8a', paddingTop: fs(8, 5), marginTop: compact ? 0 : (i ? 14 : 0), breakInside: compact ? 'avoid' : undefined, ...pageStyle(b.id) }}>
+                  {/* full: title + picture stay together; the modules below may continue on the next page */}
+                  <div style={{ breakInside: 'avoid', breakAfter: 'avoid' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                      <span style={{ fontSize: fs(15, 13), fontWeight: 700, whiteSpace: 'nowrap' }}>#{i + 1} · {from}–{to}′</span>
+                      <h2 style={{ fontSize: fs(15, 13), fontWeight: 700, margin: 0 }}>{drill ? drill.name : (b.title || 'Blok')}</h2>
+                    </div>
+                    {drill && (
+                      <p style={{ fontSize: fs(11, 9.5), color: '#475569', margin: '2px 0 4px' }}>
+                        {[`${minutesOf(b)} min`, meta.category, meta.players && `Zawodnicy: ${meta.players}`, meta.area && `Pole: ${meta.area}`].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {meta.objective && <p style={{ fontSize: fs(11.5, tx), margin: '0 0 4px' }}><strong>Cel: </strong>{meta.objective}</p>}
+                    {img && <img src={img} alt="" className="print-drill-img" style={{ display: 'block', width: '100%', maxHeight: compact ? (small ? '62mm' : '95mm') : '125mm', objectFit: 'contain', border: '1px solid #e2e8f0', margin: '0 auto 6px' }} />}
                   </div>
-                ) : (
-                  <p style={{ fontSize: 11.5, margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>{minutesOf(b)} min{b.note ? ` · ${b.note}` : ''}</p>
-                )}
-              </section>
+                  {drill ? (
+                    compact
+                      ? <div style={{ columnCount: 2, columnGap: '5mm' }}>{modules}</div>
+                      : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>{modules}</div>
+                  ) : (
+                    <p style={{ fontSize: fs(11.5, 10.5), margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>{minutesOf(b)} min{b.note ? ` · ${b.note}` : ''}</p>
+                  )}
+                </section>
+              );
+            });
+            const notes = current.notes && (
+              <div {...unit('notes')} style={pageStyle('notes')}>
+                <p style={{ fontSize: fs(12, 10), borderTop: '1px solid #cbd5e1', paddingTop: 8, whiteSpace: 'pre-wrap', margin: 0 }}><strong>Notatki: </strong>{current.notes}</p>
+              </div>
             );
-          })}
-          {current.notes && <p style={{ fontSize: 12, borderTop: '1px solid #cbd5e1', paddingTop: 8, whiteSpace: 'pre-wrap' }}><strong>Notatki: </strong>{current.notes}</p>}
+            return <>{header}{blocks}{notes}</>;
+          })()}
         </div>,
         document.body,
       )}

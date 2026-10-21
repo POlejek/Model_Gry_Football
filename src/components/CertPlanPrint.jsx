@@ -68,7 +68,7 @@ export default function CertPlanPrint({ session, club, timed, total, drills, pha
 
       {parts.flatMap(part => part.items.map(({ block: b, drill, number }) => {
         const meta = drill?.meta || {};
-        const img = drill && imageFor(drill.id);
+        const img = drill && b.printImage !== false && imageFor(drill.id); // "Bez grafiki" on the block
         const labelled = [
           ['Cel', meta.objective],
           ['Wskazówki', meta.coachingPoints],
@@ -98,12 +98,12 @@ export default function CertPlanPrint({ session, club, timed, total, drills, pha
                 <th style={{ ...label(RED), textAlign: 'center' }}>Czas</th>
               </tr>
               <tr style={{ height: 96 }}>
-                {drill && (
+                {img && (
                   <td style={{ ...value, verticalAlign: 'top', padding: 4 }}>
-                    {img && <img src={img} alt="" className="print-drill-img" style={{ display: 'block', width: '100%', maxHeight: '110mm', objectFit: 'contain' }} />}
+                    {<img src={img} alt="" className="print-drill-img" style={{ display: 'block', width: '100%', maxHeight: '110mm', objectFit: 'contain' }} />}
                   </td>
                 )}
-                <td colSpan={drill ? 1 : 2} style={{ ...value, verticalAlign: 'top', padding: '5px 7px', fontSize: 10.5 }}>
+                <td colSpan={img ? 1 : 2} style={{ ...value, verticalAlign: 'top', padding: '5px 7px', fontSize: 10.5 }}>
                   {[meta.organization, meta.description].filter(t => t && String(t).trim()).map((t, i) => <p key={i} style={{ margin: '0 0 6px' }}>{t}</p>)}
                   {labelled.map(([k, t]) => <p key={k} style={{ margin: '0 0 6px' }}><strong>{k}: </strong>{t}</p>)}
                   {tags.length > 0 && (

@@ -93,4 +93,28 @@ test.describe('Trening', () => {
     expect(goal.y).toBeLessThan(560);
     expect(await canvasPoint(page, 0, 0)).toBeTruthy();
   });
+
+  test('bandy z logo szkółki: wyłączone bez szkółki, ramka wokół boiska nie przesuwa elementów', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Boisko i kolory' }).click();
+    const toggle = page.getByRole('button', { name: 'Bandy: uzupełnij logo w Szkółce' }).filter({ visible: true });
+    await expect(toggle).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Szkółka' }).click();
+    await page.getByRole('dialog', { name: 'Szkółka i trener' }).getByLabel('Nazwa szkółki / klubu').fill('AP BKS Naprzód Brwinów');
+    await page.getByRole('dialog', { name: 'Szkółka i trener' }).getByRole('button', { name: 'Gotowe' }).click();
+
+    const canvas = page.locator('canvas:visible');
+    const before = await canvas.evaluate(c => [c.width, c.height]);
+    await page.getByRole('button', { name: 'Bandy z logo szkółki' }).filter({ visible: true }).click();
+    const after = await canvas.evaluate(c => [c.width, c.height]);
+    expect(after).toEqual([before[0] + 68, before[1] + 68]); // 34 px frame on each side
+    expect((await trainingDraft(page)).pitch.boards).toBe(true);
+
+    // a drop in the middle of the canvas still lands in the middle of the pitch
+    const box = await canvas.boundingBox();
+    await paletteTile(page, 'Stożek').dragTo(canvas, { targetPosition: { x: box.width * 0.5, y: box.height * 0.5 } });
+    const [cone] = (await trainingDraft(page)).frames[0].items;
+    expect(cone.x).toBeCloseTo(1080 / 2, -1);
+    expect(cone.y).toBeCloseTo(700 / 2, -1);
+  });
 });

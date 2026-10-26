@@ -102,4 +102,29 @@ test.describe('Konspekt', () => {
     await expect(page.getByText(/Przywrócono dane sprzed wyczyszczenia/)).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('trainingDrillLibrary')).length)).toBe(1);
   });
+
+  test('ćwiczenie z bandami drukuje się w Konspekcie z ramką band', async ({ page }) => {
+    const drill = {
+      id: 'd1', name: 'Gra z bandami', version: 2, createdAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-01T08:00:00.000Z',
+      frames: [{ items: [], lines: [], zones: [] }], pitch: { type: 'half', orientation: 'horizontal', width: 30, length: 40, boards: true }, meta: {},
+    };
+    await page.evaluate((d) => {
+      localStorage.setItem('modelGryClub', JSON.stringify({ name: 'AP BKS', team: '', logo: '', coach: '', assistant: '' }));
+      localStorage.setItem('trainingDrillLibrary', JSON.stringify([d]));
+      localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'T', date: '2026-10-20', group: 'U14', goal: '', notes: '', phases: [],
+        blocks: [{ id: 'b1', drillId: d.id, minutes: '20', note: '' }] }]));
+    }, drill);
+    await page.reload();
+    await openTab(page, 'Konspekt');
+    await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
+    await page.getByRole('button', { name: 'Drukuj / PDF' }).click();
+    await page.waitForFunction(() => window.__printed === true);
+    // half pitch lying flat: 560 × 700 plus a 34 px frame on each side
+    const size = await page.evaluate(() => {
+      const img = document.querySelector('.print-root .print-block img');
+      return [img.naturalWidth, img.naturalHeight];
+    });
+    expect(size).toEqual([560 + 68, 700 + 68]);
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  });
 });

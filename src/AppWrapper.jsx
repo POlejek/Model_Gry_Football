@@ -220,7 +220,7 @@ export default function AppWrapper() {
         <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} openDrillRequest={drillRequest} /></TabErrorBoundary>
+        <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} club={club} openDrillRequest={drillRequest} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'session' ? 'flex' : 'hidden'}`}>
         <TabErrorBoundary name="Konspekt">

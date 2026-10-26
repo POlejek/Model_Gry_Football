@@ -9,6 +9,7 @@ import { safeFileName, horizontalFullPitch } from './utils/drill.js';
 import { phaseOptions, readModelPhases, phaseLabel, readDrillLibrary } from './utils/modelPhases.js';
 import { PARTS, certOf, blockPart, equipmentRows } from './utils/certPlan.js';
 import { clubTitle, EMPTY_CLUB } from './utils/club.js';
+import { logoImage } from './utils/boards.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
 import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink } from './utils/printLayout.js';
@@ -120,13 +121,16 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   const options = useMemo(() => phaseOptions(readModelPhases()), [active]);
   const drillById = useMemo(() => new Map(library.map(d => [d.id, d])), [library]);
 
+  // drills with boards show the school's logo: redraw once it has loaded or changed
+  const [logoLoaded, setLogoLoaded] = useState(0);
+  const logoReady = Boolean(logoImage(club.logo, () => setLogoLoaded(n => n + 1)));
   const thumbs = useMemo(() => {
     const map = new Map();
     library.forEach(d => {
-      try { map.set(d.id, renderDrillImage(d, 0.4)); } catch { /* broken drill: no thumbnail */ }
+      try { map.set(d.id, renderDrillImage(d, 0.4, club)); } catch { /* broken drill: no thumbnail */ }
     });
     return map;
-  }, [library]);
+  }, [library, club, logoReady, logoLoaded]);
 
   useEffect(() => {
     try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); } catch { /* storage full */ }
@@ -290,7 +294,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
     current.blocks.forEach(b => {
       const d = drillById.get(b.drillId);
       if (d && b.printImage !== false && !map.has(d.id)) {
-        try { map.set(d.id, renderDrillImage(kind === 'cert' ? horizontalFullPitch(d) : d, 1)); } catch { /* broken drill: printed without picture */ }
+        try { map.set(d.id, renderDrillImage(kind === 'cert' ? horizontalFullPitch(d) : d, 1, club)); } catch { /* broken drill: printed without picture */ }
       }
     });
     setPrintLayout(kind === 'plan' && printMode === 'compact' ? { stage: 'measure', shrink: new Set(), breaks: new Set() } : null);

@@ -10,6 +10,8 @@ import PhasePicker from './components/PhasePicker.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import { isClearing } from './utils/backup.js';
+import { boardSize, drawBoards, logoImage, hasBrand } from './utils/boards.js';
+import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
@@ -525,25 +527,31 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
 
 // ── Main component ───────────────────────────────────────────────
 // Static image of a drill's first frame (used by the session plan for thumbnails and printing).
-export function renderDrillImage(drill, scale = 0.5) {
+// Boards with the school's logo frame the picture when the drill has them switched on.
+export function renderDrillImage(drill, scale = 0.5, club = loadClub()) {
   const n = normalizeDrill(drill);
   const { w, h } = getPitchSize(n.pitch);
+  const b = boardSize(n.pitch, club);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
+  canvas.width = Math.round((w + 2 * b) * scale);
+  canvas.height = Math.round((h + 2 * b) * scale);
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
+  drawBoards(ctx, { w, h, b, club });
+  ctx.translate(b, b);
   renderScene(ctx, { pitchImg: renderPitchCanvas(n.pitch), frame: n.frames[0], w, h });
   return canvas.toDataURL('image/png');
 }
 
 // Library thumbnails: rendered once per drill version and scale (null where canvas is unavailable, e.g. tests).
 const thumbCache = new Map();
-function drillThumb(drill, scale) {
-  const key = `${drill.id}|${drill.updatedAt}|${scale}`;
+function drillThumb(drill, scale, club) {
+  // the school's boards change with its name and logo (and the moment the logo has loaded)
+  const brand = drill.pitch?.boards ? `${club.name}|${club.logo.length}|${logoImage(club.logo) ? 1 : 0}` : '';
+  const key = `${drill.id}|${drill.updatedAt}|${scale}|${brand}`;
   if (!thumbCache.has(key)) {
     let url = null;
-    try { url = renderDrillImage(drill, scale); } catch { url = null; }
+    try { url = renderDrillImage(drill, scale, club); } catch { url = null; }
     thumbCache.set(key, url);
   }
   return thumbCache.get(key);
@@ -551,7 +559,7 @@ function drillThumb(drill, scale) {
 
 const isDesktop = () => typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)').matches;
 
-export default function TrainingDrillApp({ active = true, squad = [], openDrillRequest = null }) {
+export default function TrainingDrillApp({ active = true, squad = [], openDrillRequest = null, club = EMPTY_CLUB }) {
   const [initial] = useState(loadDraft);
 
   const canvasRef = useRef(null);
@@ -630,6 +638,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const frame = frames[currentFrame] || frames[0];
   const pitchSize = useMemo(() => getPitchSize(pitch), [pitch]);
   const pitchImg = useMemo(() => renderPitchCanvas(pitch), [pitch]);
+  // advertising boards frame the pitch outside its coordinates: B is the frame thickness (0 = none)
+  const [, setLogoLoaded] = useState(0);
+  const boardLogo = logoImage(club.logo, () => setLogoLoaded(n => n + 1));
+  const B = boardSize(pitch, club);
+  const canvasSize = { w: pitchSize.w + 2 * B, h: pitchSize.h + 2 * B };
   const sceneKey = useMemo(() => makeSceneKey(frames, pitch, teamAColor, teamBColor), [frames, pitch, teamAColor, teamBColor]);
   const displayFrame = isPlaying ? interpolateFrames(frames, playhead) : frame;
   const single = selectedIds.length === 1 ? findObj(frame, selectedIds[0]) : null;
@@ -727,7 +740,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     return () => ro.disconnect();
   }, []);
 
-  const displayScale = boxSize.w > 0 ? Math.min(boxSize.w / pitchSize.w, boxSize.h / pitchSize.h) : 0;
+  const displayScale = boxSize.w > 0 ? Math.min(boxSize.w / canvasSize.w, boxSize.h / canvasSize.h) : 0;
   // >1 when the pitch is shown small (phones): enlarges handles and hit areas to finger size
   const uiScale = displayScale ? clamp(0.9 / displayScale, 1, 3) : 1;
   const lastTouchRef = useRef(0);
@@ -742,6 +755,10 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const prevFrame = !isPlaying && showPaths && currentFrame > 0 ? frames[currentFrame - 1] : null;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo });
+    ctx.translate(B, B); // everything below is drawn in pitch coordinates
     renderScene(ctx, {
       pitchImg, frame: displayFrame, prevFrame,
       selectedIds: isPlaying ? [] : selectedIds, w: pitchSize.w, h: pitchSize.h, ui: uiScale,
@@ -960,8 +977,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     const rect = canvas.getBoundingClientRect();
     const src = e.touches?.[0] || e.changedTouches?.[0] || e;
     return {
-      x: (src.clientX - rect.left) * (canvas.width / rect.width),
-      y: (src.clientY - rect.top) * (canvas.height / rect.height),
+      x: (src.clientX - rect.left) * (canvas.width / rect.width) - B,
+      y: (src.clientY - rect.top) * (canvas.height / rect.height) - B,
       screenX: src.clientX,
       screenY: src.clientY,
     };
@@ -1230,9 +1247,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   // ── Export PNG / card ────────────────────────────────────────────
   const renderSceneCanvas = (scale = 2) => {
     const c = document.createElement('canvas');
-    c.width = pitchSize.w * scale; c.height = pitchSize.h * scale;
+    c.width = canvasSize.w * scale; c.height = canvasSize.h * scale;
     const ctx = c.getContext('2d');
     ctx.scale(scale, scale);
+    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo });
+    ctx.translate(B, B);
     renderScene(ctx, { pitchImg, frame, w: pitchSize.w, h: pitchSize.h });
     return c;
   };
@@ -1244,8 +1263,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const exportCard = () => {
     const S = 2, CW = 1000, PAD = 40, TEXT_W = CW - PAD * 2;
     const scene = renderSceneCanvas(S);
-    const imgScale = Math.min(TEXT_W / pitchSize.w, 900 / pitchSize.h, 1.6);
-    const imgW = pitchSize.w * imgScale, imgH = pitchSize.h * imgScale;
+    const imgScale = Math.min(TEXT_W / canvasSize.w, 900 / canvasSize.h, 1.6);
+    const imgW = canvasSize.w * imgScale, imgH = canvasSize.h * imgScale;
 
     const area = meta.area || (pitch.type === 'custom' ? `${pitch.width}×${pitch.length} m` : '');
     const info = [
@@ -1753,6 +1772,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                     </button>
                   ))}
                 </div>
+                <button onClick={() => changePitch({ boards: !pitch.boards })} disabled={!hasBrand(club)} aria-pressed={!!pitch.boards}
+                  title={hasBrand(club) ? 'Bandy reklamowe z logo i nazwą szkółki wokół boiska' : 'Uzupełnij logo lub nazwę w ustawieniach „Szkółka”'}
+                  className={`mt-1 w-full h-8 rounded-md text-xs transition-colors disabled:opacity-40 disabled:pointer-events-none ${pitch.boards && hasBrand(club) ? 'bg-red-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                  {hasBrand(club) ? 'Bandy z logo szkółki' : 'Bandy: uzupełnij logo w Szkółce'}
+                </button>
                 {pitch.type === 'custom' && (
                   <div className="grid grid-cols-2 gap-1 mt-2">
                     {[['width', 'Szerokość (m)'], ['length', 'Długość (m)']].map(([key, label]) => (
@@ -1984,8 +2008,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
           onDrop={handleDrop}>
           <canvas
             ref={canvasRef}
-            width={pitchSize.w}
-            height={pitchSize.h}
+            width={canvasSize.w}
+            height={canvasSize.h}
             onMouseDown={fromMouse(handlePointerDown)}
             onMouseMove={fromMouse(handlePointerMove)}
             onMouseUp={fromMouse(handlePointerUp)}
@@ -1997,8 +2021,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             className="rounded-xl shadow-2xl"
             style={{
               display: 'block', touchAction: 'none', cursor: canvasCursor,
-              width: displayScale ? pitchSize.w * displayScale : undefined,
-              height: displayScale ? pitchSize.h * displayScale : undefined,
+              width: displayScale ? canvasSize.w * displayScale : undefined,
+              height: displayScale ? canvasSize.h * displayScale : undefined,
             }}
           />
           {canvasHint && (
@@ -2171,7 +2195,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   {filteredDrills.map(d => {
                     const isCurrent = d.id === currentDrillId;
                     const isPreview = preview && d.id === preview.id;
-                    const thumb = drillThumb(d, 0.32);
+                    const thumb = drillThumb(d, 0.32, club);
                     return (
                       <div key={d.id}
                         onMouseEnter={() => setLibraryPreviewId(d.id)} onFocus={() => setLibraryPreviewId(d.id)}
@@ -2213,8 +2237,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                 <aside aria-label="Podgląd ćwiczenia" className="hidden lg:flex w-[440px] xl:w-[520px] flex-shrink-0 flex-col border-l border-white/10 overflow-y-auto">
                   <div className="p-4 flex flex-col gap-3">
                     <div className="rounded-xl bg-slate-800/80 overflow-hidden flex items-center justify-center">
-                      {drillThumb(preview, 0.75)
-                        ? <img src={drillThumb(preview, 0.75)} alt={`Rysunek: ${preview.name}`} className="max-w-full max-h-[46vh] object-contain" />
+                      {drillThumb(preview, 0.75, club)
+                        ? <img src={drillThumb(preview, 0.75, club)} alt={`Rysunek: ${preview.name}`} className="max-w-full max-h-[46vh] object-contain" />
                         : <span className="text-xs text-slate-400 py-16">brak podglądu</span>}
                     </div>
                     <div>

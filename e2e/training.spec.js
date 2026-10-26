@@ -117,4 +117,38 @@ test.describe('Trening', () => {
     expect(cone.x).toBeCloseTo(1080 / 2, -1);
     expect(cone.y).toBeCloseTo(700 / 2, -1);
   });
+
+  test('banda jak pachołek: dodanie z palety, własny tekst, długość i przesunięcie', async ({ page }) => {
+    await paletteTile(page, 'Banda').click();
+    let [board] = (await trainingDraft(page)).frames[0].items;
+    expect(board).toMatchObject({ type: 'board', content: 'brand', length: 150 });
+
+    await page.getByLabel('Treść bandy').filter({ visible: true }).selectOption('text');
+    await page.getByLabel('Tekst na bandzie').filter({ visible: true }).fill('Fair play');
+    await page.getByLabel('Długość bandy').filter({ visible: true }).fill('300');
+    [board] = (await trainingDraft(page)).frames[0].items;
+    expect(board).toMatchObject({ content: 'text', text: 'Fair play', length: 300 });
+
+    await dragOnCanvas(page, [board.x, board.y], [board.x + 200, board.y + 100]);
+    const [moved] = (await trainingDraft(page)).frames[0].items;
+    expect(moved.x - board.x).toBeGreaterThan(150);
+    expect(moved.y - board.y).toBeGreaterThan(70);
+  });
+
+  test('połowa → całe boisko: ćwiczenie zostaje na swojej połowie, dochodzi pusta połowa', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Boisko i kolory' }).click();
+    await page.getByRole('button', { name: 'Połowa' }).click();
+    const canvas = page.locator('canvas:visible');
+    const box = await canvas.boundingBox();
+    await paletteTile(page, 'Stożek').dragTo(canvas, { targetPosition: { x: box.width * 0.8, y: box.height * 0.3 } });
+    const [before] = (await trainingDraft(page)).frames[0].items;
+    await page.keyboard.press('Escape');
+    await page.getByRole('tab', { name: 'Boisko i kolory' }).click();
+    await page.getByRole('button', { name: 'Całe' }).click();
+    expect(await canvas.evaluate(c => [c.width, c.height])).toEqual([1080, 700]);
+    const [after] = (await trainingDraft(page)).frames[0].items;
+    expect(after.x).toBeCloseTo(before.x + (1080 - 560), 0); // the goal end stays on the right
+    expect(after.y).toBeCloseTo(before.y, 0);
+    expect(after.scale).toBe(1);
+  });
 });

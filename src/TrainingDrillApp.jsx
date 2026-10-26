@@ -10,14 +10,14 @@ import PhasePicker from './components/PhasePicker.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import { isClearing } from './utils/backup.js';
-import { boardSize, drawBoards, logoImage, hasBrand } from './utils/boards.js';
+import { boardSize, drawBoards, logoImage, hasBrand, drawBoardItem, setBoardBrand, BOARD_ITEM_H, BOARD_CONTENTS, DEFAULT_BOARD_STYLE } from './utils/boards.js';
 import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import {
-  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, rotateFrames,
+  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames,
 } from './utils/drill.js';
 
 const newPitch = () => ({
@@ -80,6 +80,7 @@ function getItemBounds(item) {
     const w = ctx.measureText(item.text || ' ').width;
     return { hw: Math.max(10, w / 2 + 4), hh: Math.max(10, 13 * s) };
   }
+  if (item.type === 'board') return { hw: ((item.length || 150) / 2) * s, hh: (BOARD_ITEM_H / 2) * s };
   const [hw, hh] = BOUNDS[item.type] || [18, 18];
   return { hw: Math.max(10, hw * s), hh: Math.max(10, hh * s) };
 }
@@ -333,6 +334,7 @@ function drawItem(ctx, item, selected) {
     case 'coach':     drawCoach(ctx, item, selected); break;
     case 'step':      drawStep(ctx, item, selected); break;
     case 'text':      drawText(ctx, item, selected); break;
+    case 'board':     drawBoardItem(ctx, item, selected); break;
   }
 }
 
@@ -412,6 +414,7 @@ const EQUIPMENT_GROUPS = [
     { type: 'ladder',    label: 'Drabinka',    icon: '🪜', color: '#ca8a04' },
     { type: 'mannequin', label: 'Manekin',     icon: '🟡', color: '#facc15' },
     { type: 'ball',      label: 'Piłka',       icon: '⚽', color: '#ffffff' },
+    { type: 'board',     label: 'Banda',       icon: '🪧', color: '#e30613' },
   ] },
   { title: 'Opis', items: [
     { type: 'text', label: 'Tekst',            icon: '🔤', color: '#111827' },
@@ -537,7 +540,8 @@ export function renderDrillImage(drill, scale = 0.5, club = loadClub()) {
   canvas.height = Math.round((h + 2 * b) * scale);
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
-  drawBoards(ctx, { w, h, b, club });
+  setBoardBrand(club);
+  drawBoards(ctx, { w, h, b, club, style: n.pitch.boardStyle });
   ctx.translate(b, b);
   renderScene(ctx, { pitchImg: renderPitchCanvas(n.pitch), frame: n.frames[0], w, h });
   return canvas.toDataURL('image/png');
@@ -642,6 +646,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   const [, setLogoLoaded] = useState(0);
   const boardLogo = logoImage(club.logo, () => setLogoLoaded(n => n + 1));
   const B = boardSize(pitch, club);
+  setBoardBrand(club, boardLogo); // boards placed on the pitch show this school
   const canvasSize = { w: pitchSize.w + 2 * B, h: pitchSize.h + 2 * B };
   const sceneKey = useMemo(() => makeSceneKey(frames, pitch, teamAColor, teamBColor), [frames, pitch, teamAColor, teamBColor]);
   const displayFrame = isPlaying ? interpolateFrames(frames, playhead) : frame;
@@ -757,7 +762,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     const prevFrame = !isPlaying && showPaths && currentFrame > 0 ? frames[currentFrame - 1] : null;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo });
+    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo, style: pitch.boardStyle });
     ctx.translate(B, B); // everything below is drawn in pitch coordinates
     renderScene(ctx, {
       pitchImg, frame: displayFrame, prevFrame,
@@ -878,9 +883,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     next.width = clamp(Number(next.width) || 5, 5, 120);
     next.length = clamp(Number(next.length) || 5, 5, 120);
     const newSize = getPitchSize(next);
-    let fs = frames;
-    if (next.orientation !== pitch.orientation) fs = rotateFrames(fs, pitch, next.orientation === 'horizontal');
-    fs = fitFramesTo(fs, newSize.w, newSize.h);
+    // positions keep their real distances; anything left outside the new area is moved inside
+    const fs = fitFramesTo(remapFrames(frames, pitch, next), newSize.w, newSize.h);
     setPitch(next);
     setFrames(fs);
   };
@@ -935,6 +939,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     if (eq.type === 'coach') item.label = 'T';
     if (eq.type === 'step') item.label = nextLabel(i => i.type === 'step');
     if (eq.type === 'text') item.text = 'Tekst';
+    if (eq.type === 'board') Object.assign(item, { length: 150, content: 'brand', text: '', fg: '#ffffff' });
     updateKind('from', 'items', list => [...list, item]);
     setIsDrawingMode(false);
     clearInteraction();
@@ -1250,7 +1255,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     c.width = canvasSize.w * scale; c.height = canvasSize.h * scale;
     const ctx = c.getContext('2d');
     ctx.scale(scale, scale);
-    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo });
+    drawBoards(ctx, { w: pitchSize.w, h: pitchSize.h, b: B, club, logo: boardLogo, style: pitch.boardStyle });
     ctx.translate(B, B);
     renderScene(ctx, { pitchImg, frame, w: pitchSize.w, h: pitchSize.h });
     return c;
@@ -1728,8 +1733,41 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                 </div>
               )}
 
+              {single.obj.type === 'board' && (
+                <>
+                  <div>
+                    <p className={fieldLabel}>Treść bandy</p>
+                    <select value={single.obj.content || 'brand'} aria-label="Treść bandy"
+                      onChange={e => patchObj('all', 'items', single.obj.id, { content: e.target.value })} className={inputCls}>
+                      {BOARD_CONTENTS.filter(([id]) => id !== 'alternate').map(([id, label]) => <option key={id} value={id} className="bg-slate-800">{label}</option>)}
+                    </select>
+                    {single.obj.content !== 'text' && !hasBrand(club) && (
+                      <p className="text-xs text-amber-300 mt-1">Uzupełnij logo i nazwę w ustawieniach „Szkółka”.</p>
+                    )}
+                  </div>
+                  {single.obj.content === 'text' && (
+                    <div>
+                      <p className={fieldLabel}>Tekst na bandzie</p>
+                      <input type="text" value={single.obj.text ?? ''} aria-label="Tekst na bandzie" placeholder="np. Fair play"
+                        onChange={e => patchObj('all', 'items', single.obj.id, { text: e.target.value })} className={inputCls} />
+                    </div>
+                  )}
+                  <div>
+                    <p className={fieldLabel}>Długość <span className="text-slate-400 tabular-nums">{single.obj.length || 150}</span></p>
+                    <input type="range" min={60} max={600} step={10} value={single.obj.length || 150} aria-label="Długość bandy"
+                      onChange={e => patchObj('all', 'items', single.obj.id, { length: parseInt(e.target.value, 10) })} className="w-full" />
+                  </div>
+                  <div>
+                    <p className={fieldLabel}>Kolor napisu</p>
+                    <input type="color" value={single.obj.fg || '#ffffff'} aria-label="Kolor napisu"
+                      onChange={e => patchObj('all', 'items', single.obj.id, { fg: e.target.value })}
+                      className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
+                  </div>
+                </>
+              )}
+
               <div>
-                <p className={fieldLabel}>Kolor</p>
+                <p className={fieldLabel}>{single.obj.type === 'board' ? 'Kolor tła' : 'Kolor'}</p>
                 <input type="color" value={single.obj.color || '#ffffff'}
                   onChange={e => patchObj('all', 'items', single.obj.id, { color: e.target.value })}
                   className="w-full h-8 rounded cursor-pointer border border-white/20 bg-transparent" />
@@ -1777,6 +1815,31 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   className={`mt-1 w-full h-8 rounded-md text-xs transition-colors disabled:opacity-40 disabled:pointer-events-none ${pitch.boards && hasBrand(club) ? 'bg-red-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
                   {hasBrand(club) ? 'Bandy z logo szkółki' : 'Bandy: uzupełnij logo w Szkółce'}
                 </button>
+                {pitch.boards && hasBrand(club) && (() => {
+                  const look = { ...DEFAULT_BOARD_STYLE, ...(pitch.boardStyle || {}) };
+                  const setLook = (patch) => changePitch({ boardStyle: { ...look, ...patch } });
+                  return (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <select value={look.content} onChange={e => setLook({ content: e.target.value })} aria-label="Wygląd band wokół boiska" className={inputCls}>
+                        {BOARD_CONTENTS.map(([id, label]) => <option key={id} value={id} className="bg-slate-800">{label}</option>)}
+                      </select>
+                      {look.content === 'text' && (
+                        <input type="text" defaultValue={look.text} key={`board-text-${look.text}`} placeholder="Tekst na bandach" aria-label="Tekst na bandach wokół boiska"
+                          onBlur={e => setLook({ text: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} className={inputCls} />
+                      )}
+                      <div className="grid grid-cols-2 gap-1">
+                        <label className="text-xs text-slate-400">Tło
+                          <input type="color" value={look.bg} onChange={e => setLook({ bg: e.target.value })} aria-label="Kolor tła band"
+                            className="w-full h-7 rounded cursor-pointer border border-white/20 bg-transparent" />
+                        </label>
+                        <label className="text-xs text-slate-400">Napis
+                          <input type="color" value={look.fg} onChange={e => setLook({ fg: e.target.value })} aria-label="Kolor napisu band"
+                            className="w-full h-7 rounded cursor-pointer border border-white/20 bg-transparent" />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {pitch.type === 'custom' && (
                   <div className="grid grid-cols-2 gap-1 mt-2">
                     {[['width', 'Szerokość (m)'], ['length', 'Długość (m)']].map(([key, label]) => (

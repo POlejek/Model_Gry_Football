@@ -55,11 +55,85 @@ export function logoImage(src, onLoad) {
   return null;
 }
 
+// What a board shows: 'brand' (logo and name), 'logo', 'name' (the school's name) or 'text' (own text).
+// The frame around the pitch may also use 'alternate': logo boards and name boards in turn.
+export const BOARD_CONTENTS = [
+  ['alternate', 'Na przemian logo i nazwa'],
+  ['brand', 'Logo z nazwą'],
+  ['logo', 'Samo logo'],
+  ['name', 'Nazwa szkółki'],
+  ['text', 'Własny tekst'],
+];
+export const DEFAULT_BOARD_STYLE = { content: 'alternate', text: '', bg: RED, fg: '#ffffff' };
+
+// The school shown on boards placed on the pitch (set by the editor and by picture rendering).
+let brand = { club: null, logo: null };
+export function setBoardBrand(club, logo = logoImage(club?.logo)) { brand = { club, logo }; }
+
+function fitText(ctx, text, maxW, h) {
+  let size = Math.round(h * 0.5);
+  ctx.font = `bold ${size}px Arial, sans-serif`;
+  while (size > 6 && ctx.measureText(text).width > maxW) {
+    size -= 1;
+    ctx.font = `bold ${size}px Arial, sans-serif`;
+  }
+}
+
+function drawLogo(ctx, logo, cx, w, h) {
+  const ratio = (logo.naturalWidth || logo.width || 1) / (logo.naturalHeight || logo.height || 1); // keeps proportions
+  const lh = Math.min(h - 6, (w - 6) / ratio);
+  ctx.drawImage(logo, cx - (lh * ratio) / 2, -lh / 2, lh * ratio, lh);
+}
+
+// One board of length w and height h centred on the origin.
+export function drawPanel(ctx, { w, h, content = 'brand', text = '', bg = RED, fg = '#ffffff', logo = null, name = '' }) {
+  const label = ((content === 'text' ? text : name) || (content === 'text' ? 'BANDA' : 'SZKÓŁKA')).toUpperCase();
+  const kind = (content === 'logo' || content === 'brand') && !logo ? 'name' : content;
+  ctx.fillStyle = bg;
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  if (kind === 'logo') {
+    drawLogo(ctx, logo, 0, w, h);
+    return;
+  }
+  let left = -w / 2;
+  if (kind === 'brand') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(left + 2, -h / 2 + 2, h - 4, h - 4);
+    drawLogo(ctx, logo, left + h / 2, h - 2, h - 2);
+    left += h;
+  }
+  const textW = w / 2 - left;
+  fitText(ctx, label, textW - 10, h);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, left + textW / 2, 1);
+}
+
+// A board placed on the pitch like a cone: { x, y, rotation, scale, length, content, text, color (bg), fg }.
+export const BOARD_ITEM_H = 26;
+export function drawBoardItem(ctx, item, selected) {
+  const s = item.scale || 1;
+  ctx.save();
+  ctx.translate(item.x, item.y);
+  ctx.rotate(item.rotation || 0);
+  if (selected) { ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 12; }
+  drawPanel(ctx, {
+    w: (item.length || 150) * s, h: BOARD_ITEM_H * s, content: item.content || 'brand', text: item.text,
+    bg: item.color || RED, fg: item.fg || '#ffffff', logo: brand.logo, name: (brand.club?.name || '').trim(),
+  });
+  ctx.restore();
+}
+
 // Draws the frame for a w × h pitch with the canvas origin at the frame's top-left corner.
-export function drawBoards(ctx, { w, h, b, club, logo = logoImage(club?.logo) }) {
+export function drawBoards(ctx, { w, h, b, club, logo = logoImage(club?.logo), style = DEFAULT_BOARD_STYLE }) {
   if (!b) return;
   const name = (club?.name || '').trim();
-  const panels = boardPanels(w, h, b, { logo: Boolean(logo), name: Boolean(name) || !logo });
+  const look = { ...DEFAULT_BOARD_STYLE, ...(style || {}) };
+  const alternate = look.content === 'alternate';
+  const panels = alternate
+    ? boardPanels(w, h, b, { logo: Boolean(logo), name: Boolean(name) || !logo })
+    : boardPanels(w, h, b, { logo: false });
   ctx.save();
   ctx.fillStyle = DARK;
   ctx.fillRect(0, 0, w + 2 * b, b);
@@ -70,28 +144,10 @@ export function drawBoards(ctx, { w, h, b, club, logo = logoImage(club?.logo) })
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rotation);
-    if (p.kind === 'logo') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-      // keeps the logo's proportions
-      const ratio = (logo.naturalWidth || logo.width || 1) / (logo.naturalHeight || logo.height || 1);
-      const lh = Math.min(p.h - 6, (p.w - 8) / ratio);
-      ctx.drawImage(logo, -(lh * ratio) / 2, -lh / 2, lh * ratio, lh);
-    } else {
-      ctx.fillStyle = RED;
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-      const text = (name || 'SZKÓŁKA').toUpperCase();
-      let size = Math.round(p.h * 0.5);
-      ctx.font = `bold ${size}px Arial, sans-serif`;
-      while (size > 7 && ctx.measureText(text).width > p.w - 10) {
-        size -= 1;
-        ctx.font = `bold ${size}px Arial, sans-serif`;
-      }
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, 0, 1);
-    }
+    const panel = alternate
+      ? (p.kind === 'logo' ? { content: 'logo', bg: '#ffffff' } : { content: 'name', bg: look.bg, fg: look.fg })
+      : { content: look.content, text: look.text, bg: look.bg, fg: look.fg };
+    drawPanel(ctx, { w: p.w, h: p.h, logo, name, ...panel });
     ctx.restore();
   });
   ctx.restore();

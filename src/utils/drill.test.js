@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getPitchSize, normAngle, transformObj, translateObj, transformFrame, fitFramesTo, objectsInRect, findObj,
   interpolateFrames, normalizeDrill, safeFileName, parseDrillFile, toLibraryEntry, equipmentSummary,
-  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch, remapFrames,
+  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch, remapFrames, RUNOFF,
 } from './drill.js';
 
 const player = (id, x, y, extra = {}) => ({ id, type: 'player', x, y, rotation: 0, scale: 1, team: 'A', label: String(id), ...extra });
@@ -304,5 +304,32 @@ describe('zmiana boiska zachowuje rzeczywiste odległości', () => {
   it('to samo boisko: bez zmian', () => {
     const fs = frame([cone(1, 2)]);
     expect(remapFrames(fs, pitch('half'), pitch('half'))).toBe(fs);
+  });
+});
+
+describe('miejsce za liniami boiska', () => {
+  const pitch = (type, orientation = 'vertical', extra = {}) => ({ ...LEGACY_PITCH, type, orientation, ...extra });
+  const frame = (x, y) => [{ items: [{ id: 1, type: 'cone', x, y, scale: 1 }], lines: [], zones: [] }];
+
+  it('powiększa płótno o zapas z każdej strony, stare ćwiczenia go nie mają', () => {
+    expect(getPitchSize(pitch('full'))).toEqual({ w: 700, h: 1080 });
+    expect(getPitchSize(pitch('full', 'horizontal', { runoff: RUNOFF }))).toEqual({ w: 1140, h: 760 });
+    expect(getPitchSize(pitch('half', 'vertical', { runoff: RUNOFF }))).toEqual({ w: 760, h: 620 });
+  });
+
+  it('włączenie i wyłączenie przesuwa rysunek razem z liniami (pionowo i poziomo)', () => {
+    const on = remapFrames(frame(100, 200), pitch('full'), pitch('full', 'vertical', { runoff: 30 }));
+    expect(on[0].items[0]).toMatchObject({ x: 130, y: 230, scale: 1 });
+    const flat = remapFrames(frame(100, 200), pitch('half', 'horizontal'), pitch('half', 'horizontal', { runoff: 30 }));
+    expect(flat[0].items[0]).toMatchObject({ x: 130, y: 230 });
+    const off = remapFrames(on, pitch('full', 'vertical', { runoff: 30 }), pitch('full'));
+    expect(off[0].items[0]).toMatchObject({ x: 100, y: 200 });
+  });
+
+  it('wymiar własny z zapasem zachowuje odległości od linii', () => {
+    const from = pitch('custom', 'vertical', { width: 20, length: 30 });
+    const out = remapFrames(frame(20, 20), from, { ...from, runoff: 30 });
+    expect(out[0].items[0].x).toBeCloseTo(50, 6);
+    expect(out[0].items[0].y).toBeCloseTo(50, 6);
   });
 });

@@ -10,6 +10,10 @@ export const CROP_H = { full: 1080, half: 560, third: 387 };
 // Drills saved before the pitch option existed were vertical; new drills start horizontal (fits laptop screens).
 export const LEGACY_PITCH = { type: 'full', orientation: 'vertical', width: 30, length: 40 };
 
+// Extra space beyond the touchlines (px on each side), e.g. for boards; older drills have none.
+export const RUNOFF = 30;
+const runoffOf = (p) => Math.max(0, Number(p?.runoff) || 0);
+
 export function getPitchSize(p) {
   let w, h;
   if (p.type === 'custom') {
@@ -20,6 +24,8 @@ export function getPitchSize(p) {
     w = FULL_W;
     h = CROP_H[p.type] || FULL_H;
   }
+  w += 2 * runoffOf(p);
+  h += 2 * runoffOf(p);
   return p.orientation === 'horizontal' ? { w: h, h: w } : { w, h };
 }
 
@@ -241,23 +247,25 @@ const portraitHeight = (p) => getPitchSize({ ...p, orientation: 'vertical' }).h;
 const toPortrait = (x, y, p) => (p.orientation === 'horizontal' ? [y, portraitHeight(p) - x] : [x, y]);
 const fromPortrait = (u, v, p) => (p.orientation === 'horizontal' ? [portraitHeight(p) - v, u] : [u, v]);
 
-const samePitch = (a, b) => a.type === b.type && a.orientation === b.orientation
+const samePitch = (a, b) => a.type === b.type && a.orientation === b.orientation && runoffOf(a) === runoffOf(b)
   && (a.type !== 'custom' || (a.width === b.width && a.length === b.length));
 
 export function remapFrames(frames, from, to) {
   if (samePitch(from, to)) return frames;
   const standard = from.type !== 'custom' && to.type !== 'custom';
-  if (standard && from.type === to.type) return rotateFrames(frames, from, to.orientation === 'horizontal');
+  const rf = runoffOf(from), rt = runoffOf(to);
+  if (standard && from.type === to.type && rf === rt) return rotateFrames(frames, from, to.orientation === 'horizontal');
   const [ax, ay] = pxPerMetre(from);
   const [bx, by] = pxPerMetre(to);
   const [fx, fy] = standard ? [0, 0] : visibleCentre(from);
   const [tx, ty] = standard ? [0, 0] : visibleCentre(to);
   const fn = (x, y) => {
     const [u, v] = toPortrait(x, y, from);
-    if (standard) return fromPortrait(u, v, to); // same metres and scale: only the visible part differs
-    const mx = (u - MARGIN) / ax - fx + tx;
-    const my = (v - MARGIN) / ay - fy + ty;
-    return fromPortrait(MARGIN + mx * bx, MARGIN + my * by, to);
+    // same metres and scale: only the visible part and the space beyond the lines differ
+    if (standard) return fromPortrait(u - rf + rt, v - rf + rt, to);
+    const mx = (u - MARGIN - rf) / ax - fx + tx;
+    const my = (v - MARGIN - rf) / ay - fy + ty;
+    return fromPortrait(MARGIN + rt + mx * bx, MARGIN + rt + my * by, to);
   };
   const turn = from.orientation === to.orientation ? 0 : (to.orientation === 'horizontal' ? Math.PI / 2 : -Math.PI / 2);
   // a different number of pixels per metre resizes the pictures and circles with the distances

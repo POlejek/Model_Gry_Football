@@ -17,11 +17,12 @@ import {
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import {
-  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames,
+  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames, RUNOFF,
 } from './utils/drill.js';
 
 const newPitch = () => ({
   ...LEGACY_PITCH,
+  runoff: RUNOFF, // room beyond the lines, e.g. for boards
   orientation: typeof window !== 'undefined' && window.innerWidth < window.innerHeight ? 'vertical' : 'horizontal',
 });
 const PITCH_TYPES = [
@@ -37,15 +38,16 @@ function renderPitchCanvas(p) {
   out.width = w; out.height = h;
   const ctx = out.getContext('2d');
   const horizontal = p.orientation === 'horizontal';
+  const r = Math.max(0, Number(p.runoff) || 0); // space beyond the lines
+  ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, w, h);
 
   if (p.type === 'custom') {
-    ctx.fillStyle = '#f5f5f5'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#c4a76e'; ctx.lineWidth = 3; ctx.strokeRect(20, 20, w - 40, h - 40);
+    ctx.strokeStyle = '#c4a76e'; ctx.lineWidth = 3; ctx.strokeRect(20 + r, 20 + r, w - 40 - 2 * r, h - 40 - 2 * r);
     // dimensions: dark and bold so they stay readable on the light pitch and in printed cards
     ctx.fillStyle = '#1e293b'; ctx.font = 'bold 15px Arial, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(`${horizontal ? p.length : p.width} m`, w / 2, 10);
-    ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText(`${horizontal ? p.length : p.width} m`, w / 2, 10 + r);
+    ctx.save(); ctx.translate(10 + r, h / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillText(`${horizontal ? p.width : p.length} m`, 0, 0);
     ctx.restore();
     return out;
@@ -58,7 +60,7 @@ function renderPitchCanvas(p) {
     // portrait top (goal) ends up on the right
     ctx.translate(w, 0); ctx.rotate(Math.PI / 2);
   }
-  ctx.drawImage(full, 0, 0);
+  ctx.drawImage(full, r, r);
   return out;
 }
 
@@ -1810,6 +1812,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                     </button>
                   ))}
                 </div>
+                <button onClick={() => changePitch({ runoff: pitch.runoff ? 0 : RUNOFF })} aria-pressed={!!pitch.runoff}
+                  title="Więcej miejsca za liniami boiska, np. na bandy (rysunek przesuwa się razem z liniami)"
+                  className={`mt-1 w-full h-8 rounded-md text-xs transition-colors ${pitch.runoff ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>
+                  Miejsce za liniami
+                </button>
                 <button onClick={() => changePitch({ boards: !pitch.boards })} disabled={!hasBrand(club)} aria-pressed={!!pitch.boards}
                   title={hasBrand(club) ? 'Bandy reklamowe z logo i nazwą szkółki wokół boiska' : 'Uzupełnij logo lub nazwę w ustawieniach „Szkółka”'}
                   className={`mt-1 w-full h-8 rounded-md text-xs transition-colors disabled:opacity-40 disabled:pointer-events-none ${pitch.boards && hasBrand(club) ? 'bg-red-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>

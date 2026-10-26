@@ -15,8 +15,9 @@ test.describe('Trening', () => {
     const draft = await trainingDraft(page);
     const [cone] = draft.frames[0].items;
     expect(cone.type).toBe('cone');
-    expect(cone.x).toBeCloseTo(1080 * 0.25, -1);
-    expect(cone.y).toBeCloseTo(700 * 0.5, -1);
+    // a new drill has 30 px of room beyond the lines on each side: 1080 × 700 pitch → 1140 × 760
+    expect(cone.x).toBeCloseTo(1140 * 0.25, -1);
+    expect(cone.y).toBeCloseTo(760 * 0.5, -1);
   });
 
   test('wielokąt: każde kliknięcie dodaje dokładnie jeden punkt, a kliknięcie pierwszego zamyka strefę', async ({ page }) => {
@@ -87,10 +88,10 @@ test.describe('Trening', () => {
     await page.getByRole('button', { name: 'Połowa' }).click();
     await page.getByRole('button', { name: /Pionowo/ }).click();
     const canvasSize = await page.locator('canvas:visible').evaluate(c => [c.width, c.height]);
-    expect(canvasSize).toEqual([700, 560]);
+    expect(canvasSize).toEqual([760, 620]);
     const [goal] = (await trainingDraft(page)).frames[0].items;
-    expect(goal.x).toBeLessThan(700);
-    expect(goal.y).toBeLessThan(560);
+    expect(goal.x).toBeLessThan(760);
+    expect(goal.y).toBeLessThan(620);
     expect(await canvasPoint(page, 0, 0)).toBeTruthy();
   });
 
@@ -114,8 +115,8 @@ test.describe('Trening', () => {
     const box = await canvas.boundingBox();
     await paletteTile(page, 'Stożek').dragTo(canvas, { targetPosition: { x: box.width * 0.5, y: box.height * 0.5 } });
     const [cone] = (await trainingDraft(page)).frames[0].items;
-    expect(cone.x).toBeCloseTo(1080 / 2, -1);
-    expect(cone.y).toBeCloseTo(700 / 2, -1);
+    expect(cone.x).toBeCloseTo(1140 / 2, -1);
+    expect(cone.y).toBeCloseTo(760 / 2, -1);
   });
 
   test('banda jak pachołek: dodanie z palety, własny tekst, długość i przesunięcie', async ({ page }) => {
@@ -145,10 +146,26 @@ test.describe('Trening', () => {
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: 'Boisko i kolory' }).click();
     await page.getByRole('button', { name: 'Całe' }).click();
-    expect(await canvas.evaluate(c => [c.width, c.height])).toEqual([1080, 700]);
+    expect(await canvas.evaluate(c => [c.width, c.height])).toEqual([1140, 760]);
     const [after] = (await trainingDraft(page)).frames[0].items;
-    expect(after.x).toBeCloseTo(before.x + (1080 - 560), 0); // the goal end stays on the right
+    expect(after.x).toBeCloseTo(before.x + (1140 - 620), 0); // the goal end stays on the right
     expect(after.y).toBeCloseTo(before.y, 0);
     expect(after.scale).toBe(1);
+  });
+
+  test('miejsce za liniami: nowe ćwiczenie ma 50 px za liniami, wyłączenie przesuwa rysunek razem z liniami', async ({ page }) => {
+    await paletteTile(page, 'Banda').click();
+    const [board] = (await trainingDraft(page)).frames[0].items;
+
+    await page.keyboard.press('Escape');
+    await page.getByRole('tab', { name: 'Boisko i kolory' }).click();
+    const toggle = page.getByRole('button', { name: 'Miejsce za liniami' }).filter({ visible: true });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.locator('canvas:visible').evaluate(c => [c.width, c.height])).toEqual([1080, 700]);
+    const [moved] = (await trainingDraft(page)).frames[0].items;
+    expect(moved.x).toBeCloseTo(board.x - 30, 0);
+    expect(moved.y).toBeCloseTo(board.y - 30, 0);
   });
 });

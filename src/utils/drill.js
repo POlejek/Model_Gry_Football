@@ -156,7 +156,7 @@ export function interpolateFrames(frames, t) {
 export const TYPE_LABELS = {
   player: 'Zawodnik', goal: 'Bramka', 'mini-goal': 'Mini-bramka', cone: 'Stożek', disc: 'Talerzyk',
   pole: 'Tyczka', hurdle: 'Płotek', hoop: 'Obręcz', ladder: 'Drabinka', mannequin: 'Manekin',
-  ball: 'Piłka', text: 'Tekst', step: 'Krok', coach: 'Trener',
+  ball: 'Piłka', text: 'Tekst', step: 'Krok', coach: 'Trener', board: 'Banda',
 };
 
 export const DEFAULT_META = {
@@ -219,6 +219,59 @@ export function normalizeDrill(d = {}) {
     teamBColor: d.teamBColor || '#dc2626',
     nextId: maxId + 1,
   };
+}
+
+// ── Changing the pitch: keep real distances ───────────────────────
+// Positions are converted through metres, measured on the pitch drawn upright (portrait). Full pitch,
+// half and third share the metres of the full pitch (a half is its top part), so a drill planned on
+// a half stays on that half of a full pitch. A custom area has its own metres; between it and
+// another pitch the middle of the visible area is kept.
+const MARGIN = 20;
+const pxPerMetre = (p) => (p.type === 'custom'
+  ? Array(2).fill(1000 / Math.max(p.width, p.length))
+  : [(FULL_W - 2 * MARGIN) / 68, (FULL_H - 2 * MARGIN) / 105]);
+
+function visibleCentre(p) {
+  if (p.type === 'custom') return [p.width / 2, p.length / 2];
+  const [, py] = pxPerMetre(p);
+  return [34, Math.min(105, ((CROP_H[p.type] || FULL_H) - MARGIN) / py) / 2];
+}
+
+const portraitHeight = (p) => getPitchSize({ ...p, orientation: 'vertical' }).h;
+const toPortrait = (x, y, p) => (p.orientation === 'horizontal' ? [y, portraitHeight(p) - x] : [x, y]);
+const fromPortrait = (u, v, p) => (p.orientation === 'horizontal' ? [portraitHeight(p) - v, u] : [u, v]);
+
+const samePitch = (a, b) => a.type === b.type && a.orientation === b.orientation
+  && (a.type !== 'custom' || (a.width === b.width && a.length === b.length));
+
+export function remapFrames(frames, from, to) {
+  if (samePitch(from, to)) return frames;
+  const standard = from.type !== 'custom' && to.type !== 'custom';
+  if (standard && from.type === to.type) return rotateFrames(frames, from, to.orientation === 'horizontal');
+  const [ax, ay] = pxPerMetre(from);
+  const [bx, by] = pxPerMetre(to);
+  const [fx, fy] = standard ? [0, 0] : visibleCentre(from);
+  const [tx, ty] = standard ? [0, 0] : visibleCentre(to);
+  const fn = (x, y) => {
+    const [u, v] = toPortrait(x, y, from);
+    if (standard) return fromPortrait(u, v, to); // same metres and scale: only the visible part differs
+    const mx = (u - MARGIN) / ax - fx + tx;
+    const my = (v - MARGIN) / ay - fy + ty;
+    return fromPortrait(MARGIN + mx * bx, MARGIN + my * by, to);
+  };
+  const turn = from.orientation === to.orientation ? 0 : (to.orientation === 'horizontal' ? Math.PI / 2 : -Math.PI / 2);
+  // a different number of pixels per metre resizes the pictures and circles with the distances
+  const k = (bx / ax + by / ay) / 2;
+  const resize = Math.abs(k - 1) > 1e-6;
+  return frames.map(f => {
+    const t = transformFrame(f, fn, turn);
+    if (!resize) return t;
+    return {
+      items: t.items.map(i => ({ ...i, scale: clamp((i.scale || 1) * k, 0.3, 3) })),
+      lines: t.lines,
+      zones: t.zones.map(z => (z.type === 'circle' ? { ...z, radius: z.radius * k } : z)),
+    };
+  });
 }
 
 // Session plans for the certification show a full pitch lying horizontally; any other pitch size

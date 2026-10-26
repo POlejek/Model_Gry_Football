@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BOARD, hasBrand, boardSize, boardPanels, drawBoards } from './boards.js';
+import { BOARD, hasBrand, boardSize, boardPanels, drawBoards, drawPanel, drawBoardItem, setBoardBrand } from './boards.js';
 
 describe('bandy reklamowe', () => {
   it('są tylko, gdy ćwiczenie je ma, a szkółka ma logo lub nazwę', () => {
@@ -56,5 +56,48 @@ describe('bandy reklamowe', () => {
     const none = { ...ctx, fillRect: vi.fn() };
     drawBoards(none, { w: 700, h: 1080, b: 0, club: { name: 'X' } });
     expect(none.fillRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('banda jako element i projekt band', () => {
+  const ctxStub = () => ({
+    save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(), fillRect: vi.fn(), fillText: vi.fn(),
+    drawImage: vi.fn(), measureText: (t) => ({ width: t.length * 9 }),
+  });
+  const logo = { naturalWidth: 100, naturalHeight: 100 };
+
+  it('„Logo z nazwą”: logo w białym polu i nazwa szkółki w kolorze napisu', () => {
+    const ctx = ctxStub();
+    drawPanel(ctx, { w: 200, h: 26, content: 'brand', bg: '#000000', fg: '#ffff00', logo, name: 'AP BKS' });
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.fillText.mock.calls[0][0]).toBe('AP BKS');
+    expect(ctx.fillStyle).toBe('#ffff00');
+  });
+
+  it('własny tekst, a bez logo zamiast logo nazwa', () => {
+    const ctx = ctxStub();
+    drawPanel(ctx, { w: 200, h: 26, content: 'text', text: 'Fair play' });
+    expect(ctx.fillText.mock.calls[0][0]).toBe('FAIR PLAY');
+    const noLogo = ctxStub();
+    drawPanel(noLogo, { w: 200, h: 26, content: 'logo', logo: null, name: 'AP BKS' });
+    expect(noLogo.drawImage).not.toHaveBeenCalled();
+    expect(noLogo.fillText.mock.calls[0][0]).toBe('AP BKS');
+  });
+
+  it('banda na boisku: obrót, długość i szkółka z ustawień', () => {
+    const ctx = ctxStub();
+    setBoardBrand({ name: 'AP BKS' }, logo);
+    drawBoardItem(ctx, { x: 10, y: 20, rotation: 1, scale: 2, length: 100, content: 'brand', color: '#e30613' }, false);
+    expect(ctx.translate).toHaveBeenCalledWith(10, 20);
+    expect(ctx.rotate).toHaveBeenCalledWith(1);
+    expect(ctx.fillRect.mock.calls[0]).toEqual([-100, -26, 200, 52]);
+    expect(ctx.drawImage).toHaveBeenCalled();
+    setBoardBrand(null, null);
+  });
+
+  it('ramka: jednolity wygląd zamiast przemienności', () => {
+    const ctx = ctxStub();
+    drawBoards(ctx, { w: 700, h: 1080, b: BOARD, club: { name: 'AP BKS' }, logo: null, style: { content: 'text', text: 'Akademia', bg: '#000000', fg: '#ffffff' } });
+    expect(new Set(ctx.fillText.mock.calls.map(c => c[0]))).toEqual(new Set(['AKADEMIA']));
   });
 });

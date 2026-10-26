@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getPitchSize, normAngle, transformObj, translateObj, transformFrame, fitFramesTo, objectsInRect, findObj,
   interpolateFrames, normalizeDrill, safeFileName, parseDrillFile, toLibraryEntry, equipmentSummary,
-  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch,
+  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch, remapFrames,
 } from './drill.js';
 
 const player = (id, x, y, extra = {}) => ({ id, type: 'player', x, y, rotation: 0, scale: 1, team: 'A', label: String(id), ...extra });
@@ -248,5 +248,61 @@ describe('boisko w poziomie na wydruku', () => {
     expect(horizontalFullPitch(half)).toBe(half);
     const custom = { id: 'c', frames: [frame], pitch: { type: 'custom', orientation: 'vertical', width: 20, length: 30 } };
     expect(horizontalFullPitch(custom)).toBe(custom);
+  });
+});
+
+describe('zmiana boiska zachowuje rzeczywiste odległości', () => {
+  const pitch = (type, orientation = 'vertical', extra = {}) => ({ ...LEGACY_PITCH, type, orientation, ...extra });
+  const frame = (items, zones = []) => [{ items, lines: [{ id: 9, type: 'pass', startX: 100, startY: 100, endX: 200, endY: 300 }], zones }];
+  const cone = (x, y) => ({ id: 1, type: 'cone', x, y, scale: 1, rotation: 0 });
+
+  it('połowa → całe (pionowo): wszystko zostaje na swojej połowie, w tej samej skali', () => {
+    const fs = frame([cone(350, 300)]);
+    const out = remapFrames(fs, pitch('half'), pitch('full'));
+    expect(out[0].items[0]).toMatchObject({ x: 350, y: 300, scale: 1 });
+    expect(out[0].lines[0]).toMatchObject({ startX: 100, endY: 300 });
+  });
+
+  it('połowa → całe (poziomo): bramka zostaje przy prawej krawędzi, dochodzi pusta połowa z lewej', () => {
+    const out = remapFrames(frame([cone(500, 350)]), pitch('half', 'horizontal'), pitch('full', 'horizontal'));
+    expect(out[0].items[0].x).toBeCloseTo(500 + (1080 - 560), 6);
+    expect(out[0].items[0].y).toBeCloseTo(350, 6);
+    const back = remapFrames(out, pitch('full', 'horizontal'), pitch('half', 'horizontal'));
+    expect(back[0].items[0].x).toBeCloseTo(500, 6);
+  });
+
+  it('zmiana tylko orientacji obraca jak dotąd', () => {
+    const out = remapFrames(frame([cone(100, 50)]), pitch('full'), pitch('full', 'horizontal'));
+    expect(out[0].items[0]).toMatchObject({ x: 1030, y: 100 });
+  });
+
+  it('wymiar własny: większe pole zachowuje odległości w metrach, środek zostaje na środku', () => {
+    // 30 × 20 m (1000/30 px na metr) → 40 × 30 m (25 px na metr)
+    const from = pitch('custom', 'vertical', { width: 20, length: 30 });
+    const to = pitch('custom', 'vertical', { width: 30, length: 40 });
+    const centre = cone(20 + 10 * (1000 / 30), 20 + 15 * (1000 / 30));
+    const metreRight = { ...cone(centre.x + 1000 / 30, centre.y), id: 2 };
+    const zone = { id: 3, type: 'circle', centerX: centre.x, centerY: centre.y, radius: 1000 / 30 };
+    const out = remapFrames(frame([centre, metreRight], [zone]), from, to);
+    const [c, r] = out[0].items;
+    expect(c.x).toBeCloseTo(20 + 15 * 25, 6);
+    expect(c.y).toBeCloseTo(20 + 20 * 25, 6);
+    expect(r.x - c.x).toBeCloseTo(25, 6); // still one metre apart
+    expect(c.scale).toBeCloseTo(0.75, 6);
+    expect(out[0].zones[0].radius).toBeCloseTo(25, 6);
+  });
+
+  it('wymiar własny → całe boisko: obszar ćwiczenia trafia na środek boiska, pomniejszony', () => {
+    const from = pitch('custom', 'vertical', { width: 20, length: 30 });
+    const centre = cone(20 + 10 * (1000 / 30), 20 + 15 * (1000 / 30));
+    const out = remapFrames(frame([centre]), from, pitch('full'));
+    expect(out[0].items[0].x).toBeCloseTo(350, 6);
+    expect(out[0].items[0].y).toBeCloseTo(540, 6);
+    expect(out[0].items[0].scale).toBeLessThan(0.4);
+  });
+
+  it('to samo boisko: bez zmian', () => {
+    const fs = frame([cone(1, 2)]);
+    expect(remapFrames(fs, pitch('half'), pitch('half'))).toBe(fs);
   });
 });

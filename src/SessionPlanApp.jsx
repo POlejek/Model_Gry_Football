@@ -12,7 +12,10 @@ import { clubTitle, EMPTY_CLUB } from './utils/club.js';
 import { logoImage } from './utils/boards.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
-import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink } from './utils/printLayout.js';
+import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink, fitScale, pagesNeeded } from './utils/printLayout.js';
+
+// Parts left out of the 1 / 2-page printout when shrinking alone is not enough (in this order).
+const FIT_DROP_LEVELS = ['notatki trenera', 'warianty', 'organizacja i obciążenie', 'punkty trenerskie'];
 
 const SESSIONS_KEY = 'trainingSessions';
 const DRILLS_KEY = 'trainingDrillLibrary';
@@ -279,7 +282,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   // for a full-width picture); printing starts once they are in the DOM and decoded.
   const [printImages, setPrintImages] = useState(null);
   const [printMode, setPrintMode] = useState(() => {
-    try { return localStorage.getItem('sessionPrintMode') === 'compact' ? 'compact' : 'full'; } catch { return 'full'; }
+    try { const m = localStorage.getItem('sessionPrintMode'); return ['compact', 'page1', 'page2'].includes(m) ? m : 'full'; } catch { return 'full'; }
   });
   const choosePrintMode = (mode) => {
     setPrintMode(mode);
@@ -299,6 +302,36 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
     });
     setPrintLayout(kind === 'plan' && printMode === 'compact' ? { stage: 'measure', shrink: new Set(), breaks: new Set() } : null);
     setPrintImages(map);
+  };
+  // 1 / 2 pages: scale the whole printout (zoom, width compensated) to the largest size that fits the page count;
+  // drills are never split, the drill that opens page 2 gets a page break.
+  const fitToPages = (maxPages, pageH) => {
+    const root = document.querySelector('.print-root .print-fit');
+    if (!root) return;
+    document.body.classList.add('measuring-print');
+    const units = [...root.querySelectorAll('[data-fit-unit]')];
+    const droppable = [...root.querySelectorAll('[data-fit-drop]')];
+    const measure = (scale) => {
+      root.style.zoom = String(scale);
+      root.style.width = `${186 / scale}mm`;
+      units.forEach(u => { u.style.breakBefore = 'auto'; });
+      return units.map(u => ({ id: u.dataset.fitUnit, h: u.getBoundingClientRect().height + 6 * scale }));
+    };
+    // first shrink down to a readable size; if that is not enough, leave out less important parts level by level
+    const MIN_READABLE = 0.6;
+    let level = 0;
+    let scale = 1;
+    for (; level <= FIT_DROP_LEVELS.length; level++) {
+      droppable.forEach(el => { el.style.display = Number(el.dataset.fitDrop) <= level ? 'none' : ''; });
+      const last = level === FIT_DROP_LEVELS.length;
+      scale = fitScale(measure, maxPages, pageH, { min: last ? 0.3 : MIN_READABLE, max: 1 });
+      if (last || pagesNeeded(measure(scale), pageH) <= maxPages) break;
+    }
+    const breaks = new Set(pageBreaks(measure(scale), pageH));
+    units.forEach(u => { u.style.breakBefore = breaks.has(u.dataset.fitUnit) ? 'page' : 'auto'; });
+    const omitted = root.querySelector('.print-fit-omitted');
+    if (omitted) omitted.textContent = level > 0 ? `W tym wydruku pominięto: ${FIT_DROP_LEVELS.slice(0, level).join(', ')} – pełne opisy w aplikacji.` : '';
+    document.body.classList.remove('measuring-print');
   };
   const measureUnits = () => {
     document.body.classList.add('measuring-print');
@@ -325,6 +358,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         setPrintLayout({ stage: 'ready', shrink: printLayout.shrink, breaks: new Set(pageBreaks(measureUnits(), pageH)) });
         return;
       }
+      if (printKind === 'plan' && (printMode === 'page1' || printMode === 'page2')) fitToPages(printMode === 'page1' ? 1 : 2, pageH);
       document.body.classList.add('printing-session');
       const cleanup = () => {
         document.body.classList.remove('printing-session');
@@ -337,7 +371,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
       window.print();
     });
     return () => { cancelled = true; };
-  }, [printImages, printLayout]);
+  }, [printImages, printLayout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   let minute = 0;
   const timed = current ? current.blocks.map(b => {
@@ -562,10 +596,12 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
                   <Download size={14} /> <span className="hidden sm:inline">Pobierz</span>
                 </button>
                 <select value={printMode} onChange={e => choosePrintMode(e.target.value)} aria-label="Tryb wydruku"
-                  title="Pełny – duże grafiki i opisy; Kompaktowy – 1 ćwiczenie na stronę (2, jeśli się zmieszczą), z nagłówkiem"
+                  title="Pełny – duże grafiki i opisy; Kompaktowy – 1 ćwiczenie na stronę (2, jeśli się zmieszczą); 1 strona / 2 strony – grafika po lewej, opisy po prawej, całość zmniejszona tak, by zmieściła się na 1 albo 2 stronach"
                   className="h-8 px-2 rounded-md text-sm bg-white/5 border border-white/10 text-slate-200">
                   <option value="full" className="bg-slate-800">Wydruk: pełny</option>
                   <option value="compact" className="bg-slate-800">Wydruk: kompaktowy</option>
+                  <option value="page1" className="bg-slate-800">Wydruk: 1 strona</option>
+                  <option value="page2" className="bg-slate-800">Wydruk: 2 strony</option>
                 </select>
                 <button onClick={() => printPlan('plan')} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
                   title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
@@ -729,7 +765,63 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
       )}
       {active && current && printKind !== 'cert' && createPortal(
         <div className={`print-root text-black bg-white ${printMode === 'compact' ? 'print-compact' : ''}`}>
-          {(() => {
+          {(printMode === 'page1' || printMode === 'page2') ? (
+            <div className="print-fit" style={{ width: '186mm' }}>
+              <div data-fit-unit="header" style={{ borderBottom: '2px solid #1e3a8a', paddingBottom: 4, marginBottom: 6 }}>
+                <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{current.title || 'Konspekt treningu'}</h1>
+                <p style={{ fontSize: 10.5, color: '#475569', margin: '2px 0 0' }}>{[formatDate(current.date), current.group, `Czas: ${total} min`].filter(Boolean).join('   ·   ')}</p>
+                {current.goal && <p style={{ fontSize: 10.5, margin: '3px 0 0' }}><strong>Cel: </strong>{current.goal}</p>}
+                {(current.phases.length > 0 || trainedPhases.length > 0) && (
+                  <p style={{ fontSize: 10.5, margin: '2px 0 0' }}><strong>Fazy modelu gry: </strong>{[...new Set([...current.phases, ...trainedPhases])].map(k => phaseLabel(k, options)).join(', ')}</p>
+                )}
+                {equipment && <p style={{ fontSize: 10.5, margin: '2px 0 0' }}><strong>Sprzęt: </strong>{equipment}</p>}
+              </div>
+              {timed.map(({ block: b, from, to, drill }, i) => {
+                const img = drill && b.printImage !== false && (printImages?.get(drill.id) || thumbs.get(drill.id));
+                const meta = drill?.meta || {};
+                const mod = (label, text, drop) => text && (
+                  <div key={label} data-fit-drop={drop} style={{ marginBottom: 4 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, color: '#1e3a8a' }}>{label}</div>
+                    <div style={{ fontSize: 10, lineHeight: 1.3, whiteSpace: 'pre-wrap' }}>{text}</div>
+                  </div>
+                );
+                return (
+                  <section key={b.id} data-fit-unit={b.id} className="print-block" style={{ breakInside: 'avoid', borderTop: '1.5px solid #1e3a8a', paddingTop: 4, marginTop: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' }}>#{i + 1} · {from}–{to}′</span>
+                      <h2 style={{ fontSize: 12.5, fontWeight: 700, margin: 0 }}>{drill ? drill.name : (b.title || 'Blok')}</h2>
+                    </div>
+                    {drill ? (
+                      <div style={{ display: 'flex', gap: '4mm', alignItems: 'flex-start' }}>
+                        {/* sized in mm, not %, so the image shrinks with the zoom of .print-fit like the text does */}
+                        {img && <img src={img} alt="" className="print-drill-img" style={{ width: '86mm', maxHeight: '95mm', flexShrink: 0, objectFit: 'contain', objectPosition: 'left top', border: '1px solid #e2e8f0' }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 9.5, color: '#475569', margin: '0 0 3px' }}>
+                            {[`${minutesOf(b)} min`, meta.category, meta.players && `Zawodnicy: ${meta.players}`, meta.area && `Pole: ${meta.area}`].filter(Boolean).join(' · ')}
+                          </p>
+                          {mod('Cel', meta.objective)}
+                          {mod('Przebieg', meta.description)}
+                          {mod('Organizacja', meta.organization, 3)}
+                          {mod('Obciążenie', meta.load, 3)}
+                          {mod('Punkty trenerskie', meta.coachingPoints, 4)}
+                          {mod('Warianty / progresje', meta.variations, 2)}
+                          {mod('Notatka', b.note)}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{minutesOf(b)} min{b.note ? ` · ${b.note}` : ''}</p>
+                    )}
+                  </section>
+                );
+              })}
+              {current.notes && (
+                <div data-fit-unit="notes" data-fit-drop={1} style={{ borderTop: '1px solid #cbd5e1', paddingTop: 4, marginTop: 6 }}>
+                  <p style={{ fontSize: 9.5, whiteSpace: 'pre-wrap', margin: 0 }}><strong>Notatki: </strong>{current.notes}</p>
+                </div>
+              )}
+              <p className="print-fit-omitted" style={{ fontSize: 9, color: '#64748b', margin: '6px 0 0' }} />
+            </div>
+          ) : (() => {
             const compact = printMode === 'compact';
             const unit = (id, shrinkable) => (compact ? { 'data-print-unit': id, 'data-shrinkable': shrinkable ? '1' : '0' } : {});
             const pageStyle = (id) => (compact ? { breakBefore: printLayout?.breaks?.has(id) ? 'page' : 'auto' } : {});

@@ -36,6 +36,34 @@ test.describe('Konspekt – wydruk', () => {
     expect(result.breaks).toBe(0); // nagłówek + A + B (bez grafiki) mieszczą się na jednej stronie
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   });
+
+  test('wydruk na 1 stronę: grafika po lewej, opis po prawej, całość pomniejszona tak, by zmieścić się na jednej stronie', async ({ page }) => {
+    const long = (id, name) => ({ ...drill(id, name), meta: { ...drill(id, name).meta, description: 'Przebieg ćwiczenia z wieloma szczegółami. '.repeat(40), coachingPoints: 'Punkt trenerski. '.repeat(30) } });
+    const drills = ['d1', 'd2', 'd3', 'd4'].map((id, i) => long(id, `Ćwiczenie ${i + 1}`));
+    await page.evaluate((ds) => {
+      localStorage.setItem('trainingDrillLibrary', JSON.stringify(ds));
+      localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'Długi konspekt', date: '2026-11-05', group: 'U14', goal: '', notes: 'Notatka. '.repeat(50), phases: [],
+        blocks: ds.map((d, i) => ({ id: `b${i}`, drillId: d.id, minutes: '20', note: '' })), createdAt: '', updatedAt: '' }]));
+    }, drills);
+    await page.reload();
+    await openTab(page, 'Konspekt');
+    await page.getByLabel('Tryb wydruku').selectOption('page1');
+    await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
+    await page.getByRole('button', { name: 'Drukuj / PDF' }).click();
+    await page.waitForFunction(() => window.__printed === true);
+    const result = await page.evaluate(() => {
+      const root = document.querySelector('.print-root .print-fit');
+      return {
+        zoom: Number(root.style.zoom),
+        breaks: [...root.querySelectorAll('[data-fit-unit]')].filter(el => el.style.breakBefore === 'page').length,
+        images: root.querySelectorAll('img.print-drill-img').length,
+      };
+    });
+    expect(result.images).toBe(4);
+    expect(result.breaks).toBe(0); // wszystko na jednej stronie
+    expect(result.zoom).toBeLessThan(1);
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  });
 });
 
 test.describe('Konspekt', () => {

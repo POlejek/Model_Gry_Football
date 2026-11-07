@@ -28,3 +28,31 @@ export function pageBreaks(units, pageH) {
   });
   return breaks;
 }
+
+/** Number of pages the units take when packed with pageBreaks (a unit taller than a page spans several). */
+export function pagesNeeded(units, pageH) {
+  if (!units.length) return 0;
+  let pages = 1;
+  let left = pageH;
+  units.forEach((u, i) => {
+    if (i > 0 && u.h > left && !(i === 1 && units[0].id === 'header')) { pages++; left = pageH; }
+    if (u.h <= left) left -= u.h;
+    else { pages += Math.ceil((u.h - left) / pageH); left = pageH - ((u.h - left) % pageH || pageH); }
+  });
+  return pages;
+}
+
+/**
+ * Fit-to-pages printout: the largest scale (between min and max) at which the content fits on maxPages.
+ * measure(scale) lays the content out at that scale and returns its units ({ id, h } in px).
+ */
+export function fitScale(measure, maxPages, pageH, { min = 0.3, max = 1.15, steps = 12 } = {}) {
+  if (pagesNeeded(measure(max), pageH) <= maxPages) return max;
+  let lo = min;
+  let hi = max;
+  for (let i = 0; i < steps; i++) {
+    const mid = (lo + hi) / 2;
+    if (pagesNeeded(measure(mid), pageH) <= maxPages) lo = mid; else hi = mid;
+  }
+  return lo;
+}

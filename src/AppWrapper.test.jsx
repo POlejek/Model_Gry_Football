@@ -120,4 +120,14 @@ describe('Zgoda na statystyki', () => {
     expect(localStorage.getItem('plangryAnalyticsConsent')).toBe('granted');
     expect(screen.getByRole('button', { name: 'Wyłącz statystyki' })).toBeInTheDocument();
   });
+
+  it('liczy zakładkę startową po zgodzie i każde przejście do innej zakładki', async () => {
+    vi.stubEnv('VITE_GA_ID', 'G-TEST123');
+    const user = userEvent.setup();
+    render(<AppWrapper />);
+    await user.click(screen.getByRole('button', { name: 'Akceptuję' }));
+    await user.click(screen.getByRole('tab', { name: /Konspekt/ }));
+    const titles = window.dataLayer.map(a => [...a]).filter(a => a[0] === 'event' && a[1] === 'page_view').map(a => a[2].page_title);
+    expect(titles).toEqual(['Taktyka', 'Konspekt']);
+  });
 });

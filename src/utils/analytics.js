@@ -29,7 +29,8 @@ function load(id) {
     analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
   });
   window.gtag('js', new Date());
-  window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false });
+  // page views are sent per tab (trackScreen), so the automatic one would count each visit twice
+  window.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false, send_page_view: false });
   const script = document.createElement('script');
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
@@ -65,6 +66,14 @@ export function setConsent(value) {
 export function track(name, params = {}) {
   if (!loaded || getConsent() !== 'granted') return;
   window.gtag('event', name, params);
+}
+
+// The tabs are reported as separate pages, so GA's "Pages and screens" report counts each one on its own.
+const SCREENS = { tactics: ['Taktyka', 'taktyka'], training: ['Trening', 'trening'], session: ['Konspekt', 'konspekt'] };
+export function trackScreen(tab) {
+  const [title, slug] = SCREENS[tab] || [tab, tab];
+  const { origin, pathname } = window.location;
+  track('page_view', { page_title: title, page_location: `${origin}${pathname}#${slug}`, tab });
 }
 
 // Only for tests: forget that the script was loaded.

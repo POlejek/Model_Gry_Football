@@ -9,7 +9,7 @@ import { needsBackup, backupAgeDays } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 import { loadClub, saveClub } from './utils/club.js';
 import ConsentBanner from './components/ConsentBanner.jsx';
-import { needsConsent, setConsent, initAnalytics, track } from './utils/analytics.js';
+import { needsConsent, setConsent, initAnalytics, trackScreen } from './utils/analytics.js';
 
 const TABS = [
   { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
@@ -81,8 +81,13 @@ export default function AppWrapper() {
   const [droppedFiles, setDroppedFiles] = useState(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [askConsent, setAskConsent] = useState(needsConsent);
-  useEffect(() => { initAnalytics(); }, []);
-  const chooseConsent = (value) => { setConsent(value); setAskConsent(false); };
+  // the tab the visit starts in counts too, not only later switches
+  useEffect(() => { initAnalytics(); trackScreen(activeTab); }, []);
+  const chooseConsent = (value) => {
+    setConsent(value);
+    setAskConsent(false);
+    if (value === 'granted') trackScreen(activeTab);
+  };
   const [backupDue, setBackupDue] = useState(() => needsBackup());
   // result of an import/undo, shown once after the reload that applied it
   const [notice, setNotice] = useState(() => {
@@ -155,7 +160,7 @@ export default function AppWrapper() {
 
   const selectTab = (id) => {
     setActiveTab(id);
-    track('tab_view', { tab: id });
+    trackScreen(id);
     try { localStorage.setItem(TAB_KEY, id); } catch { /* private mode: not remembered */ }
   };
 

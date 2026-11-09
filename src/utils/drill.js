@@ -144,6 +144,8 @@ export function lerpObj(a, b, p) {
 }
 
 export function interpolateFrames(frames, t) {
+  // a playhead outside the animation (e.g. slightly below 0 on the first step) shows its nearest end
+  t = clamp(Number.isFinite(t) ? t : 0, 0, frames.length - 1);
   const i = Math.min(Math.floor(t), frames.length - 1);
   const raw = t - i;
   if (i >= frames.length - 1 || raw <= 0) return frames[i];

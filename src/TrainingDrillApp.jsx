@@ -807,7 +807,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     let last = performance.now();
     const end = frames.length - 1;
     const step = (now) => {
-      const dt = now - last;
+      // the first frame's timestamp may be a little earlier than `last`: never step backwards
+      const dt = Math.max(0, now - last);
       last = now;
       setPlayhead(ph => {
         const n = ph + (dt * speed) / 1000;

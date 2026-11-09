@@ -108,6 +108,12 @@ describe('interpolateFrames (odtwarzanie animacji ćwiczenia)', () => {
     expect(interpolateFrames(frames, 5)).toBe(frames[1]);
   });
 
+  it('pozycja odtwarzania tuż poniżej zera (pierwszy krok animacji) pokazuje pierwszą klatkę zamiast błędu', () => {
+    expect(interpolateFrames(frames, -0.01)).toBe(frames[0]);
+    expect(interpolateFrames(frames, -3)).toBe(frames[0]);
+    expect(interpolateFrames(frames, NaN)).toBe(frames[0]);
+  });
+
   it('w połowie przejścia przesuwa zawodnika do połowy drogi (z wygładzeniem)', () => {
     const mid = interpolateFrames(frames, 0.5);
     expect(mid.items.find(i => i.id === 1).x).toBeCloseTo(50);

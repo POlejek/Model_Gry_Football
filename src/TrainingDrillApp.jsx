@@ -10,6 +10,7 @@ import PhasePicker from './components/PhasePicker.jsx';
 import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import { isClearing } from './utils/backup.js';
+import { track } from './utils/analytics.js';
 import { boardSize, drawBoards, logoImage, hasBrand, drawBoardItem, setBoardBrand, BOARD_ITEM_H, BOARD_CONTENTS, DEFAULT_BOARD_STYLE } from './utils/boards.js';
 import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
@@ -806,7 +807,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     let last = performance.now();
     const end = frames.length - 1;
     const step = (now) => {
-      const dt = now - last;
+      // the first frame's timestamp may be a little earlier than `last`: never step backwards
+      const dt = Math.max(0, now - last);
       last = now;
       setPlayhead(ph => {
         const n = ph + (dt * speed) / 1000;
@@ -881,6 +883,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   // ── Pitch ────────────────────────────────────────────────────────
   const changePitch = (patch) => {
     checkpoint();
+    // board colours change on every move of the colour picker: not counted
+    if (!patch.boardStyle) track('pitch_change', { change: Object.keys(patch).join(','), ...(patch.type ? { type: patch.type } : {}) });
     const next = { ...pitch, ...patch };
     next.width = clamp(Number(next.width) || 5, 5, 120);
     next.length = clamp(Number(next.length) || 5, 5, 120);
@@ -942,6 +946,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     if (eq.type === 'step') item.label = nextLabel(i => i.type === 'step');
     if (eq.type === 'text') item.text = 'Tekst';
     if (eq.type === 'board') Object.assign(item, { length: 150, content: 'brand', text: '', fg: '#ffffff' });
+    track('add_item', { type: eq.type });
     updateKind('from', 'items', list => [...list, item]);
     setIsDrawingMode(false);
     clearInteraction();
@@ -1265,9 +1270,13 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
 
   const frameSuffix = frames.length > 1 ? `_klatka${currentFrame + 1}` : '';
 
-  const exportPng = () => downloadCanvas(renderSceneCanvas(), `${safeFileName(drillName)}${frameSuffix}.png`);
+  const exportPng = () => {
+    track('export_drill', { format: 'png' });
+    downloadCanvas(renderSceneCanvas(), `${safeFileName(drillName)}${frameSuffix}.png`);
+  };
 
   const exportCard = () => {
+    track('export_drill', { format: 'card' });
     const S = 2, CW = 1000, PAD = 40, TEXT_W = CW - PAD * 2;
     const scene = renderSceneCanvas(S);
     const imgScale = Math.min(TEXT_W / canvasSize.w, 900 / canvasSize.h, 1.6);
@@ -1365,6 +1374,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
   };
 
   const saveDrill = (asNew = false) => {
+    track('save_drill', { as_new: asNew });
     let name = drillName.trim() || `Ćwiczenie ${savedDrills.length + 1}`;
     if (asNew && savedDrills.some(d => d.id === currentDrillId && d.name === name)) name += ' (kopia)';
     const now = new Date().toISOString();

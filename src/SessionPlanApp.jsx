@@ -12,6 +12,7 @@ import { clubTitle, EMPTY_CLUB } from './utils/club.js';
 import { logoImage } from './utils/boards.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
+import { track } from './utils/analytics.js';
 import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink, fitScale, pagesNeeded } from './utils/printLayout.js';
 
 // Parts left out of the 1 / 2-page printout when shrinking alone is not enough (in this order).
@@ -293,6 +294,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   const [printLayout, setPrintLayout] = useState(null); // { stage, shrink: Set, breaks: Set }
   const printPlan = (kind = 'plan') => {
     setPrintKind(kind);
+    track('print_session', { kind, layout: kind === 'cert' ? 'cert' : printMode });
     const map = new Map();
     current.blocks.forEach(b => {
       const d = drillById.get(b.drillId);

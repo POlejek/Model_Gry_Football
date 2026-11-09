@@ -1,5 +1,6 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { setConsent, resetAnalyticsForTests } from './utils/analytics.js';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SessionPlanApp, { parseSessionFile, SESSION_FORMAT, SESSION_LIBRARY_FORMAT } from './SessionPlanApp.jsx';
@@ -89,4 +90,24 @@ describe('Konspekt zgodny z certyfikacją PZPN', () => {
     await user.click(screen.getAllByRole('button', { name: /Nowy konspekt/ })[0]);
     expect(screen.getByRole('checkbox', { name: /Konspekt zgodny z certyfikacją PZPN/ })).toBeChecked();
   });
+});
+
+describe('Statystyki wydruku konspektu', () => {
+  afterEach(() => { vi.unstubAllEnvs(); resetAnalyticsForTests(); delete window.dataLayer; });
+
+  it.each([['full', 'full'], ['compact', 'compact'], ['page1', 'page1'], ['page2', 'page2']])(
+    'tryb „%s” trafia do zdarzenia print_session', async (mode, layout) => {
+      vi.stubEnv('VITE_GA_ID', 'G-TEST123');
+      setConsent('granted');
+      vi.spyOn(window, 'print').mockImplementation(() => {});
+      localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'T', date: '2026-11-09', group: 'U14', goal: '', notes: '', phases: [],
+        blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }]));
+      const user = userEvent.setup();
+      render(<SessionPlanApp />);
+      await user.selectOptions(screen.getByLabelText('Tryb wydruku'), mode);
+      await user.click(screen.getByRole('button', { name: 'Drukuj / PDF' }));
+      const events = window.dataLayer.map(a => [...a]).filter(a => a[0] === 'event');
+      expect(events).toContainEqual(['event', 'print_session', { kind: 'plan', layout }]);
+    },
+  );
 });

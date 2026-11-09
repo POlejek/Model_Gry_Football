@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppWrapper from './AppWrapper.jsx';
@@ -90,5 +90,44 @@ describe('Szkółka, przeciąganie plików i czyszczenie danych', () => {
     await user.click(screen.getByRole('button', { name: 'Wyczyść wszystko' }));
     expect(confirm.mock.calls[0][0]).toContain('Kadra (1 zawodnik)');
     expect(JSON.parse(localStorage.getItem('modelGrySquad'))).toHaveLength(1);
+  });
+});
+
+describe('Zgoda na statystyki', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('bez identyfikatora Google Analytics okienko się nie pokazuje', () => {
+    render(<AppWrapper />);
+    expect(screen.queryByRole('dialog', { name: 'Zgoda na statystyki' })).not.toBeInTheDocument();
+  });
+
+  it('pyta przy pierwszym wejściu, zapamiętuje odmowę i pozwala zmienić zdanie w „Dane”', async () => {
+    vi.stubEnv('VITE_GA_ID', 'G-TEST123');
+    const user = userEvent.setup();
+    const { unmount } = render(<AppWrapper />);
+    const banner = screen.getByRole('dialog', { name: 'Zgoda na statystyki' });
+    await user.click(within(banner).getByRole('button', { name: 'Szczegóły i prywatność' }));
+    expect(banner).toHaveTextContent('Nie wysyłamy Twoich danych z aplikacji');
+    await user.click(within(banner).getByRole('button', { name: 'Odrzucam' }));
+    expect(screen.queryByRole('dialog', { name: 'Zgoda na statystyki' })).not.toBeInTheDocument();
+    expect(localStorage.getItem('plangryAnalyticsConsent')).toBe('denied');
+
+    unmount();
+    render(<AppWrapper />);
+    expect(screen.queryByRole('dialog', { name: 'Zgoda na statystyki' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dane' }));
+    await user.click(screen.getByRole('button', { name: 'Włącz statystyki' }));
+    expect(localStorage.getItem('plangryAnalyticsConsent')).toBe('granted');
+    expect(screen.getByRole('button', { name: 'Wyłącz statystyki' })).toBeInTheDocument();
+  });
+
+  it('liczy zakładkę startową po zgodzie i każde przejście do innej zakładki', async () => {
+    vi.stubEnv('VITE_GA_ID', 'G-TEST123');
+    const user = userEvent.setup();
+    render(<AppWrapper />);
+    await user.click(screen.getByRole('button', { name: 'Akceptuję' }));
+    await user.click(screen.getByRole('tab', { name: /Konspekt/ }));
+    const titles = window.dataLayer.map(a => [...a]).filter(a => a[0] === 'event' && a[1] === 'page_view').map(a => a[2].page_title);
+    expect(titles).toEqual(['Taktyka', 'Konspekt']);
   });
 });

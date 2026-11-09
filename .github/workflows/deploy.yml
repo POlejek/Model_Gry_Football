@@ -78,6 +78,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # Google Analytics 4 measurement id (public); only the published site reports, after consent
+          VITE_GA_ID: G-6CK13E3V2M
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

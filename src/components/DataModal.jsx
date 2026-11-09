@@ -4,6 +4,8 @@ import {
   SECTIONS, readAll, describe, buildBackup, markBackupDone, backupAgeDays, parseAnyFile, combineParsed,
   applyImport, replaceLosses, undoInfo, undoLastImport, storageUsage, STORAGE_LIMIT, plural, SECTION_SLUGS, clearAll,
 } from '../utils/backup.js';
+import { gaId, getConsent, setConsent, track } from '../utils/analytics.js';
+import { PrivacyNote } from './ConsentBanner.jsx';
 
 // Sections that are a single value: they can only be skipped or loaded, not merged.
 const SINGLE = new Set(['settings', 'club']);
@@ -94,6 +96,7 @@ export default function DataModal({ onClose, droppedFiles = null }) {
     if (losses.length && !window.confirm(`„Zastąp” usunie z tego urządzenia: ${losses.join(', ')}.\n\nStan sprzed importu będzie można przywrócić przyciskiem „Cofnij ostatni import”. Kontynuować?`)) return;
     const result = applyImport(incoming.data, full);
     if (!result.ok) { setExportNote(result.summary[0]); return; }
+    track('import_data', { sections: Object.keys(full).filter(k => full[k] !== 'skip').join(',') });
     const undoNote = result.undoSaved ? '' : ' (bez możliwości cofnięcia — za mało miejsca w pamięci)';
     reloadWith(`Import zakończony${undoNote}: ${result.summary.join(' · ')}`);
   };
@@ -105,9 +108,18 @@ export default function DataModal({ onClose, droppedFiles = null }) {
     if (undoLastImport()) reloadWith(`Przywrócono dane sprzed ${what}.`);
   };
 
+  const [consent, setConsentState] = useState(getConsent);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const toggleConsent = () => {
+    const next = consent === 'granted' ? 'denied' : 'granted';
+    setConsent(next);
+    setConsentState(next);
+  };
+
   const doClear = () => {
     const what = available.map(s => `${s.label} (${describe(s.id, current)})`).join(', ');
     if (!window.confirm(`Usunąć WSZYSTKIE dane z tej przeglądarki?\n\n${what}\n\nNajpierw warto pobrać pełną kopię. Do następnego importu można to cofnąć przyciskiem „Cofnij”.`)) return;
+    track('clear_all');
     let result = clearAll();
     if (!result.ok) {
       if (!window.confirm('Za mało miejsca, by zachować dane do cofnięcia. Usunąć mimo to — bez możliwości cofnięcia?')) return;
@@ -237,6 +249,22 @@ export default function DataModal({ onClose, droppedFiles = null }) {
                 {undoCleared ? 'Wyczyszczono dane' : 'Ostatni import'}: {new Date(undo.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
               </p>
               <button onClick={doUndo} className={btnSecondary}><Undo2 size={15} /> {undoCleared ? 'Cofnij wyczyszczenie' : 'Cofnij ostatni import'}</button>
+            </section>
+          )}
+
+          {gaId() && (
+            <section className={`${card} space-y-2`} aria-labelledby="stats-title">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[12rem]">
+                  <h3 id="stats-title" className="font-semibold">Statystyki odwiedzin</h3>
+                  <p className="text-xs text-slate-400">
+                    {consent === 'granted' ? 'Włączone — anonimowe statystyki Google Analytics.' : 'Wyłączone — nic nie jest wysyłane.'}
+                    {' '}<button onClick={() => setPrivacyOpen(o => !o)} className="underline hover:text-white">{privacyOpen ? 'Ukryj szczegóły' : 'Szczegóły'}</button>
+                  </p>
+                </div>
+                <button onClick={toggleConsent} className={btnSecondary}>{consent === 'granted' ? 'Wyłącz statystyki' : 'Włącz statystyki'}</button>
+              </div>
+              {privacyOpen && <PrivacyNote />}
             </section>
           )}
 

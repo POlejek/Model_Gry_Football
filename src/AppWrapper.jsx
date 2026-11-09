@@ -8,6 +8,8 @@ import DataModal, { IMPORT_RESULT_KEY } from './components/DataModal.jsx';
 import { needsBackup, backupAgeDays } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 import { loadClub, saveClub } from './utils/club.js';
+import ConsentBanner from './components/ConsentBanner.jsx';
+import { needsConsent, setConsent, initAnalytics, track } from './utils/analytics.js';
 
 const TABS = [
   { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
@@ -78,6 +80,9 @@ export default function AppWrapper() {
   const [showClub, setShowClub] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
+  const [askConsent, setAskConsent] = useState(needsConsent);
+  useEffect(() => { initAnalytics(); }, []);
+  const chooseConsent = (value) => { setConsent(value); setAskConsent(false); };
   const [backupDue, setBackupDue] = useState(() => needsBackup());
   // result of an import/undo, shown once after the reload that applied it
   const [notice, setNotice] = useState(() => {
@@ -150,6 +155,7 @@ export default function AppWrapper() {
 
   const selectTab = (id) => {
     setActiveTab(id);
+    track('tab_view', { tab: id });
     try { localStorage.setItem(TAB_KEY, id); } catch { /* private mode: not remembered */ }
   };
 
@@ -230,6 +236,7 @@ export default function AppWrapper() {
       </div>
 
       {showData && <DataModal droppedFiles={droppedFiles} onClose={() => { setShowData(false); setDroppedFiles(null); setBackupDue(needsBackup()); }} />}
+      {askConsent && <ConsentBanner onChoose={chooseConsent} />}
       {showClub && <ClubModal club={club} onChange={updateClub} onClose={() => setShowClub(false)} />}
       {draggingFiles && !showClub && (
         <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center bg-blue-950/60 border-4 border-dashed border-blue-400/70">

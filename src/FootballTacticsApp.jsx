@@ -7,6 +7,7 @@ import {
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
+import { track } from './utils/analytics.js';
 import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, drawTextNote, interpolatePlayers, findMatchingPlayer, TEXT_NOTE_SIZE, renderSchemeFrame, SCHEME_W, SCHEME_H } from './utils/draw.js';
 import { htmlToLines, htmlToPptRuns, commentFontSize } from './utils/richText.js';
 import {
@@ -562,6 +563,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
 
   // Eksport animacji do MP4
   const exportAnimationToMP4 = async () => {
+    track('export_tactics', { format: 'mp4' });
     if (!currentScheme || currentScheme.frames.length < 2) {
       alert('Musisz mieć co najmniej 2 klatki, aby wyeksportować animację!');
       return;
@@ -724,6 +726,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   };
 
   const exportToPowerPoint = async (schemeIdFilter = null) => {
+    track('export_tactics', { format: 'pptx' });
     const list = [];
     Object.keys(phases).forEach(phase => {
       const subs = phases[phase] || [];
@@ -2821,6 +2824,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
 
   // ── PNG export of the current frame ──
   const exportSchemePng = () => {
+    track('export_tactics', { format: 'png' });
     const canvas = document.createElement('canvas');
     canvas.width = 700;
     canvas.height = 1080;

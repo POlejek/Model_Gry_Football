@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck, ChevronDown,
+  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck, ChevronDown, Share,
   Image as ImageIcon, ImageOff,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
@@ -14,6 +14,7 @@ import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
 import { track } from './utils/analytics.js';
 import { weekStart } from './utils/week.js';
+import { isIOS, printoutToPdf, sharePdf } from './utils/pdfExport.js';
 import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink, fitScale, pagesNeeded } from './utils/printLayout.js';
 
 // Parts left out of the 1 / 2-page printout when shrinking alone is not enough (in this order).
@@ -322,7 +323,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   // compact layout: measure → shrink too tall drills → measure again → page breaks → print
   const [printLayout, setPrintLayout] = useState(null); // { stage, shrink: Set, breaks: Set }
   const [printMenu, setPrintMenu] = useState(false);
-  const [printReady, setPrintReady] = useState(false); // phones: printout prepared, waiting for the tap
+  // phones: printout prepared, waiting for the tap — true (print) or, on iPhone / iPad, a PDF { stage, file, pages }
+  const [printReady, setPrintReady] = useState(false);
   const printCleanupRef = useRef(null);
   const printPlan = (kind = 'plan', printMode = currentPrintMode) => {
     setPrintKind(kind);
@@ -406,7 +408,14 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
       window.addEventListener('afterprint', cleanup);
       // Phones ignore print() that does not come straight from a tap, and preparing the pictures
       // takes too long for that: there the coach confirms with one more tap on "Drukuj".
-      if (window.matchMedia?.('(pointer: coarse)').matches) setPrintReady(true);
+      if (isIOS()) {
+        // iOS cannot print a web app from the home screen: make a PDF now, share it on the next tap
+        setPrintReady({ stage: 'working' });
+        const name = `konspekt_${safeFileName(current.title || 'trening')}${current.date ? `_${current.date}` : ''}.pdf`;
+        printoutToPdf(document.querySelector('.print-root'), name)
+          .then(({ file, pages }) => { if (!cancelled) setPrintReady({ stage: 'pdf', file, pages }); })
+          .catch(() => { if (!cancelled) setPrintReady({ stage: 'error' }); });
+      } else if (window.matchMedia?.('(pointer: coarse)').matches) setPrintReady(true);
       else window.print();
     });
     return () => { cancelled = true; };
@@ -779,7 +788,44 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         </div>
       )}
 
-      {printReady && (
+      {printReady && typeof printReady === 'object' && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-label="PDF konspektu"
+            className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-5 text-white">
+            {printReady.stage === 'working' && (
+              <>
+                <p className="text-base font-semibold">Przygotowuję PDF…</p>
+                <p className="text-sm text-slate-300 mt-1">To potrwa chwilę.</p>
+              </>
+            )}
+            {printReady.stage === 'pdf' && (
+              <>
+                <p className="text-base font-semibold">PDF gotowy</p>
+                <p className="text-sm text-slate-300 mt-1">
+                  {printReady.pages === 1 ? '1 strona' : `${printReady.pages} ${printReady.pages < 5 ? 'strony' : 'stron'}`}. Dotknij „Udostępnij”, a potem wybierz „Drukuj”, „Zachowaj w Plikach” albo wyślij.
+                </p>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => sharePdf(printReady.file).then(r => { if (r !== 'cancelled') printCleanupRef.current?.(); })}
+                    autoFocus className={`${btnPrimary} flex-1 justify-center h-11`}>
+                    <Share size={16} /> Udostępnij
+                  </button>
+                  <button onClick={() => printCleanupRef.current?.()} className={`${btn} h-11`}>Zamknij</button>
+                </div>
+              </>
+            )}
+            {printReady.stage === 'error' && (
+              <>
+                <p className="text-base font-semibold">Nie udało się przygotować PDF</p>
+                <p className="text-sm text-slate-300 mt-1">Spróbuj ponownie albo otwórz PlanGry w Safari i użyj „Udostępnij → Drukuj”.</p>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => printCleanupRef.current?.()} className={`${btn} h-11 flex-1 justify-center`}>Zamknij</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {printReady === true && (
         <div className="fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-center justify-center p-4">
           <div role="dialog" aria-modal="true" aria-label="Wydruk gotowy"
             className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-5 text-white">

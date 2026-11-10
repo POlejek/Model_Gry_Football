@@ -159,18 +159,26 @@ test.describe('Konspekt', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   });
 
-  test('gotowe treningi: dodanie tygodnia „Otwarcie gry 9v9” do Konspektu i biblioteki', async ({ page }) => {
+  test('gotowe treningi: pakiet „Otwarcie gry 9v9” dodaje model gry (Taktyka) i tydzień treningów', async ({ page }) => {
     await page.getByRole('button', { name: 'Gotowe treningi' }).click();
     const dialog = page.getByRole('dialog', { name: 'Gotowe treningi' });
     await expect(dialog.getByRole('button', { name: /^Dodaj Otwarcie gry/ })).toHaveCount(3);
     await dialog.getByRole('button', { name: 'Dodaj Otwarcie gry 9v9' }).click();
 
-    await expect(page.getByText(/Dodano „Otwarcie gry 9v9”/)).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Konspekt/ })).toHaveAttribute('aria-selected', 'true');
-    const stored = await page.evaluate(() => ({
-      drills: JSON.parse(localStorage.getItem('trainingDrillLibrary')).length,
-      titles: JSON.parse(localStorage.getItem('trainingSessions')).map(s => s.title),
-    }));
+    await expect(page.getByText(/Dodano „Otwarcie gry 9v9”: model gry \(1-3-2-3\)/)).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Taktyka/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('Wyjście przez boczny sektor')).toBeVisible();
+    const stored = await page.evaluate(() => {
+      const t = JSON.parse(localStorage.getItem('footballTacticsData'));
+      return {
+        format: t.gameFormat,
+        schemes: t.schemes['9v9']['Atak-Otwarcie'].map(s => s.name),
+        drills: JSON.parse(localStorage.getItem('trainingDrillLibrary')).length,
+        titles: JSON.parse(localStorage.getItem('trainingSessions')).map(s => s.title),
+      };
+    });
+    expect(stored.format).toBe('9v9');
+    expect(stored.schemes).toHaveLength(3);
     expect(stored.drills).toBe(9);
     expect(stored.titles).toHaveLength(3);
     expect(stored.titles[0]).toContain('Otwarcie gry 9v9');

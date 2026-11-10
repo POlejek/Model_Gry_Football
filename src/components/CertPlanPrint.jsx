@@ -89,8 +89,9 @@ export default function CertPlanPrint({ session, club, timed, total, drills, pha
             <tbody>
               {/* fixed header and a minimum body height: the upright part name then never stretches the red bar */}
               <tr style={{ height: 24 }}>
-                <td rowSpan={2} style={{ background: DARK, border: `1px solid ${LINE}`, verticalAlign: 'middle', padding: 0 }}>
-                  <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: 0.3, margin: '0 auto', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
+                <td rowSpan={2} style={{ background: DARK, border: `1px solid ${LINE}`, verticalAlign: 'middle', padding: 0, position: 'relative' }}>
+                  {/* rotated text instead of writing-mode, which the iPhone PDF renderer cannot draw */}
+                  <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%) rotate(-90deg)', color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: 0.3, whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
                     {part.label}
                   </div>
                 </td>

@@ -5,6 +5,7 @@
 const BLUE = '#1d4ed8', RED = '#dc2626', GREEN = '#16a34a', YELLOW = '#eab308', INK = '#111827';
 const PHASE = 'Atak-Otwarcie';
 const VERSION = '2026-11-10T00:00:00.000Z';
+import { buildModel } from './modelGry.js';
 
 export const FORMATS = {
   '7v7': {
@@ -14,8 +15,8 @@ export const FORMATS = {
     switchRondo: { side: 10, out: 4, mid: 2 }, minutes: [12, 12, 15, 20, 5], load: ['4 × 2′, przerwa 1′', '4 × 3′, przerwa 1′', '3 × 5′, przerwa 2′'],
   },
   '9v9': {
-    label: '9v9', group: 'U12–U13', field: [70, 50], lines: [3, 3, 2], system: '1-3-3-2',
-    rondo: { side: 12, out: 5, mid: 2 }, pattern: { back: 3, mids: 3, press: 2 }, press: { back: 3, mids: 2, press: 3 },
+    label: '9v9', group: 'U12–U13', field: [70, 50], lines: [3, 2, 3], system: '1-3-2-3',
+    rondo: { side: 12, out: 5, mid: 2 }, pattern: { back: 3, mids: 2, press: 2 }, press: { back: 3, mids: 2, press: 3 },
     third: { area: [22, 14] }, zones: { area: [36, 24], per: 4, mid: 3 }, small: { area: [40, 30], a: 5, b: 5 },
     switchRondo: { side: 12, out: 5, mid: 2 }, minutes: [15, 15, 18, 22, 5], load: ['4 × 3′, przerwa 1′', '4 × 4′, przerwa 1′30″', '3 × 6′, przerwa 2′'],
   },
@@ -297,7 +298,7 @@ function sessions(cfg, monday) {
   const m = cfg.minutes;
   const plan = (n, day, title, goal, warmup, ids, summary) => ({
     id: `pack-otwarcie-${cfg.label}-s${n}`, title: `Otwarcie gry ${cfg.label} — ${title}`, date: addDays(monday, day), group: cfg.group, goal,
-    notes: `Tydzień „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
+    notes: `Tydzień „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Model gry do tego tygodnia: zakładka Taktyka → Atak – Otwarcie (3 schematy). Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
     phases: [PHASE], createdAt: VERSION, updatedAt: VERSION,
     blocks: [
       { id: `pack-otwarcie-${cfg.label}-s${n}-b1`, drillId: null, title: 'Rozgrzewka', minutes: String(m[0]), note: warmup, part: 'wstepna' },
@@ -318,16 +319,22 @@ function sessions(cfg, monday) {
   ];
 }
 
-// The whole week for one format, ready for the app's import (drills and session plans only).
+// The whole pack for one format, ready for the app's import: the game model first (tactics schemes),
+// then the week of drills and session plans built on it. Settings open Taktyka on that format's schemes.
 export function buildPack(format, monday) {
   const cfg = FORMATS[format];
-  return { tactics: null, squad: [], settings: null, club: null, drills: drills(cfg), sessions: sessions(cfg, monday) };
+  return {
+    tactics: buildModel(format), squad: [], club: null,
+    settings: { gameFormat: format, selectedPhase: 'Atak', selectedSubPhase: 'Otwarcie' },
+    drills: drills(cfg), sessions: sessions(cfg, monday),
+  };
 }
 
 export const PACKS = Object.values(FORMATS).map(cfg => ({
   id: cfg.label,
   title: `Otwarcie gry ${cfg.label}`,
   group: cfg.group,
-  description: `Tydzień treningów w systemie ${cfg.system}: od ronda z bramkarzem do meczu z zasadą otwarcia.`,
-  contents: '3 konspekty · 9 ćwiczeń',
+  system: cfg.system,
+  description: `Model gry w systemie ${cfg.system} (3 schematy otwarcia) i tydzień treningów pod niego: od ronda z bramkarzem do meczu z zasadą otwarcia.`,
+  contents: '3 schematy · 3 konspekty · 9 ćwiczeń',
 }));

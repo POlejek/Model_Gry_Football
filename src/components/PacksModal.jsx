@@ -27,12 +27,13 @@ export default function PacksModal({ onClose }) {
   // then reloads into Konspekt, because the editors keep their data in memory.
   const add = (pack) => {
     const monday = weekStart(new Date().toISOString().slice(0, 10));
-    const result = applyImport(buildPack(pack.id, monday), { drills: 'add', sessions: 'add' });
+    // model first (schemes in Taktyka), then the week built on it; nothing of the coach's is replaced
+    const result = applyImport(buildPack(pack.id, monday), { tactics: 'add', settings: 'replace', drills: 'add', sessions: 'add' });
     if (!result.ok) { setError(result.summary[0]); return; }
     track('add_pack', { pack: `otwarcie-${pack.id}` });
     try {
-      localStorage.setItem(TAB_KEY, 'session');
-      sessionStorage.setItem(IMPORT_RESULT_KEY, `Dodano „${pack.title}”: 3 konspekty w bieżącym tygodniu i 9 ćwiczeń w bibliotece. Możesz to cofnąć w oknie „Dane”.`);
+      localStorage.setItem(TAB_KEY, 'tactics');
+      sessionStorage.setItem(IMPORT_RESULT_KEY, `Dodano „${pack.title}”: model gry (${pack.system}) — 3 schematy w Taktyce → Atak – Otwarcie, oraz tydzień treningów: 3 konspekty w bieżącym tygodniu i 9 ćwiczeń w bibliotece. Możesz to cofnąć w oknie „Dane”.`);
     } catch { /* ignore */ }
     window.location.reload();
   };
@@ -52,8 +53,9 @@ export default function PacksModal({ onClose }) {
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
           <p className="text-sm text-slate-300">
-            <span className="font-semibold text-white">Otwarcie gry</span> — budowanie akcji od bramkarza. Trzy treningi w tygodniu:
-            ustawienie i pierwsze podanie, gra na trzeciego zawodnika, otwarcie w grze. Wybierz format swojej drużyny.
+            <span className="font-semibold text-white">Otwarcie gry</span> — budowanie akcji od bramkarza. Najpierw model gry: trzy animowane
+            schematy otwarcia (bokiem, środkiem z trzecim zawodnikiem, długim podaniem). Pod niego tydzień treningów: ustawienie
+            i pierwsze podanie, gra na trzeciego zawodnika, otwarcie w grze. Wybierz format swojej drużyny.
           </p>
           <ul className="space-y-2">
             {PACKS.map(p => (
@@ -77,7 +79,8 @@ export default function PacksModal({ onClose }) {
           </ul>
           {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
           <p className="text-xs text-slate-400">
-            Konspekty trafią do bieżącego tygodnia (poniedziałek, środa, piątek), a ćwiczenia do biblioteki w Treningu.
+            Schematy trafią do Taktyki (faza Atak – Otwarcie), konspekty do bieżącego tygodnia (poniedziałek, środa, piątek),
+            a ćwiczenia do biblioteki w Treningu.
             Twoje dotychczasowe treningi zostają bez zmian. Kolejne tematy pojawią się tutaj.
           </p>
         </div>

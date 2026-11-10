@@ -3033,7 +3033,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       `}</style>
 
       {/* Pasek narzędzi — tryby, opcje bieżącego trybu, drużyny, cofnij/ponów, stan zapisu (na telefonie wersja kompaktowa) */}
-      <div className="flex items-center gap-1 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-3 py-1.5 relative z-50">
+      <div className="flex flex-wrap items-center gap-1 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-2 sm:px-3 py-1.5 relative z-50">
         <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
           {[
             ['select', MousePointer2, 'Przesuwanie', 'Przesuwanie zawodników, piłki, linii i stref (V)'],
@@ -3689,7 +3689,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                 title="Pobierz zaznaczone schematy jako PPT"
               >
                 <Download size={16} />
-                PPT ({selectedSchemesForPpt.size})
+                PowerPoint ({selectedSchemesForPpt.size})
               </button>
               <button
                 onClick={() => {
@@ -3709,7 +3709,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               title="Wybierz schematy do eksportu PowerPoint"
             >
               <Download size={16} />
-              PPT
+              PowerPoint
             </button>
           )}
         </div>

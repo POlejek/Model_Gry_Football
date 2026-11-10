@@ -95,8 +95,8 @@ describe('Konspekt zgodny z certyfikacją PZPN', () => {
 describe('Statystyki wydruku konspektu', () => {
   afterEach(() => { vi.unstubAllEnvs(); resetAnalyticsForTests(); delete window.dataLayer; });
 
-  it.each([['full', 'full'], ['compact', 'compact'], ['page1', 'page1'], ['page2', 'page2']])(
-    'tryb „%s” trafia do zdarzenia print_session', async (mode, layout) => {
+  it.each([['Szczegółowy', 'full'], ['Ćwiczenie na stronę', 'compact'], ['Cały trening na 1 stronie', 'page1'], ['Cały trening na 2 stronach', 'page2']])(
+    'układ „%s” trafia do zdarzenia print_session', async (label, layout) => {
       vi.stubEnv('VITE_GA_ID', 'G-TEST123');
       setConsent('granted');
       vi.spyOn(window, 'print').mockImplementation(() => {});
@@ -104,10 +104,27 @@ describe('Statystyki wydruku konspektu', () => {
         blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }]));
       const user = userEvent.setup();
       render(<SessionPlanApp />);
-      await user.selectOptions(screen.getByLabelText('Tryb wydruku'), mode);
       await user.click(screen.getByRole('button', { name: 'Drukuj / PDF' }));
+      expect(screen.getAllByRole('menuitem')).toHaveLength(4);
+      await user.click(screen.getByRole('menuitem', { name: label }));
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(localStorage.getItem('sessionPrintMode')).toBe(layout);
       const events = window.dataLayer.map(a => [...a]).filter(a => a[0] === 'event');
       expect(events).toContainEqual(['event', 'print_session', { kind: 'plan', layout }]);
     },
   );
+
+  it('ostatnio użyty układ jest pierwszy w menu i oznaczony', async () => {
+    localStorage.setItem('sessionPrintMode', 'page2');
+    localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'T', date: '2026-11-10', group: '', goal: '', notes: '', phases: [],
+      blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }]));
+    const user = userEvent.setup();
+    render(<SessionPlanApp />);
+    await user.click(screen.getByRole('button', { name: 'Drukuj / PDF' }));
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveTextContent('Cały trening na 2 stronachostatnio użyty');
+    expect(items[1]).toHaveTextContent('SzczegółowyDuże rysunki i pełne opisy');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
 });

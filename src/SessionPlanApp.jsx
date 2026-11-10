@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck,
+  Plus, Trash2, ArrowUp, ArrowDown, Printer, Search, X, Copy, FileText, ExternalLink, ClipboardList, Download, Upload, BadgeCheck, ChevronDown,
   Image as ImageIcon, ImageOff,
 } from 'lucide-react';
 import { renderDrillImage } from './TrainingDrillApp.jsx';
@@ -109,7 +109,38 @@ function AutoTextarea({ value, minRows = 2, className, watch, ...props }) {
 const sessionEquipment = (drills) => equipmentRows(drills).map(e => `${e.name} ×${e.count}`).join(', ');
 
 const inputCls = 'w-full px-2 py-1.5 bg-white/10 border border-white/15 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400';
-const btn = 'px-2.5 py-1.5 rounded-md text-sm bg-white/5 hover:bg-white/10 text-slate-200 transition-colors inline-flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none';
+// Layouts of the ordinary printout, named after what the coach gets (ids are stored and reported in statistics).
+export const PRINT_MODES = [
+  { id: 'full', label: 'Szczegółowy', hint: 'Duże rysunki i pełne opisy. Tyle stron, ile trzeba.' },
+  { id: 'compact', label: 'Ćwiczenie na stronę', hint: 'Każde ćwiczenie na osobnej stronie, dwa krótkie obok siebie.' },
+  { id: 'page1', label: 'Cały trening na 1 stronie', hint: 'Rysunek po lewej, opis po prawej, wszystko pomniejszone.' },
+  { id: 'page2', label: 'Cały trening na 2 stronach', hint: 'Rysunek po lewej, opis po prawej. Większe i czytelniejsze niż na 1 stronie.' },
+];
+
+// Small picture of the page layout: one tall page, a page per drill, or picture-left rows on 1 or 2 pages.
+function PrintModeIcon({ id }) {
+  const page = (x, rows) => (
+    <g key={x}>
+      <rect x={x} y="1" width="14" height="20" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      {rows}
+    </g>
+  );
+  const row = (x, y, h, split) => (split
+    ? <g key={y}><rect x={x + 2} y={y} width="4" height={h} fill="currentColor" /><rect x={x + 7} y={y} width="5" height={h} fill="currentColor" opacity="0.45" /></g>
+    : <rect key={y} x={x + 2} y={y} width="10" height={h} fill="currentColor" opacity={h > 4 ? 1 : 0.45} />);
+  const pages = {
+    full: [page(9, [row(9, 4, 7), row(9, 12.5, 2), row(9, 16, 2)])],
+    compact: [page(1, [row(1, 4, 6), row(1, 11.5, 2)]), page(17, [row(17, 4, 6), row(17, 11.5, 2)])],
+    page1: [page(9, [row(9, 4, 4, true), row(9, 9.5, 4, true), row(9, 15, 4, true)])],
+    page2: [page(1, [row(1, 4, 6, true), row(1, 12, 6, true)]), page(17, [row(17, 4, 6, true), row(17, 12, 6, true)])],
+  };
+  return <svg width="32" height="22" viewBox="0 0 32 22" className="flex-shrink-0 mt-0.5 text-slate-300" aria-hidden="true">{pages[id]}</svg>;
+}
+
+const btnBase = 'px-2.5 py-1.5 rounded-md text-sm transition-colors inline-flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none';
+const btn = `${btnBase} bg-white/5 hover:bg-white/10 text-slate-200`;
+const btnPrimary = `${btnBase} bg-blue-600 hover:bg-blue-500 text-white font-medium`; // the one main action of a row
+const btnCert = `${btnBase} bg-red-600/90 hover:bg-red-500 text-white font-medium`;
 const iconBtn = 'p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none';
 
 export default function SessionPlanApp({ active = true, onOpenDrill = null, club = EMPTY_CLUB, onEditClub = null }) {
@@ -131,7 +162,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   const thumbs = useMemo(() => {
     const map = new Map();
     library.forEach(d => {
-      try { map.set(d.id, renderDrillImage(d, 0.4, club)); } catch { /* broken drill: no thumbnail */ }
+      try { map.set(d.id, renderDrillImage(d, 0.4, club, { crop: true })); } catch { /* broken drill: no thumbnail */ }
     });
     return map;
   }, [library, club, logoReady, logoLoaded]);
@@ -144,6 +175,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   const weeks = useMemo(() => groupByWeek(sessions), [sessions]);
   const thisWeek = weekStart(today());
   const [notesOpen, setNotesOpen] = useState(false);
+  const [certOpen, setCertOpen] = useState(false); // the form is long: closed until the coach opens it
 
   const patchSession = (patch) => setSessions(list => list.map(s => (
     s.id === currentId ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
@@ -282,9 +314,10 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   // Images for the printout are rendered at full resolution only when printing (thumbnails are too small
   // for a full-width picture); printing starts once they are in the DOM and decoded.
   const [printImages, setPrintImages] = useState(null);
-  const [printMode, setPrintMode] = useState(() => {
+  const [currentPrintMode, setPrintMode] = useState(() => {
     try { const m = localStorage.getItem('sessionPrintMode'); return ['compact', 'page1', 'page2'].includes(m) ? m : 'full'; } catch { return 'full'; }
   });
+  const printMode = currentPrintMode;
   const choosePrintMode = (mode) => {
     setPrintMode(mode);
     try { localStorage.setItem('sessionPrintMode', mode); } catch { /* storage unavailable */ }
@@ -292,7 +325,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   const [printKind, setPrintKind] = useState('plan'); // 'plan' (konspekt) | 'cert' (certyfikacja PZPN)
   // compact layout: measure → shrink too tall drills → measure again → page breaks → print
   const [printLayout, setPrintLayout] = useState(null); // { stage, shrink: Set, breaks: Set }
-  const printPlan = (kind = 'plan') => {
+  const [printMenu, setPrintMenu] = useState(false);
+  const printPlan = (kind = 'plan', printMode = currentPrintMode) => {
     setPrintKind(kind);
     track('print_session', { kind, layout: kind === 'cert' ? 'cert' : printMode });
     const map = new Map();
@@ -426,7 +460,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         <div className="p-2 border-t border-white/10 grid grid-cols-2 gap-1">
           <button onClick={exportAllSessions} disabled={!sessions.length} className={`${btn} justify-center text-xs`}
             title="Wszystkie konspekty z użytymi ćwiczeniami w jednym pliku .json">
-            <Download size={13} /> Wszystkie
+            <Download size={13} /> Eksportuj
           </button>
           <button onClick={() => importInputRef.current?.click()} className={`${btn} justify-center text-xs`}
             title="Wczytaj jeden lub wiele plików z konspektami">
@@ -448,7 +482,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
             ))}
           </select>
           <button onClick={createSession} className={btn} aria-label="Nowy konspekt"><Plus size={15} /></button>
-          <button onClick={exportAllSessions} disabled={!sessions.length} className={btn} aria-label="Pobierz wszystkie konspekty"><Download size={15} /></button>
+          <button onClick={exportAllSessions} disabled={!sessions.length} className={btn} aria-label="Eksportuj wszystkie konspekty"><Download size={15} /></button>
           <button onClick={() => importInputRef.current?.click()} className={btn} aria-label="Importuj konspekty"><Upload size={15} /></button>
         </div>
 
@@ -504,10 +538,24 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
               </div>
               <div className={`sm:col-span-4 rounded-lg border ${cert.enabled ? 'border-red-500/40 bg-red-500/[0.04]' : 'border-white/10 bg-white/[0.03]'}`}>
                 <label className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 cursor-pointer">
-                  <input type="checkbox" checked={cert.enabled} onChange={e => patchCert({ enabled: e.target.checked })} />
+                  <input type="checkbox" checked={cert.enabled} onChange={e => { patchCert({ enabled: e.target.checked }); setCertOpen(e.target.checked); }} />
                   <span><span className="font-semibold text-slate-300">Konspekt zgodny z certyfikacją PZPN</span> — dodatkowe pola i wydruk w układzie formularza</span>
                 </label>
-                {cert.enabled && (
+                {cert.enabled && (() => {
+                  const fields = ['coach', 'assistant', 'topic', 'microcycle', 'technique', 'teamplay', 'motor', 'mental', 'time', 'place', 'number', 'players'];
+                  const filled = fields.filter(f => String(cert[f] || '').trim()).length;
+                  return (
+                    <button onClick={() => setCertOpen(o => !o)} aria-expanded={certOpen}
+                      className="w-full flex items-center justify-between gap-2 px-3 pb-2 text-left text-xs text-slate-400 hover:text-slate-200">
+                      <span className="min-w-0 truncate">
+                        Pola formularza: uzupełnione {filled} z {fields.length}
+                        {!certOpen && [cert.topic, cert.place].filter(Boolean).length > 0 && <span className="text-slate-300"> · {[cert.topic, cert.place].filter(Boolean).join(' · ')}</span>}
+                      </span>
+                      <span className="flex-shrink-0 text-slate-300">{certOpen ? 'Zwiń ▲' : 'Rozwiń ▼'}</span>
+                    </button>
+                  );
+                })()}
+                {cert.enabled && certOpen && (
                   <div className="px-3 pb-3 space-y-3">
                     <p className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2">
                       <span>Szkółka: <span className="text-slate-200">{clubTitle(club) || 'nie ustawiono'}</span></span>
@@ -594,23 +642,40 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
               )}
               <div className="flex items-center gap-2 ml-auto">
                 <button onClick={duplicateSession} className={btn} title="Kopia konspektu z dzisiejszą datą" aria-label="Duplikuj"><Copy size={14} /> <span className="hidden sm:inline">Duplikuj</span></button>
-                <button onClick={exportSession} className={btn} aria-label="Pobierz" title="Pobierz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
-                  <Download size={14} /> <span className="hidden sm:inline">Pobierz</span>
+                <button onClick={exportSession} className={btn} aria-label="Eksportuj konspekt" title="Zapisz ten konspekt z ćwiczeniami jako plik .json (np. dla asystenta lub na inne urządzenie)">
+                  <Download size={14} /> <span className="hidden sm:inline">Eksportuj</span>
                 </button>
-                <select value={printMode} onChange={e => choosePrintMode(e.target.value)} aria-label="Tryb wydruku"
-                  title="Pełny – duże grafiki i opisy; Kompaktowy – 1 ćwiczenie na stronę (2, jeśli się zmieszczą); 1 strona / 2 strony – grafika po lewej, opisy po prawej, całość zmniejszona tak, by zmieściła się na 1 albo 2 stronach"
-                  className="h-8 px-2 rounded-md text-sm bg-white/5 border border-white/10 text-slate-200">
-                  <option value="full" className="bg-slate-800">Wydruk: pełny</option>
-                  <option value="compact" className="bg-slate-800">Wydruk: kompaktowy</option>
-                  <option value="page1" className="bg-slate-800">Wydruk: 1 strona</option>
-                  <option value="page2" className="bg-slate-800">Wydruk: 2 strony</option>
-                </select>
-                <button onClick={() => printPlan('plan')} disabled={!current.blocks.length} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`} aria-label="Drukuj / PDF"
-                  title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
-                  <Printer size={14} /> Drukuj / PDF
-                </button>
+                {/* one button: choosing a layout prints it; the last one used is listed first */}
+                <div className="relative">
+                  <button onClick={() => setPrintMenu(o => !o)} disabled={!current.blocks.length} className={btnPrimary} aria-label="Drukuj / PDF"
+                    aria-haspopup="menu" aria-expanded={printMenu}
+                    title="Drukuj albo zapisz jako PDF (w oknie drukowania wybierz „Zapisz jako PDF”)">
+                    <Printer size={14} /> Drukuj / PDF <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                  {printMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setPrintMenu(false)} />
+                      <div role="menu" aria-label="Układ wydruku" ref={el => el?.scrollIntoView?.({ block: 'nearest' })} onKeyDown={e => { if (e.key === 'Escape') setPrintMenu(false); }}
+                        className="absolute right-0 top-full mt-1 z-50 w-[min(22rem,88vw)] rounded-xl bg-slate-900 border border-white/15 shadow-2xl p-1">
+                        {[...PRINT_MODES].sort((x, y) => (y.id === printMode) - (x.id === printMode)).map(m => (
+                          <button key={m.id} role="menuitem" aria-label={m.label} autoFocus={m.id === printMode}
+                            onClick={() => { setPrintMenu(false); choosePrintMode(m.id); printPlan('plan', m.id); }}
+                            className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/10">
+                            <PrintModeIcon id={m.id} />
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-sm font-medium text-white">
+                                {m.label}{m.id === printMode && <span className="ml-2 text-xs font-normal text-emerald-300">ostatnio użyty</span>}
+                              </span>
+                              <span className="block text-xs text-slate-400">{m.hint}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
                 {cert.enabled && (
-                  <button onClick={() => printPlan('cert')} className={`${btn} bg-red-600/80 hover:bg-red-500 text-white`} aria-label="Drukuj konspekt do certyfikacji"
+                  <button onClick={() => printPlan('cert')} className={btnCert} aria-label="Drukuj konspekt do certyfikacji"
                     title="Konspekt w układzie wymaganym w certyfikacji PZPN — druk albo PDF">
                     <BadgeCheck size={14} /> <span className="hidden sm:inline">Certyfikacja</span>
                   </button>
@@ -694,7 +759,7 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
                 </article>
               ))}
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => setShowPicker(true)} className={`${btn} bg-blue-600/80 hover:bg-blue-500 text-white`}><Plus size={14} /> Dodaj ćwiczenie</button>
+                <button onClick={() => setShowPicker(true)} className={btnPrimary}><Plus size={14} /> Dodaj ćwiczenie</button>
                 <button onClick={addTextBlock} className={btn}><FileText size={14} /> Blok tekstowy</button>
               </div>
             </section>

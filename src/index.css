@@ -21,6 +21,18 @@ canvas {
   touch-action: none;
 }
 
+/* Keyboard users see where they are; mouse and touch do not get the ring. */
+:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+
+/* Touch screens: controls are at least a fingertip tall, and 16 px text in fields keeps iOS from
+   zooming the page when one is focused (zooming by hand stays available). */
+@media (pointer: coarse) {
+  button, [role="tab"], select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 44px; }
+  button { min-width: 44px; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea { font-size: 16px; }
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+}
+
 /* Printing a session plan: show only the printable plan rendered into a portal. */
 .print-root { display: none; }
 /* compact print: lay the plan out off-screen at A4 content width to measure drill heights */

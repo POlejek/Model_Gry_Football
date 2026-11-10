@@ -18,7 +18,7 @@ import {
   isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
 } from './utils/geometry.js';
 import {
-  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames, RUNOFF,
+  FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames, RUNOFF, contentCrop,
 } from './utils/drill.js';
 
 const newPitch = () => ({
@@ -534,9 +534,23 @@ const optClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justi
 // ── Main component ───────────────────────────────────────────────
 // Static image of a drill's first frame (used by the session plan for thumbnails and printing).
 // Boards with the school's logo frame the picture when the drill has them switched on.
-export function renderDrillImage(drill, scale = 0.5, club = loadClub()) {
+// `crop` (thumbnails): only the part of the pitch the drill uses, enlarged up to 2×.
+export function renderDrillImage(drill, scale = 0.5, club = loadClub(), { crop = false } = {}) {
   const n = normalizeDrill(drill);
   const { w, h } = getPitchSize(n.pitch);
+  if (crop) {
+    const c = contentCrop(n.frames, w, h);
+    const s = scale * Math.min(2, w / c.w, h / c.h);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(c.w * s);
+    canvas.height = Math.round(c.h * s);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(s, s);
+    ctx.translate(-c.x, -c.y);
+    setBoardBrand(club);
+    renderScene(ctx, { pitchImg: renderPitchCanvas(n.pitch), frame: n.frames[0], w, h });
+    return canvas.toDataURL('image/png');
+  }
   const b = boardSize(n.pitch, club);
   const canvas = document.createElement('canvas');
   canvas.width = Math.round((w + 2 * b) * scale);
@@ -552,13 +566,13 @@ export function renderDrillImage(drill, scale = 0.5, club = loadClub()) {
 
 // Library thumbnails: rendered once per drill version and scale (null where canvas is unavailable, e.g. tests).
 const thumbCache = new Map();
-function drillThumb(drill, scale, club) {
+function drillThumb(drill, scale, club, crop = false) {
   // the school's boards change with its name and logo (and the moment the logo has loaded)
   const brand = drill.pitch?.boards ? `${club.name}|${club.logo.length}|${logoImage(club.logo) ? 1 : 0}` : '';
-  const key = `${drill.id}|${drill.updatedAt}|${scale}|${brand}`;
+  const key = `${drill.id}|${drill.updatedAt}|${scale}|${brand}|${crop}`;
   if (!thumbCache.has(key)) {
     let url = null;
-    try { url = renderDrillImage(drill, scale, club); } catch { url = null; }
+    try { url = renderDrillImage(drill, scale, club, { crop }); } catch { url = null; }
     thumbCache.set(key, url);
   }
   return thumbCache.get(key);
@@ -1963,7 +1977,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
 
       {/* ── Center: toolbar + canvas + timeline ── */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30">
-        <div className="flex-shrink-0 flex items-center gap-1 flex-nowrap lg:flex-wrap px-2 py-1.5 border-b border-white/10 bg-slate-950/50 relative z-30">
+        <div className="flex-shrink-0 flex items-center gap-1 flex-wrap px-2 py-1.5 border-b border-white/10 bg-slate-950/50 relative z-30">
           <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5" role="group" aria-label="Narzędzie">
             <button className={segClass(tool === 'select')} onClick={() => setTool('select')} title="Zaznaczanie i przesuwanie (V)" aria-label="Zaznacz">
               <MousePointer2 size={14} /> <span className="hidden min-[1300px]:inline">Zaznacz</span>
@@ -2106,7 +2120,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
             }}
           />
           {canvasHint && (
-            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 max-w-[92%] text-center px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg lg:whitespace-nowrap">
+            // an empty pitch shows its hint in the middle; while drawing it sits below the pitch, never over it
+            <div className={`pointer-events-none absolute left-1/2 -translate-x-1/2 max-w-[92%] text-center px-3 py-1.5 rounded-full bg-slate-900/85 border border-white/10 text-xs text-slate-200 shadow-lg lg:whitespace-nowrap ${hasContent ? 'bottom-1' : 'top-1/2 -translate-y-1/2'}`}>
               {canvasHint}
             </div>
           )}
@@ -2223,8 +2238,8 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
               [<FileText size={16} />, 'Karta PNG', exportCard],
               [<Plus size={16} />, 'Nowe ćwiczenie', () => { setMobileSheet(null); newDrill(); }],
               [<CopyPlus size={16} />, 'Zapisz jako kopię', () => saveDrill(true), !currentDrillId],
-              [<Download size={16} />, 'Eksport .json', exportDrill],
-              [<Upload size={16} />, 'Import plików', () => importInputRef.current?.click()],
+              [<Download size={16} />, 'Eksportuj ćwiczenie', exportDrill],
+              [<Upload size={16} />, 'Importuj pliki…', () => importInputRef.current?.click()],
             ].map(([icon, label, onClick, disabled]) => (
               <button key={label} onClick={onClick} disabled={!!disabled}
                 className="h-11 inline-flex items-center justify-center gap-2 rounded-lg text-sm bg-white/5 hover:bg-white/10 text-slate-200 disabled:opacity-40">
@@ -2275,7 +2290,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   {filteredDrills.map(d => {
                     const isCurrent = d.id === currentDrillId;
                     const isPreview = preview && d.id === preview.id;
-                    const thumb = drillThumb(d, 0.32, club);
+                    const thumb = drillThumb(d, 0.32, club, true);
                     return (
                       <div key={d.id}
                         onMouseEnter={() => setLibraryPreviewId(d.id)} onFocus={() => setLibraryPreviewId(d.id)}

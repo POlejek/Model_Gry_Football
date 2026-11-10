@@ -44,3 +44,37 @@ test.describe('Telefon', () => {
     await expect(page.getByRole('status')).toHaveText('Zapisano „Mobilne”');
   });
 });
+
+// Layout guards from the interface review: they fail when a change makes the phone layout regress.
+test.describe('Telefon – układ', () => {
+  const measure = (page) => page.evaluate(() => {
+    // drawers parked wholly beside the screen are not on it; a control cut by the edge is the fault to catch
+    const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0 && r.left < window.innerWidth && r.right > 0; };
+    const controls = [...document.querySelectorAll('button, select, [role="tab"]')].filter(visible);
+    return {
+      small: controls.filter(el => { const r = el.getBoundingClientRect(); return r.width < 44 || r.height < 44; }).map(el => (el.getAttribute('aria-label') || el.textContent).trim().slice(0, 30)),
+      offScreen: controls.filter(el => { const r = el.getBoundingClientRect(); return r.right > window.innerWidth + 1 || r.left < -1; }).map(el => (el.getAttribute('aria-label') || el.textContent).trim().slice(0, 30)),
+    };
+  });
+
+  for (const tab of ['Taktyka', 'Trening', 'Konspekt']) {
+    test(`${tab}: przyciski mają co najmniej 44 px i żaden nie wystaje poza ekran`, async ({ page }) => {
+      await openTab(page, tab);
+      const { small, offScreen } = await measure(page);
+      expect(small, 'za małe na palec').toEqual([]);
+      expect(offScreen, 'poza ekranem').toEqual([]);
+    });
+  }
+
+  test('Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
+    await page.getByRole('button', { name: 'Więcej' }).click();
+    await expect(page.getByRole('menuitem')).toHaveText([/Dane/, /Kadra/, /Szkółka/]);
+    await page.getByRole('menuitem', { name: /Kadra/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Kadra zespołu' })).toBeVisible();
+  });
+
+  test('strona pozwala na powiększanie palcami', async ({ page }) => {
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).not.toMatch(/user-scalable=no|maximum-scale/);
+  });
+});

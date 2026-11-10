@@ -24,9 +24,10 @@ test.describe('Konspekt – wydruk', () => {
     const blocks = await page.evaluate(() => JSON.parse(localStorage.getItem('trainingSessions'))[0].blocks.map(b => b.printImage));
     expect(blocks).toEqual([undefined, false]);
 
-    await page.getByLabel('Tryb wydruku').selectOption('compact');
+
     await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
     await page.getByRole('button', { name: 'Drukuj / PDF' }).click();
+    await page.getByRole('menuitem', { name: 'Ćwiczenie na stronę' }).click();
     await page.waitForFunction(() => window.__printed === true);
     const result = await page.evaluate(() => ({
       images: document.querySelectorAll('.print-root .print-block img').length,
@@ -47,9 +48,10 @@ test.describe('Konspekt – wydruk', () => {
     }, drills);
     await page.reload();
     await openTab(page, 'Konspekt');
-    await page.getByLabel('Tryb wydruku').selectOption('page1');
+
     await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
     await page.getByRole('button', { name: 'Drukuj / PDF' }).click();
+    await page.getByRole('menuitem', { name: 'Cały trening na 1 stronie' }).click();
     await page.waitForFunction(() => window.__printed === true);
     const result = await page.evaluate(() => {
       const root = document.querySelector('.print-root .print-fit');
@@ -146,6 +148,7 @@ test.describe('Konspekt', () => {
     await openTab(page, 'Konspekt');
     await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
     await page.getByRole('button', { name: 'Drukuj / PDF' }).click();
+    await page.getByRole('menuitem', { name: 'Szczegółowy' }).click();
     await page.waitForFunction(() => window.__printed === true);
     // half pitch lying flat: 560 × 700 plus a 34 px frame on each side
     const size = await page.evaluate(() => {

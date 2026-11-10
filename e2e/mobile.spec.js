@@ -66,9 +66,9 @@ test.describe('Telefon – układ', () => {
     });
   }
 
-  test('Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
+  test('Gotowe treningi, Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
     await page.getByRole('button', { name: 'Więcej' }).click();
-    await expect(page.getByRole('menuitem')).toHaveText([/Dane/, /Kadra/, /Szkółka/]);
+    await expect(page.getByRole('menuitem')).toHaveText([/Gotowe treningi/, /Dane/, /Kadra/, /Szkółka/]);
     await page.getByRole('menuitem', { name: /Kadra/ }).click();
     await expect(page.getByRole('dialog', { name: 'Kadra zespołu' })).toBeVisible();
   });
@@ -76,5 +76,22 @@ test.describe('Telefon – układ', () => {
   test('strona pozwala na powiększanie palcami', async ({ page }) => {
     const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
     expect(viewport).not.toMatch(/user-scalable=no|maximum-scale/);
+  });
+
+  test('Konspekt: wybór układu wydruku kończy się drukiem po jednym dotknięciu', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'Trening', date: '2026-11-10', group: '', goal: '', notes: '', phases: [],
+      blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }])));
+    await page.reload();
+    await openTab(page, 'Konspekt');
+    await page.evaluate(() => { window.__prints = 0; window.print = () => { window.__prints++; }; });
+    await page.getByRole('button', { name: 'Drukuj / PDF' }).tap();
+    await page.getByRole('menuitem', { name: 'Cały trening na 1 stronie' }).tap();
+    const ready = page.getByRole('dialog', { name: 'Wydruk gotowy' });
+    await expect(ready).toBeVisible();
+    await ready.getByRole('button', { name: 'Drukuj' }).tap();
+    expect(await page.evaluate(() => window.__prints)).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(ready).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
   });
 });

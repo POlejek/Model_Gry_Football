@@ -13,6 +13,7 @@ import { logoImage } from './utils/boards.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
 import { track } from './utils/analytics.js';
+import { weekStart } from './utils/week.js';
 import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink, fitScale, pagesNeeded } from './utils/printLayout.js';
 
 // Parts left out of the 1 / 2-page printout when shrinking alone is not enough (in this order).
@@ -68,12 +69,7 @@ const formatDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateStrin
 const shortDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '');
 
 // Monday (ISO date) of the week a session belongs to; sessions without a date go last.
-export function weekStart(iso) {
-  if (!iso) return '';
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-}
+export { weekStart };
 const weekLabel = (monday) => {
   if (!monday) return 'Bez daty';
   const a = new Date(`${monday}T12:00:00`);
@@ -326,6 +322,8 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
   // compact layout: measure → shrink too tall drills → measure again → page breaks → print
   const [printLayout, setPrintLayout] = useState(null); // { stage, shrink: Set, breaks: Set }
   const [printMenu, setPrintMenu] = useState(false);
+  const [printReady, setPrintReady] = useState(false); // phones: printout prepared, waiting for the tap
+  const printCleanupRef = useRef(null);
   const printPlan = (kind = 'plan', printMode = currentPrintMode) => {
     setPrintKind(kind);
     track('print_session', { kind, layout: kind === 'cert' ? 'cert' : printMode });
@@ -402,9 +400,14 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
         setPrintImages(null);
         setPrintLayout(null);
         setPrintKind('plan');
+        setPrintReady(false);
       };
+      printCleanupRef.current = cleanup;
       window.addEventListener('afterprint', cleanup);
-      window.print();
+      // Phones ignore print() that does not come straight from a tap, and preparing the pictures
+      // takes too long for that: there the coach confirms with one more tap on "Drukuj".
+      if (window.matchMedia?.('(pointer: coarse)').matches) setPrintReady(true);
+      else window.print();
     });
     return () => { cancelled = true; };
   }, [printImages, printLayout]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -773,6 +776,22 @@ export default function SessionPlanApp({ active = true, onOpenDrill = null, club
           className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] text-center px-4 py-2 rounded-lg shadow-2xl text-sm border ${
             message.tone === 'warn' ? 'bg-amber-950/95 border-amber-500/40 text-amber-200' : 'bg-slate-900/95 border-emerald-500/40 text-emerald-200'}`}>
           {message.text}
+        </div>
+      )}
+
+      {printReady && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-label="Wydruk gotowy"
+            className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-5 text-white">
+            <p className="text-base font-semibold">Wydruk gotowy</p>
+            <p className="text-sm text-slate-300 mt-1">Dotknij „Drukuj”, a potem wybierz drukarkę albo „Zapisz jako PDF”.</p>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => window.print()} autoFocus className={`${btnPrimary} flex-1 justify-center h-11`}>
+                <Printer size={16} /> Drukuj
+              </button>
+              <button onClick={() => printCleanupRef.current?.()} className={`${btn} h-11`}>Anuluj</button>
+            </div>
+          </div>
         </div>
       )}
 

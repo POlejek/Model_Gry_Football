@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal } from 'lucide-react';
+import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal, Sparkles } from 'lucide-react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
@@ -10,7 +10,8 @@ import { needsBackup, backupAgeDays } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 import { loadClub, saveClub } from './utils/club.js';
 import ConsentBanner from './components/ConsentBanner.jsx';
-import { needsConsent, setConsent, initAnalytics, trackScreen } from './utils/analytics.js';
+import PacksModal from './components/PacksModal.jsx';
+import { needsConsent, setConsent, initAnalytics, trackScreen, track } from './utils/analytics.js';
 
 const TABS = [
   { id: 'tactics',  label: 'Taktyka', Icon: Route, title: 'Edytor taktyki: fazy, schematy, animacje' },
@@ -170,7 +171,10 @@ export default function AppWrapper() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
   const backupAge = backupDue ? backupAgeDays() : null;
+  const [showPacks, setShowPacks] = useState(false);
   const utilities = [
+    { label: 'Gotowe treningi', icon: <Sparkles size={16} aria-hidden="true" />, accent: true, title: 'Gotowe tygodnie treningów do wczytania',
+      open: () => { track('open_ready_trainings'); setShowPacks(true); } },
     { label: 'Dane', icon: <Database size={16} aria-hidden="true" />, open: () => setShowData(true),
       title: backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych',
       note: backupDue ? (backupAge === null ? 'brak kopii' : `kopia: ${backupAge} dni temu`) : '', warn: true },
@@ -242,8 +246,9 @@ export default function AppWrapper() {
         ) : (
           <div className="ml-auto self-center mb-1 flex items-center">
             {utilities.map(u => (
-              <button key={u.label} onClick={u.open} title={u.title} aria-label={u.label} className={utilBtn}>
-                {u.icon}<span className="hidden sm:inline">{u.label}</span>
+              <button key={u.label} onClick={u.open} title={u.title} aria-label={u.label}
+                className={u.accent ? `${utilBtn} mr-1 bg-blue-600/20 text-blue-200 hover:bg-blue-600/30` : utilBtn}>
+                {u.icon}<span className={u.accent ? 'hidden lg:inline' : 'hidden sm:inline'}>{u.label}</span>
                 {u.note && (u.warn ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-xs whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
@@ -272,6 +277,7 @@ export default function AppWrapper() {
 
       {showData && <DataModal droppedFiles={droppedFiles} onClose={() => { setShowData(false); setDroppedFiles(null); setBackupDue(needsBackup()); }} />}
       {askConsent && <ConsentBanner onChoose={chooseConsent} />}
+      {showPacks && <PacksModal onClose={() => setShowPacks(false)} />}
       {showClub && <ClubModal club={club} onChange={updateClub} onClose={() => setShowClub(false)} />}
       {draggingFiles && !showClub && (
         <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center bg-blue-950/60 border-4 border-dashed border-blue-400/70">

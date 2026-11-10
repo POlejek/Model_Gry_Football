@@ -158,4 +158,24 @@ test.describe('Konspekt', () => {
     expect(size).toEqual([560 + 68, 700 + 68]);
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   });
+
+  test('gotowe treningi: dodanie tygodnia „Otwarcie gry 9v9” do Konspektu i biblioteki', async ({ page }) => {
+    await page.getByRole('button', { name: 'Gotowe treningi' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Gotowe treningi' });
+    await expect(dialog.getByRole('button', { name: /^Dodaj Otwarcie gry/ })).toHaveCount(3);
+    await dialog.getByRole('button', { name: 'Dodaj Otwarcie gry 9v9' }).click();
+
+    await expect(page.getByText(/Dodano „Otwarcie gry 9v9”/)).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Konspekt/ })).toHaveAttribute('aria-selected', 'true');
+    const stored = await page.evaluate(() => ({
+      drills: JSON.parse(localStorage.getItem('trainingDrillLibrary')).length,
+      titles: JSON.parse(localStorage.getItem('trainingSessions')).map(s => s.title),
+    }));
+    expect(stored.drills).toBe(9);
+    expect(stored.titles).toHaveLength(3);
+    expect(stored.titles[0]).toContain('Otwarcie gry 9v9');
+
+    await page.getByRole('button', { name: 'Gotowe treningi' }).click();
+    await expect(page.getByRole('dialog', { name: 'Gotowe treningi' }).getByText('Dodano')).toHaveCount(1);
+  });
 });

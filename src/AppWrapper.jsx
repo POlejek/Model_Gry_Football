@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal } from 'lucide-react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
@@ -12,9 +13,9 @@ import ConsentBanner from './components/ConsentBanner.jsx';
 import { needsConsent, setConsent, initAnalytics, trackScreen } from './utils/analytics.js';
 
 const TABS = [
-  { id: 'tactics',  label: '⚽ Taktyka', title: 'Edytor taktyki: fazy, schematy, animacje' },
-  { id: 'training', label: '🏃 Trening', title: 'Budowanie ćwiczeń treningowych' },
-  { id: 'session',  label: '📋 Konspekt', title: 'Plan jednostki treningowej z ćwiczeń, druk i PDF' },
+  { id: 'tactics',  label: 'Taktyka', Icon: Route, title: 'Edytor taktyki: fazy, schematy, animacje' },
+  { id: 'training', label: 'Trening', Icon: Dumbbell, title: 'Budowanie ćwiczeń treningowych' },
+  { id: 'session',  label: 'Konspekt', Icon: ClipboardList, title: 'Plan jednostki treningowej z ćwiczeń, druk i PDF' },
 ];
 const TAB_KEY = 'modelGryActiveTab';
 
@@ -158,6 +159,28 @@ export default function AppWrapper() {
     };
   }, []);
 
+  // phone: Dane / Kadra / Szkółka move into one "Więcej" menu
+  const [isPhone, setIsPhone] = useState(() => !!window.matchMedia?.('(max-width: 639px)').matches);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 639px)');
+    if (!mq?.addEventListener) return undefined;
+    const onChange = (e) => { setIsPhone(e.matches); setMenuOpen(false); };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const backupAge = backupDue ? backupAgeDays() : null;
+  const utilities = [
+    { label: 'Dane', icon: <Database size={16} aria-hidden="true" />, open: () => setShowData(true),
+      title: backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych',
+      note: backupDue ? (backupAge === null ? 'brak kopii' : `kopia: ${backupAge} dni temu`) : '', warn: true },
+    { label: 'Kadra', icon: <Users size={16} aria-hidden="true" />, open: () => setShowSquad(true),
+      title: 'Kadra zespołu: numery, nazwiska i pozycje', note: squad.length ? `(${squad.length})` : '' },
+    { label: 'Szkółka', open: () => setShowClub(true), title: 'Szkółka: nazwa, logo, trener i asystent (nagłówek konspektu)',
+      icon: club.logo ? <img src={club.logo} alt="" className="w-5 h-5 object-contain rounded-sm bg-white" /> : <School size={16} aria-hidden="true" /> },
+  ];
+  const utilBtn = 'px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5';
+
   const selectTab = (id) => {
     setActiveTab(id);
     trackScreen(id);
@@ -169,61 +192,68 @@ export default function AppWrapper() {
       className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden"
       style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="flex-shrink-0 flex items-end gap-1 bg-slate-950/80 border-b border-white/10 px-2 sm:px-3 pt-1" role="tablist">
+      <div className="flex-shrink-0 flex items-end gap-1 bg-slate-950/80 border-b border-white/10 px-2 sm:px-3 pt-1">
         <span className="hidden md:inline-flex items-center gap-2 self-center mr-3 text-sm font-semibold text-slate-200">
-          <span className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-xs">⚽</span>
+          <span className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center"><Goal size={14} aria-hidden="true" /></span>
           PlanGry
         </span>
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => selectTab(tab.id)}
-            title={tab.title}
-            className={`px-3 sm:px-5 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'border-blue-400 text-blue-300 bg-white/5'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-        <button
-          onClick={() => setShowData(true)}
-          title={backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych'}
-          aria-label="Dane"
-          className="ml-auto self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
-        >
-          <span aria-hidden="true">💾</span><span className="hidden sm:inline">Dane</span>
-          {backupDue && (() => {
-            const age = backupAgeDays();
-            return (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-xs whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="hidden md:inline">{age === null ? 'brak kopii' : `kopia: ${age} dni temu`}</span>
-              </span>
-            );
-          })()}
-        </button>
-        <button
-          onClick={() => setShowSquad(true)}
-          title="Kadra zespołu: numery, nazwiska i pozycje" aria-label="Kadra"
-          className="self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
-        >
-          <span aria-hidden="true">👥</span><span className="hidden sm:inline">Kadra</span>{squad.length ? <span className="text-xs text-slate-400">({squad.length})</span> : null}
-        </button>
-        <button
-          onClick={() => setShowClub(true)}
-          title="Szkółka: nazwa, logo, trener i asystent (nagłówek konspektu)" aria-label="Szkółka"
-          className="self-center mb-1 px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5"
-        >
-          {club.logo
-            ? <img src={club.logo} alt="" className="w-5 h-5 object-contain rounded-sm bg-white" />
-            : <span aria-hidden="true">🏫</span>}
-          <span className="hidden sm:inline">Szkółka</span>
-        </button>
+        <div role="tablist" className="flex items-end gap-1 min-w-0">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => selectTab(tab.id)}
+              title={tab.title}
+              className={`px-2.5 sm:px-5 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors inline-flex items-center gap-1.5 ${
+                activeTab === tab.id
+                  ? 'border-blue-400 text-blue-300 bg-white/5'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <tab.Icon size={16} aria-hidden="true" className="flex-shrink-0 hidden min-[380px]:block" />{tab.label}
+            </button>
+          ))}
+        </div>
+        {isPhone ? (
+          // phone: the three utilities do not fit next to the tabs, so they share one menu
+          <div className="ml-auto self-center mb-1 relative">
+            <button onClick={() => setMenuOpen(o => !o)} aria-label="Więcej" aria-haspopup="menu" aria-expanded={menuOpen}
+              className={`${utilBtn} relative`}>
+              <MoreHorizontal size={20} aria-hidden="true" />
+              {backupDue && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400" />}
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-[140]" onClick={() => setMenuOpen(false)} />
+                <div role="menu" aria-label="Więcej" onKeyDown={e => { if (e.key === 'Escape') setMenuOpen(false); }}
+                  className="absolute right-0 top-full mt-1 z-[141] w-56 rounded-xl bg-slate-900 border border-white/15 shadow-2xl p-1">
+                  {utilities.map(u => (
+                    <button key={u.label} role="menuitem" onClick={() => { setMenuOpen(false); u.open(); }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-slate-200 hover:bg-white/10 text-left">
+                      {u.icon}<span className="flex-1">{u.label}</span>
+                      {u.note && <span className={`text-xs ${u.warn ? 'text-amber-300' : 'text-slate-400'}`}>{u.note}</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="ml-auto self-center mb-1 flex items-center">
+            {utilities.map(u => (
+              <button key={u.label} onClick={u.open} title={u.title} aria-label={u.label} className={utilBtn}>
+                {u.icon}<span className="hidden sm:inline">{u.label}</span>
+                {u.note && (u.warn ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 text-xs whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    <span className="hidden md:inline">{u.note}</span>
+                  </span>
+                ) : <span className="text-xs text-slate-400">{u.note}</span>)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}

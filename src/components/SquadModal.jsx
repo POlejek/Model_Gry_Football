@@ -44,42 +44,30 @@ export default function SquadModal({ squad, onChange, onClose }) {
               <span className="text-slate-400">Dodaj zawodników, aby wybierać ich na boisku i pokazywać nazwiska zamiast numerów.</span>
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-400">
-                  <th className="pb-2 w-16 font-medium">Nr</th>
-                  <th className="pb-2 font-medium">Imię i nazwisko</th>
-                  <th className="pb-2 w-32 font-medium">Pozycja</th>
-                  <th className="pb-2 w-8" />
-                </tr>
-              </thead>
-              <tbody>
+            // phone: number, position and delete share a row and the name gets the full width below
+            <div className="text-sm">
+              <div className="hidden sm:grid grid-cols-[4rem_1fr_8rem_2rem] gap-2 pb-2 text-left text-xs text-slate-400 font-medium" aria-hidden="true">
+                <span>Nr</span><span>Imię i nazwisko</span><span>Pozycja</span><span />
+              </div>
+              <ul className="space-y-3 sm:space-y-1">
                 {rows.map(r => {
                   const duplicate = numberCounts[String(r.number).trim()] > 1;
                   return (
-                    <tr key={r.id}>
-                      <td className="py-1 pr-2">
-                        <input value={r.number} onChange={e => patch(r.id, 'number', e.target.value)} aria-label="Numer"
-                          className={`${inputCls} text-center ${duplicate ? 'border-amber-400' : ''}`} title={duplicate ? 'Ten numer ma już inny zawodnik' : undefined} />
-                      </td>
-                      <td className="py-1 pr-2">
-                        <input value={r.name} onChange={e => patch(r.id, 'name', e.target.value)} aria-label="Imię i nazwisko"
-                          placeholder="np. Jan Kowalski" className={inputCls} />
-                      </td>
-                      <td className="py-1 pr-2">
-                        <select value={r.position} onChange={e => patch(r.id, 'position', e.target.value)} aria-label="Pozycja" className={inputCls}>
-                          {POSITIONS.map(p => <option key={p.id} value={p.id} className="bg-slate-800">{p.label}</option>)}
-                        </select>
-                      </td>
-                      <td className="py-1 text-right">
-                        <button onClick={() => remove(r.id)} aria-label={`Usuń ${r.name || r.number}`}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-white/5"><Trash2 size={14} /></button>
-                      </td>
-                    </tr>
+                    <li key={r.id} className="grid grid-cols-[4rem_1fr_auto] sm:grid-cols-[4rem_1fr_8rem_2rem] gap-2 items-center">
+                      <input value={r.number} onChange={e => patch(r.id, 'number', e.target.value)} aria-label="Numer"
+                        className={`${inputCls} text-center ${duplicate ? 'border-amber-400' : ''}`} title={duplicate ? 'Ten numer ma już inny zawodnik' : undefined} />
+                      <input value={r.name} onChange={e => patch(r.id, 'name', e.target.value)} aria-label="Imię i nazwisko"
+                        placeholder="np. Jan Kowalski" className={`${inputCls} order-last col-span-3 sm:order-none sm:col-span-1`} />
+                      <select value={r.position} onChange={e => patch(r.id, 'position', e.target.value)} aria-label="Pozycja" className={inputCls}>
+                        {POSITIONS.map(p => <option key={p.id} value={p.id} className="bg-slate-800">{p.label}</option>)}
+                      </select>
+                      <button onClick={() => remove(r.id)} aria-label={`Usuń ${r.name || r.number}`}
+                        className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-white/5 justify-self-end"><Trash2 size={14} /></button>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
+              </ul>
+            </div>
           )}
           {Object.values(numberCounts).some(c => c > 1) && (
             <p className="mt-2 text-xs text-amber-300">Powtórzony numer — na boisku pokaże się pierwszy zawodnik z tym numerem.</p>

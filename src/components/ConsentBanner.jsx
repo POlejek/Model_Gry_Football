@@ -22,7 +22,7 @@ export default function ConsentBanner({ onChoose }) {
   const [details, setDetails] = useState(false);
   return (
     <div role="dialog" aria-label="Zgoda na statystyki"
-      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[250] w-[min(94vw,36rem)] rounded-2xl bg-slate-900/95 border border-white/15 shadow-2xl p-4 text-white">
+      className="fixed bottom-[4.75rem] lg:bottom-3 left-1/2 -translate-x-1/2 z-[250] w-[min(94vw,36rem)] rounded-2xl bg-slate-900/95 border border-white/15 shadow-2xl p-4 text-white">
       <p className="text-sm font-semibold">Statystyki odwiedzin</p>
       <p className="text-sm text-slate-300 mt-1">
         Czy zgadzasz się na anonimowe statystyki (Google Analytics)? Pomagają nam rozwijać PlanGry. Twoje ćwiczenia

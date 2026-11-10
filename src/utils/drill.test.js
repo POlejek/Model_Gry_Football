@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getPitchSize, normAngle, transformObj, translateObj, transformFrame, fitFramesTo, objectsInRect, findObj,
   interpolateFrames, normalizeDrill, safeFileName, parseDrillFile, toLibraryEntry, equipmentSummary,
-  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch, remapFrames, RUNOFF,
+  drillSignature, isEmptyScene, emptyFrame, wrapText, DRILL_FORMAT, LIBRARY_FORMAT, LEGACY_PITCH, rotateFrames, horizontalFullPitch, remapFrames, RUNOFF, contentCrop,
 } from './drill.js';
 
 const player = (id, x, y, extra = {}) => ({ id, type: 'player', x, y, rotation: 0, scale: 1, team: 'A', label: String(id), ...extra });
@@ -337,5 +337,39 @@ describe('miejsce za liniami boiska', () => {
     const out = remapFrames(frame(20, 20), from, { ...from, runoff: 30 });
     expect(out[0].items[0].x).toBeCloseTo(50, 6);
     expect(out[0].items[0].y).toBeCloseTo(50, 6);
+  });
+});
+
+describe('contentCrop (miniatury przycięte do ćwiczenia)', () => {
+  const fr = (items = [], lines = [], zones = []) => [{ items, lines, zones }];
+  const at = (x, y) => ({ id: 1, type: 'cone', x, y });
+
+  it('puste ćwiczenie pokazuje całe boisko', () => {
+    expect(contentCrop(fr(), 1080, 700)).toEqual({ x: 0, y: 0, w: 1080, h: 700 });
+  });
+
+  it('małe ćwiczenie: wycinek wokół elementów, nie mniejszy niż 45% boku', () => {
+    const c = contentCrop(fr([at(500, 300), { ...at(560, 340), id: 2 }]), 1080, 700);
+    expect(c.w).toBeCloseTo(1080 * 0.45);
+    expect(c.h).toBeCloseTo(700 * 0.45);
+    expect(c.x + c.w / 2).toBeCloseTo(530);
+    expect(c.y + c.h / 2).toBeCloseTo(320);
+  });
+
+  it('wycinek nie wychodzi poza boisko i obejmuje linie oraz strefy ze wszystkich klatek', () => {
+    const frames = [
+      { items: [at(20, 20)], lines: [], zones: [] },
+      { items: [], lines: [{ id: 2, startX: 30, startY: 30, endX: 700, endY: 60 }], zones: [{ id: 3, type: 'circle', centerX: 100, centerY: 400, radius: 50 }] },
+    ];
+    const c = contentCrop(frames, 1080, 700);
+    expect(c.x).toBe(0);
+    expect(c.y).toBe(0);
+    expect(c.x + c.w).toBeGreaterThanOrEqual(770);
+    expect(c.y + c.h).toBeGreaterThanOrEqual(450);
+    expect(c.x + c.w).toBeLessThanOrEqual(1080);
+  });
+
+  it('ćwiczenie na całym boisku zostaje całe', () => {
+    expect(contentCrop(fr([at(10, 10), { ...at(1070, 690), id: 2 }]), 1080, 700)).toEqual({ x: 0, y: 0, w: 1080, h: 700 });
   });
 });

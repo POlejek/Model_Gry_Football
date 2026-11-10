@@ -78,6 +78,28 @@ export function rotateFrames(frames, pitch, toHorizontal) {
   return frames.map(f => transformFrame(f, fn, toHorizontal ? Math.PI / 2 : -Math.PI / 2));
 }
 
+// Part of a w × h pitch that holds the drill, for thumbnails: everything drawn in any frame plus a
+// margin, never less than `minPart` of each side (so the lines around stay recognisable) and never
+// outside the pitch. An empty drill shows the whole pitch.
+export function contentCrop(frames, w, h, { pad = 70, minPart = 0.45 } = {}) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const add = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  frames.forEach(f => {
+    f.items.forEach(i => add(i.x, i.y));
+    f.lines.forEach(l => { add(l.startX, l.startY); add(l.endX, l.endY); if (l.controlX !== undefined) add(l.controlX, l.controlY); });
+    f.zones.forEach(z => { const b = zoneBBox(z); add(b[0], b[1]); add(b[2], b[3]); });
+  });
+  if (x0 === Infinity) return { x: 0, y: 0, w, h };
+  const side = (lo, hi, full) => {
+    const size = Math.min(full, Math.max(hi - lo + 2 * pad, full * minPart));
+    const start = clamp((lo + hi) / 2 - size / 2, 0, full - size);
+    return [start, size];
+  };
+  const [x, cw] = side(x0, x1, w);
+  const [y, ch] = side(y0, y1, h);
+  return { x, y, w: cw, h: ch };
+}
+
 // Keeps content where it is if it fits; otherwise shifts it inside or scales it down to fit.
 export function fitFramesTo(frames, w, h, margin = 30) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

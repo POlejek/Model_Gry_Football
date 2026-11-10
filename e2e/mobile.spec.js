@@ -95,3 +95,40 @@ test.describe('Telefon – układ', () => {
     expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
   });
 });
+
+// iOS cannot print a web app opened from the home screen: the plan becomes a PDF for the share sheet.
+test.describe('iPhone – PDF zamiast druku', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' });
+
+  for (const layout of ['Szczegółowy', 'Cały trening na 1 stronie']) {
+    test(`Konspekt („${layout}”): PDF trafia do menu „Udostępnij”`, async ({ page }) => {
+      await page.evaluate(() => localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'Trening', date: '2026-11-10', group: 'U14', goal: 'Otwarcie gry', notes: '', phases: [],
+        blocks: [1, 2, 3, 4, 5, 6].map(i => ({ id: `b${i}`, drillId: null, title: `Blok ${i}`, minutes: '10', note: 'Opis bloku '.repeat(40) })) }])));
+      await page.reload();
+      await openTab(page, 'Konspekt');
+      await page.evaluate(() => {
+        window.__shared = null; window.__prints = 0;
+        window.print = () => { window.__prints++; };
+        navigator.canShare = () => true;
+        navigator.share = async ({ files }) => {
+          const bytes = new Uint8Array(await files[0].arrayBuffer());
+          const text = new TextDecoder('latin1').decode(bytes);
+          window.__shared = { name: files[0].name, type: files[0].type, head: text.slice(0, 5), pages: (text.match(/\/Type \/Page\b/g) || []).length };
+        };
+      });
+      await page.getByRole('button', { name: 'Drukuj / PDF' }).tap();
+      await page.getByRole('menuitem', { name: layout }).tap();
+      const dialog = page.getByRole('dialog', { name: 'PDF konspektu' });
+      await expect(dialog.getByText('PDF gotowy')).toBeVisible({ timeout: 15000 });
+      await dialog.getByRole('button', { name: 'Udostępnij' }).tap();
+      await expect.poll(() => page.evaluate(() => window.__shared)).not.toBeNull();
+      const shared = await page.evaluate(() => window.__shared);
+      expect(shared).toMatchObject({ name: 'konspekt_Trening_2026-11-10.pdf', type: 'application/pdf', head: '%PDF-' });
+      expect(shared.pages).toBeGreaterThanOrEqual(1);
+      if (layout === 'Cały trening na 1 stronie') expect(shared.pages).toBe(1);
+      expect(await page.evaluate(() => window.__prints)).toBe(0);
+      await expect(dialog).toHaveCount(0);
+      expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
+    });
+  }
+});

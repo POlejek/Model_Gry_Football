@@ -35,6 +35,10 @@ canvas {
 
 /* Printing a session plan: show only the printable plan rendered into a portal. */
 .print-root { display: none; }
+/* PDF for iPhone / iPad: the printout is drawn at A4 content width behind the app */
+body.pdf-render .print-root { display: block; position: absolute; left: 0; top: 0; width: 186mm; z-index: -1; font-family: Arial, sans-serif; }
+/* the PDF renderer cannot lay out text columns: one column there */
+body.pdf-render .print-root [style*="column-count"] { column-count: 1 !important; }
 /* compact print: lay the plan out off-screen at A4 content width to measure drill heights */
 body.measuring-print .print-root { display: block; position: absolute; left: -10000px; top: 0; width: 186mm; font-family: Arial, sans-serif; }
 @media print {

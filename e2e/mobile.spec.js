@@ -66,9 +66,9 @@ test.describe('Telefon – układ', () => {
     });
   }
 
-  test('Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
+  test('Gotowe treningi, Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
     await page.getByRole('button', { name: 'Więcej' }).click();
-    await expect(page.getByRole('menuitem')).toHaveText([/Dane/, /Kadra/, /Szkółka/]);
+    await expect(page.getByRole('menuitem')).toHaveText([/Gotowe treningi/, /Dane/, /Kadra/, /Szkółka/]);
     await page.getByRole('menuitem', { name: /Kadra/ }).click();
     await expect(page.getByRole('dialog', { name: 'Kadra zespołu' })).toBeVisible();
   });

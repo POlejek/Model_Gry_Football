@@ -13,6 +13,7 @@ import { logoImage } from './utils/boards.js';
 import PhasePicker from './components/PhasePicker.jsx';
 import CertPlanPrint from './components/CertPlanPrint.jsx';
 import { track } from './utils/analytics.js';
+import { weekStart } from './utils/week.js';
 import { A4_CONTENT_MM, MM, pageBreaks, unitsToShrink, fitScale, pagesNeeded } from './utils/printLayout.js';
 
 // Parts left out of the 1 / 2-page printout when shrinking alone is not enough (in this order).
@@ -68,12 +69,7 @@ const formatDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateStrin
 const shortDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '');
 
 // Monday (ISO date) of the week a session belongs to; sessions without a date go last.
-export function weekStart(iso) {
-  if (!iso) return '';
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-}
+export { weekStart };
 const weekLabel = (monday) => {
   if (!monday) return 'Bez daty';
   const a = new Date(`${monday}T12:00:00`);

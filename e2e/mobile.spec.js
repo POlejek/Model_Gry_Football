@@ -78,22 +78,6 @@ test.describe('Telefon – układ', () => {
     expect(viewport).not.toMatch(/user-scalable=no|maximum-scale/);
   });
 
-  test('Konspekt: wybór układu wydruku kończy się drukiem po jednym dotknięciu', async ({ page }) => {
-    await page.evaluate(() => localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'Trening', date: '2026-11-10', group: '', goal: '', notes: '', phases: [],
-      blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }])));
-    await page.reload();
-    await openTab(page, 'Konspekt');
-    await page.evaluate(() => { window.__prints = 0; window.print = () => { window.__prints++; }; });
-    await page.getByRole('button', { name: 'Drukuj / PDF' }).tap();
-    await page.getByRole('menuitem', { name: 'Cały trening na 1 stronie' }).tap();
-    const ready = page.getByRole('dialog', { name: 'Wydruk gotowy' });
-    await expect(ready).toBeVisible();
-    await ready.getByRole('button', { name: 'Drukuj' }).tap();
-    expect(await page.evaluate(() => window.__prints)).toBe(1);
-    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
-    await expect(ready).toHaveCount(0);
-    expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
-  });
 });
 
 // iOS cannot print a web app opened from the home screen: the plan becomes a PDF for the share sheet.
@@ -131,4 +115,27 @@ test.describe('iPhone – PDF zamiast druku', () => {
       expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
     });
   }
+});
+
+// Android (and other touch screens that can print): one more tap on "Drukuj" opens printing.
+// iPhone / iPad get a PDF instead, covered below.
+test.describe('Telefon z Androidem – druk', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' });
+
+  test('Konspekt: wybór układu wydruku kończy się drukiem po jednym dotknięciu', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's1', title: 'Trening', date: '2026-11-10', group: '', goal: '', notes: '', phases: [],
+      blocks: [{ id: 'b1', drillId: null, title: 'Rozgrzewka', minutes: '10', note: '' }] }])));
+    await page.reload();
+    await openTab(page, 'Konspekt');
+    await page.evaluate(() => { window.__prints = 0; window.print = () => { window.__prints++; }; });
+    await page.getByRole('button', { name: 'Drukuj / PDF' }).tap();
+    await page.getByRole('menuitem', { name: 'Cały trening na 1 stronie' }).tap();
+    const ready = page.getByRole('dialog', { name: 'Wydruk gotowy' });
+    await expect(ready).toBeVisible();
+    await ready.getByRole('button', { name: 'Drukuj' }).tap();
+    expect(await page.evaluate(() => window.__prints)).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(ready).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
+  });
 });

@@ -10,8 +10,8 @@ const lineTypes = new Set(LINE_TYPES.filter(Boolean).map(t => t[0]));
 const PLAYERS = { '7v7': 7, '9v9': 9, '11v11': 11 };
 
 describe('systemy modelu gry', () => {
-  it('7v7 w 1-2-3-1, 9v9 w 1-3-2-3, 11v11 w 1-4-3-3', () => {
-    expect(MODEL_SYSTEMS).toEqual({ '7v7': '1-2-3-1', '9v9': '1-3-2-3', '11v11': '1-4-3-3' });
+  it('7v7 w 1-2-3-1, 9v9 w 1-3-2-3, 11v11 w 1-4-2-3-1', () => {
+    expect(MODEL_SYSTEMS).toEqual({ '7v7': '1-2-3-1', '9v9': '1-3-2-3', '11v11': '1-4-2-3-1' });
   });
 
   it('ustawienie wyjściowe zgadza się z systemem (linie od własnej bramki)', () => {
@@ -27,6 +27,18 @@ describe('systemy modelu gry', () => {
       });
     });
   });
+
+  it('przy wznowieniu obrońcy stoją szerzej niż pole karne, a bramkarz i trzech najgłębszych tworzą budowanie', () => {
+    Object.keys(MODEL_SYSTEMS).forEach(format => {
+      const [wide] = buildModel(format).schemes[format]['Atak-Otwarcie'];
+      const f = wide.frames[1];
+      const deepest = f.team.filter(p => p.number !== '1').sort((a, b) => b.y - a.y).slice(0, 3);
+      const xs = deepest.map(p => p.x).sort((a, b) => a - b);
+      expect(xs[0], format).toBeLessThan(SCHEME_W * 0.2); // outside the penalty area width
+      expect(xs[2], format).toBeGreaterThan(SCHEME_W * 0.8);
+      expect(Math.abs(xs[1] - SCHEME_W / 2), format).toBeLessThan(40); // one in the middle
+    });
+  });
 });
 
 describe.each(Object.keys(PLAYERS))('model gry %s', (format) => {
@@ -34,7 +46,7 @@ describe.each(Object.keys(PLAYERS))('model gry %s', (format) => {
   const schemes = model.schemes[format]['Atak-Otwarcie'];
 
   it('trzy schematy otwarcia z opisem i animacją', () => {
-    expect(schemes.map(s => s.name)).toEqual(['Wyjście przez boczny sektor', 'Wyjście przez środek z trzecim zawodnikiem', 'Długie podanie za linię pressingu']);
+    expect(schemes.map(s => s.name)).toEqual(['Wznowienie: szerocy obrońcy, bramkarz jako czwarty', 'Rotacja w środku przeciw kryciu indywidualnemu', 'Plan B: długie podanie do napastnika i druga piłka']);
     schemes.forEach(s => {
       expect(s.frames.length).toBeGreaterThanOrEqual(2);
       expect(s.comments).toMatch(/<b>Cel:<\/b>/);

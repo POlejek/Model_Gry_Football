@@ -167,7 +167,7 @@ test.describe('Konspekt', () => {
 
     await expect(page.getByText(/Dodano „Otwarcie gry 9v9”: model gry \(1-3-2-3\)/)).toBeVisible();
     await expect(page.getByRole('tab', { name: /Taktyka/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Wyjście przez boczny sektor')).toBeVisible();
+    await expect(page.getByText('Wznowienie: szerocy obrońcy, bramkarz jako czwarty')).toBeVisible();
     const stored = await page.evaluate(() => {
       const t = JSON.parse(localStorage.getItem('footballTacticsData'));
       return {

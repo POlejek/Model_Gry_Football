@@ -1,28 +1,31 @@
-// Ready-made week "Otwarcie gry" (building up from the goalkeeper) for 7v7, 9v9 and 11v11:
-// 9 drills and 3 session plans per format. Drills are described in metres on a pitch of the right
+// Ready-made week "Otwarcie gry" (building up from the goalkeeper) for 7v7, 9v9 and 11v11, on the
+// possession model of ./modelGry.js: 9 drills and 3 session plans per format. Drills are described in metres on a pitch of the right
 // size and turned into the editor's drill format, so the coach can open and change every one.
 
 const BLUE = '#1d4ed8', RED = '#dc2626', GREEN = '#16a34a', YELLOW = '#eab308', INK = '#111827';
 const PHASE = 'Atak-Otwarcie';
 const VERSION = '2026-11-10T00:00:00.000Z';
-import { buildModel } from './modelGry.js';
+import { buildModel, modelShapes } from './modelGry.js';
+
+// Ids of everything a pack adds (v2: the possession model); the first version's items keep theirs.
+export const PACK_PREFIX = 'pack-otwarcie2';
 
 export const FORMATS = {
   '7v7': {
     label: '7v7', group: 'U10–U11', field: [55, 37], lines: [2, 3, 1], system: '1-2-3-1',
-    rondo: { side: 10, out: 4, mid: 2 }, pattern: { back: 2, mids: 3, press: 1 }, press: { back: 2, mids: 2, press: 2 },
+    rondo: { side: 10, out: 4, mid: 2 },
     third: { area: [18, 12] }, zones: { area: [30, 20], per: 3, mid: 2 }, small: { area: [30, 22], a: 4, b: 4 },
     switchRondo: { side: 10, out: 4, mid: 2 }, minutes: [12, 12, 15, 20, 5], load: ['4 × 2′, przerwa 1′', '4 × 3′, przerwa 1′', '3 × 5′, przerwa 2′'],
   },
   '9v9': {
     label: '9v9', group: 'U12–U13', field: [70, 50], lines: [3, 2, 3], system: '1-3-2-3',
-    rondo: { side: 12, out: 5, mid: 2 }, pattern: { back: 3, mids: 2, press: 2 }, press: { back: 3, mids: 2, press: 3 },
+    rondo: { side: 12, out: 5, mid: 2 },
     third: { area: [22, 14] }, zones: { area: [36, 24], per: 4, mid: 3 }, small: { area: [40, 30], a: 5, b: 5 },
     switchRondo: { side: 12, out: 5, mid: 2 }, minutes: [15, 15, 18, 22, 5], load: ['4 × 3′, przerwa 1′', '4 × 4′, przerwa 1′30″', '3 × 6′, przerwa 2′'],
   },
   '11v11': {
-    label: '11v11', group: 'U14–U15', field: [105, 68], lines: [4, 3, 3], system: '1-4-3-3',
-    rondo: { side: 14, out: 6, mid: 3 }, pattern: { back: 4, mids: 3, press: 3 }, press: { back: 4, mids: 3, press: 5 },
+    label: '11v11', group: 'U14–U15', field: [105, 68], lines: [4, 2, 3, 1], system: '1-4-2-3-1',
+    rondo: { side: 14, out: 6, mid: 3 },
     third: { area: [26, 16] }, zones: { area: [42, 28], per: 4, mid: 4 }, small: { area: [50, 40], a: 6, b: 6 },
     switchRondo: { side: 14, out: 6, mid: 3 }, minutes: [15, 15, 20, 25, 5], load: ['4 × 3′, przerwa 1′', '4 × 4′, przerwa 2′', '3 × 7′, przerwa 2′'],
   },
@@ -70,7 +73,7 @@ function onSquare(n, S, ox, oy) {
 }
 
 const drill = (cfg, n, name, b, meta) => ({
-  id: `pack-otwarcie-${cfg.label}-d${n}`, name, version: 2, createdAt: VERSION, updatedAt: VERSION,
+  id: `${PACK_PREFIX}-${cfg.label}-d${n}`, name, version: 2, createdAt: VERSION, updatedAt: VERSION,
   teamAColor: BLUE, teamBColor: RED, pitch: b.pitch, frames: [b.frame],
   meta: { category: '', duration: '', players: '', area: '', objective: '', organization: '', description: '', load: '', coachingPoints: '', variations: '', phases: [PHASE], ...meta },
 });
@@ -94,61 +97,65 @@ function drills(cfg) {
     [[3, 3], [3 + S, 3], [3, 3 + S], [3 + S, 3 + S]].forEach(([x, y]) => b.cone(x, y));
     out.push(drill(cfg, 1, `Rondo ${N}v${M} z bramkarzem`, b, {
       category: 'Rondo', duration: String(cfg.minutes[1]), players: `${N + M} (${N}v${M})`, area: `${S}×${S} m`, load: cfg.load[0],
-      objective: 'Pewne pierwsze podanie i przyjęcie pod presją. Bramkarz gra nogami jak zawodnik z pola.',
+      objective: 'Bramkarz jako pierwszy rozgrywający: pewne pierwsze podanie i przyjęcie pod presją, przyciąganie odbierającego.',
       organization: `Kwadrat ${S}×${S} m. ${N} zawodników na obwodzie (jeden z nich to bramkarz), ${M} w środku. Dwa takie pola obok siebie, zmiana odbierających po serii.`,
       description: `Zawodnicy na obwodzie utrzymują piłkę, maksymalnie 2 kontakty. Odbierający po przejęciu wyprowadza piłkę poza kwadrat. Punkt za ${N + 2} podań z rzędu oraz za podanie między dwoma odbierającymi.`,
-      coachingPoints: 'Otwarta pozycja ciała przed przyjęciem. Przyjęcie dalszą nogą, w kierunku wolnej przestrzeni. Podanie mocne, po ziemi. Bramkarz stale w grze: pokazuje się do podania i mówi „czas” albo „plecy”.',
+      coachingPoints: 'Otwarta pozycja ciała przed przyjęciem. Przyjęcie dalszą nogą, w kierunku wolnej przestrzeni. Podanie mocne, po ziemi. Bramkarz zaprasza odbierającego: prowadzi piłkę w jego stronę i podaje dopiero, gdy ten ruszy. Mówi „czas” albo „plecy”.',
       variations: 'Łatwiej: 3 kontakty albo jeden odbierający mniej. Trudniej: 1 kontakt bramkarza, punkt tylko za podanie przez środek.',
     }));
   }
 
+  // our build-up shape and the opponent's press from the game model, on the build-up half
+  // (model: x across the pitch, y from our goal → drill: x along the pitch, y across it)
+  const shapes = modelShapes(cfg.label);
+  const R = shapes.roles;
+  const at = ([fx, fy]) => [fy * FL, fx * FW];
+  const ownHalf = Object.entries(shapes.build).filter(([n, [, fy]]) => n !== '1' && fy < 0.45);
+  const pressers = Object.entries(shapes.press).filter(([, [, fy]]) => fy < 0.3);
+
   { // 2. Build-up pattern without pressure
-    const { back, mids } = cfg.pattern;
     const b = board(HL, FW);
-    const by = spread(back, FW, FW * 0.14), my = spread(mids, FW, FW * 0.22);
-    const bx = HL * 0.3, mx = HL * 0.62;
-    b.zone(0, FW * 0.2, HL * 0.3, FW * 0.6, '#64748b', 0.1);
+    b.zone(0, 0, HL * 0.3, FW, '#64748b', 0.1);
     b.goalLeft(FW / 2); b.gk(HL * 0.07, FW / 2);
-    by.forEach((y, i) => b.a(i + 2, bx, y));
-    my.forEach((y, i) => b.a(i + 2 + back, mx, y));
+    ownHalf.forEach(([n, pos]) => b.a(n, ...at(pos)));
+    pressers.forEach(([, pos]) => b.cone(...at(pos)));
     [FW * 0.25, FW * 0.75].forEach(y => b.miniRight(y));
-    spread(2, FW, FW * 0.38).forEach(y => b.cone(HL * 0.46, y));
+    const cb = at(shapes.build[R.cbL]), free = at(shapes.build[R.free]);
     b.ball(HL * 0.1, FW / 2 + 1.2);
-    b.pass(HL * 0.07, FW / 2, bx - 1, by[0] + 1);
-    b.dribble(bx, by[0], bx + HL * 0.14, by[0] + 1);
-    b.pass(bx + HL * 0.14, by[0] + 1, mx - 1, my[0]);
-    b.pass(mx, my[0], HL - 1, FW * 0.25);
-    b.run(bx, by[back - 1], bx + HL * 0.1, by[back - 1]);
-    out.push(drill(cfg, 2, `Wzorzec otwarcia w ${cfg.system}`, b, {
-      category: 'Gra pozycyjna', duration: String(cfg.minutes[2]), players: `${1 + back + mids} + zmiennicy`, area: `${HL}×${FW} m (połowa boiska)`, load: cfg.load[1],
-      objective: `Ustawienie przy otwarciu od bramki w systemie ${cfg.system} i dwa podstawowe rozwiązania: przez bok i przez środek.`,
-      organization: `Połowa boiska ${cfg.label}. Bramkarz, ${back} obrońców i ${mids} pomocników na swoich pozycjach. Na linii środkowej dwie małe bramki. Pachołki oznaczają pierwszą linię pressingu.`,
-      description: 'Bramkarz wznawia grę. Rozwiązanie A: podanie do bocznego obrońcy, prowadzenie do przodu, podanie do pomocnika i zakończenie w małej bramce. Rozwiązanie B: podanie do środkowego pomocnika, odegranie i zmiana strony. Po każdej akcji zmiana zawodników na pozycjach.',
-      coachingPoints: 'Szerokość i głębia przed podaniem bramkarza. Obrońcy ustawieni bokiem, widzą piłkę i boisko. Pomocnik pokazuje się między liniami, a nie obok kryjącego. Każde podanie na dalszą nogę.',
-      variations: 'Dodaj jednego, potem dwóch pasywnych przeciwników w miejscu pachołków. Ogranicz liczbę kontaktów do 2.',
+    b.pass(HL * 0.07, FW / 2, cb[0] - 0.5, cb[1] + 1);
+    b.pass(cb[0] + 1, cb[1], free[0] - 1, free[1]);
+    b.pass(free[0] + 1, free[1], HL - 1, FW * 0.25);
+    out.push(drill(cfg, 2, `Wzorzec otwarcia w ${cfg.system}: szerocy obrońcy`, b, {
+      category: 'Gra pozycyjna', duration: String(cfg.minutes[2]), players: `${1 + ownHalf.length} + zmiennicy`, area: `${HL}×${FW} m (połowa boiska)`, load: cfg.load[1],
+      objective: `Ustawienie przy wznowieniu od bramki w ${cfg.system}: ${R.backs.toLowerCase()} bardzo szeroko${R.drop}, bramkarz jako czwarty. Podanie do wolnego zawodnika przez linię pressingu.`,
+      organization: `Połowa boiska ${cfg.label}. Bramkarz i ${ownHalf.length} zawodników w ustawieniu do budowania. Pachołki pokazują, gdzie stoją pressujący rywale. Na linii środkowej dwie małe bramki.`,
+      description: `Bramkarz wznawia grę do szeroko ustawionego obrońcy, ten podaje przez linię pachołków do zawodnika ${R.free} i akcja kończy się w małej bramce. Druga strona tak samo. Potem wariant: bramkarz prowadzi piłkę i podaje dopiero po ruchu trenera, który gra rolę pressującego.`,
+      coachingPoints: 'Obrońcy aż przy liniach bocznych: im szerzej, tym dłużej biegnie pressujący. Ustawienie bokiem, żeby widzieć piłkę i boisko. Zawodnik, który ma dostać piłkę, pokazuje się za plecami pachołka, w półprzestrzeni. Odległości ważniejsze niż ustawienie.',
+      variations: 'Zamiast pachołków pasywni przeciwnicy, potem aktywni. Limit 2 kontaktów. Zmiana: 6 i 8 zamieniają się pozycjami przed podaniem bramkarza.',
     }));
   }
 
-  { // 3. Build-up against a press
-    const { back, mids, press } = cfg.press;
+  { // 3. Build-up against the press: the goalkeeper is the extra player
     const b = board(HL, FW);
-    const by = spread(back, FW, FW * 0.12), my = spread(mids, FW, FW * 0.3), py = spread(press, FW, FW * 0.22);
     b.zone(0, 0, HL * 0.42, FW, '#2563eb', 0.1);
     b.goalLeft(FW / 2); b.gk(HL * 0.07, FW / 2);
-    by.forEach((y, i) => b.a(i + 2, HL * 0.26, y));
-    my.forEach((y, i) => b.a(i + 2 + back, HL * 0.62, y));
-    py.forEach((y, i) => b.b(i + 1, HL * (i % 2 ? 0.5 : 0.42), y));
+    ownHalf.forEach(([n, pos]) => b.a(n, ...at(pos)));
+    pressers.forEach(([n, pos]) => b.b(n, ...at(pos)));
+    const piv = at(shapes.build[R.piv]);
+    b.b('6', piv[0] + FL * 0.06, piv[1]); // marks our 6
     [FW * 0.2, FW * 0.5, FW * 0.8].forEach(y => b.miniRight(y));
+    const cb = at(shapes.build[R.cbL]), p1 = at(pressers[0][1]);
     b.ball(HL * 0.1, FW / 2 + 1.2);
-    b.pass(HL * 0.07, FW / 2, HL * 0.25, by[back - 1] - 1);
-    b.run(HL * 0.42, py[press - 1], HL * 0.3, by[back - 1]);
-    out.push(drill(cfg, 3, `Otwarcie pod pressingiem ${1 + back + mids}v${press}`, b, {
-      category: 'Małe gry', duration: String(cfg.minutes[3]), players: `${1 + back + mids + press} (${1 + back + mids}v${press})`, area: `${HL}×${FW} m (połowa boiska)`, load: cfg.load[2],
-      objective: 'Wyjście spod pressingu z przewagą liczebną: znaleźć wolnego zawodnika i przeprowadzić piłkę przez linię środkową.',
-      organization: `Połowa boiska ${cfg.label}. Niebiescy: bramkarz, ${back} obrońców i ${mids} pomocników. Czerwoni: ${press} pressujących. Trzy małe bramki na linii środkowej. Każda akcja zaczyna się od bramkarza.`,
-      description: 'Niebiescy budują grę od bramkarza i zdobywają punkt za podanie do jednej z trzech małych bramek. Czerwoni po odbiorze atakują dużą bramkę i mają na to 8 sekund. Po 5 akcjach zmiana pressujących.',
-      coachingPoints: 'Gdzie jest przewaga? Jeśli pressuje dwóch na środku, wolny jest bok. Bramkarz jako dodatkowy zawodnik: nie boimy się podania do tyłu. Po podaniu ruch, żeby otworzyć nową linię. Spokój przy pierwszym kontakcie.',
-      variations: 'Trudniej: dołóż pressującego albo ogranicz bramkarza do 2 kontaktów. Łatwiej: pressujący startują dopiero po pierwszym podaniu.',
+    b.pass(HL * 0.07, FW / 2, cb[0] - 0.5, cb[1] + 1);
+    b.run(p1[0] - 1, p1[1], cb[0] + 2, cb[1] + 1.5);
+    const us = 1 + ownHalf.length, them = pressers.length + 1;
+    out.push(drill(cfg, 3, `Wyjście spod pressingu ${us}v${them}`, b, {
+      category: 'Małe gry', duration: String(cfg.minutes[3]), players: `${us + them} (${us}v${them})`, area: `${HL}×${FW} m (połowa boiska)`, load: cfg.load[2],
+      objective: `Ściągnąć pressing i wyjść spod niego z przewagą (${R.overload} przy wznowieniu): znaleźć wolnego zawodnika i przeprowadzić piłkę przez linię środkową.`,
+      organization: `Połowa boiska ${cfg.label}. Niebiescy: bramkarz i ${ownHalf.length} zawodników w ustawieniu do budowania. Czerwoni: ${pressers.length} pressujących plus jeden pomocnik, który kryje indywidualnie 6. Trzy małe bramki na linii środkowej. Każda akcja zaczyna się od bramkarza.`,
+      description: 'Niebiescy budują grę od bramkarza i zdobywają punkt za podanie do jednej z trzech małych bramek, 2 punkty po podaniu przez linię pressingu do zawodnika w półprzestrzeni. Czerwoni po odbiorze atakują dużą bramkę i mają na to 8 sekund. Po 5 akcjach zmiana pressujących.',
+      coachingPoints: `Bramkarz czeka, aż napastnik rywala ruszy. Kogo zaatakował pressujący? Wolny jest zawodnik dalej. ${R.piv} kryty indywidualnie: zamiana z ${R.swap}, jeden wychodzi, drugi schodzi. Nie boimy się podania do tyłu, do bramkarza.`,
+      variations: 'Trudniej: dołóż pressującego albo ogranicz bramkarza do 2 kontaktów. Łatwiej: pomocnik czerwonych nie kryje 6.',
     }));
   }
 
@@ -163,13 +170,13 @@ function drills(cfg) {
     b.pass(p2[0], p2[1], p3[0] + 0.8, p3[1] + 0.8);
     b.pass(p3[0], p3[1], p4[0] - 1, p4[1] - 1);
     b.run(p1[0], p1[1] - 1, p3[0] - 1.2, p3[1] + 0.5);
-    out.push(drill(cfg, 4, 'Podania z trzecim zawodnikiem', b, {
+    out.push(drill(cfg, 4, 'Rotacja i gra na trzeciego zawodnika', b, {
       category: 'Technika', duration: String(cfg.minutes[1]), players: '5–6 na stację', area: `${L}×${W} m`, load: cfg.load[0],
-      objective: 'Gra na trzeciego: podanie w głąb, odegranie i podanie do zawodnika ustawionego twarzą do gry.',
+      objective: 'Odpowiedź na krycie indywidualne: zamiana pozycji (jeden schodzi, drugi wychodzi) i gra na trzeciego do zawodnika ustawionego przodem do gry.',
       organization: `Cztery pachołki w kształcie rombu na polu ${L}×${W} m. Po jednym zawodniku przy pachołku, dodatkowy na starcie. Dwie stacje, zmiana kierunku w połowie czasu.`,
-      description: '1 podaje w głąb do 2. 2 odgrywa jednym kontaktem do 3. 3 podaje za plecy do 4. Każdy biegnie za swoim podaniem na następną pozycję, 4 prowadzi piłkę na start.',
+      description: 'Przed podaniem 2 i 3 zamieniają się: 3 schodzi bliżej piłki, 2 wychodzi wyżej i ciągnie za sobą kryjącego. 1 podaje w głąb do 2, 2 odgrywa jednym kontaktem do 3, 3 podaje za plecy do 4. Każdy biegnie za swoim podaniem na następną pozycję, 4 prowadzi piłkę na start.',
       coachingPoints: 'Podanie w głąb mocne, odegranie miękkie. Zawodnik 2 sprawdza przestrzeń za plecami przed przyjęciem. Zawodnik 3 rusza w momencie podania, a nie po nim. Tempo: piłka nie stoi.',
-      variations: 'Dodaj pasywnego obrońcę za plecami zawodnika 2. Zawodnik 2 decyduje: odegranie albo obrót z piłką, jeśli obrońca nie doskoczył.',
+      variations: 'Dodaj obrońcę, który kryje indywidualnie zawodnika 2. Zawodnik 2 decyduje: odegranie albo obrót z piłką, jeśli obrońca nie doskoczył.',
     }));
   }
 
@@ -186,10 +193,10 @@ function drills(cfg) {
     b.pass(zw * 1.5, W * 0.5, 2 * zw + zw * 0.3, spread(per, W, W * 0.15)[1]);
     out.push(drill(cfg, 5, `Gra pozycyjna w trzech strefach ${per}+${per} na ${mid}`, b, {
       category: 'Gra pozycyjna', duration: String(cfg.minutes[2]), players: `${2 * per + mid + 1} (${per}+${per}+J na ${mid})`, area: `${L}×${W} m, 3 strefy`, load: cfg.load[1],
-      objective: 'Przeniesienie piłki z własnej strefy do strefy ataku przez środek, z wykorzystaniem zawodnika między liniami.',
+      objective: 'Przeniesienie piłki przez środek do wolnego zawodnika między liniami, który przyjmuje przodem do bramki rywala.',
       organization: `Pole ${L}×${W} m podzielone na 3 równe strefy. Niebiescy po ${per} w strefach skrajnych, ${mid} czerwonych w strefie środkowej, joker w strefie środkowej gra z posiadającymi.`,
       description: `Niebiescy wymieniają minimum 4 podania w swojej strefie i szukają podania do drugiej strefy: przez jokera albo bezpośrednio. Jeden czerwony może wejść do strefy z piłką i pressować. Po odbiorze czerwoni zamieniają się z zespołem, który stracił piłkę.`,
-      coachingPoints: 'Cierpliwość: przesuwamy piłkę, aż otworzy się linia podania. Joker pokazuje się w „okienku” między przeciwnikami. Strefa bez piłki przygotowuje się do przyjęcia: szeroko i w różnych liniach.',
+      coachingPoints: 'Posiadanie służy do przesuwania rywala: przesuwamy piłkę, aż otworzy się linia podania. Joker pokazuje się w „okienku” między przeciwnikami i przyjmuje półobrotem. Strefa bez piłki przygotowuje się do przyjęcia: szeroko i w różnych liniach.',
       variations: 'Dwóch pressujących w strefie z piłką. Punkt tylko za podanie przez jokera. Limit 2 kontaktów.',
     }));
   }
@@ -207,12 +214,13 @@ function drills(cfg) {
     spread(nb - pressers, W, W * 0.2).forEach((y, i) => b.b(i + 1 + pressers, L * 0.75, y));
     [W * 0.25, W * 0.75].forEach(y => b.miniRight(y));
     b.ball(L * 0.08, W / 2 + 1);
-    out.push(drill(cfg, 6, `Gra ${a}+Br na ${nb} na dwie małe bramki`, b, {
+    b.line('curve-arrow-solid', L * 0.05, W / 2, L * 0.55, spread(front, W, W * 0.25)[0]);
+    out.push(drill(cfg, 6, `Gra ${a}+Br na ${nb}: krótko albo plan B`, b, {
       category: 'Małe gry', duration: String(cfg.minutes[3]), players: `${a + nb + 1} (${a}+Br v ${nb})`, area: `${L}×${W} m`, load: cfg.load[2],
-      objective: 'Otwarcie gry w warunkach meczowych: decyzja, czy grać krótko, czy dłuższym podaniem za linię pressingu.',
+      objective: 'Decyzja bramkarza w warunkach meczowych: krótko, gdy jest przewaga, albo plan B — długo do napastnika i walka o drugą piłkę.',
       organization: `Pole ${L}×${W} m z dużą bramką i bramkarzem po jednej stronie oraz dwiema małymi bramkami po drugiej. Strefa otwarcia zaznaczona na 1/3 długości. Niebiescy ${a}+Br, czerwoni ${nb}.`,
-      description: 'Każda akcja zaczyna się od bramkarza niebieskich. Niebiescy zdobywają bramkę w małych bramkach: 1 punkt, a 2 punkty, jeśli wcześniej wymienili 3 podania w strefie otwarcia. Czerwoni po odbiorze atakują dużą bramkę. Zmiana ról po serii.',
-      coachingPoints: 'Bramkarz ocenia: ilu pressuje i gdzie jest wolny zawodnik. Jeśli przeciwnik wysoko, szukamy podania za jego linię. Po stracie natychmiast reakcja: najbliższy doskakuje, reszta zamyka środek.',
+      description: 'Każda akcja zaczyna się od bramkarza niebieskich. Czerwoni wybierają: pressują wysoko i kryją indywidualnie albo czekają. Niebiescy zdobywają 1 punkt za bramkę w małej bramce, 2 punkty po wyjściu krótkim podaniem albo po wygranej drugiej piłce po długim podaniu. Czerwoni po odbiorze atakują dużą bramkę. Zmiana ról po serii.',
+      coachingPoints: 'Warunek planu B: środek zasłonięty i 6 kryty indywidualnie, wtedy długo do napastnika. Napastnik tyłem do bramki zgrywa piłkę, dwóch najbliższych rusza po drugą piłkę w chwili podania. Po stracie kontrpressing od razu 3–4 zawodnikami.',
       variations: 'Czerwoni dostają dodatkowego zawodnika. Zakaz podania górą. Bramka liczy się tylko po akcji z udziałem bramkarza.',
     }));
   }
@@ -233,7 +241,7 @@ function drills(cfg) {
       objective: 'Utrzymanie piłki pod presją i szybka zmiana strony gry, gdy przeciwnik zagęści jedną strefę.',
       organization: `Dwa kwadraty ${S}×${S} m w odstępie 4 m. W każdym ${N} niebieskich na obwodzie. ${2 * M} czerwonych: ${M} pressuje w polu z piłką, ${M} czeka między polami.`,
       description: `Niebiescy w pierwszym polu wymieniają minimum 5 podań i przenoszą piłkę do drugiego pola. Wtedy czekający czerwoni wbiegają do pressingu, a poprzedni wracają między pola. Odbiór albo przechwyt podania między polami oznacza zmianę zespołów.`,
-      coachingPoints: 'Przyciągnij przeciwnika krótkimi podaniami, potem graj daleko. Podanie zmieniające stronę: mocne, po ziemi, na dalszą nogę. Drugi kwadrat ustawia się zanim piłka przyleci.',
+      coachingPoints: 'Przewaga przy piłce, a druga strona trzyma szerokość. Przyciągnij przeciwnika krótkimi podaniami, potem zmień stronę. Podanie zmieniające stronę: mocne, po ziemi, na dalszą nogę. Drugi kwadrat ustawia się zanim piłka przyleci.',
       variations: 'Zmiana pola dozwolona już po 3 podaniach. Podanie zmieniające tylko jednym kontaktem.',
     }));
   }
@@ -256,17 +264,19 @@ function drills(cfg) {
     b.gk(FL * 0.04, FW / 2); b.gk(FL * 0.96, FW / 2, 'B');
     team(b, cfg.lines, 'A');
     const press = cfg.lines[cfg.lines.length - 1] + 1;
-    spread(press, FW, FW * 0.22).forEach((y, i) => b.b(i + 2, FL * (i % 2 ? 0.29 : 0.25), y)); // between A's back line and midfield
+    // between A's back line and midfield (four lines leave less room: nearer the back line, more central)
+    const deep = cfg.lines.length > 3;
+    spread(press, FW, FW * (deep ? 0.35 : 0.22)).forEach((y, i) => b.b(i + 2, FL * (deep ? 0.23 : i % 2 ? 0.29 : 0.25), y));
     spread(cfg.lines[0], FW, FW * 0.15).forEach((y, i) => b.b(i + 2 + press, FL * 0.8, y));
     b.ball(FL * 0.06, FW / 2 + 1.5);
     b.pass(FL * 0.04, FW / 2, FL * 0.15, FW * 0.14);
     b.dribble(FL * 0.37, FW * 0.5, FL * 0.55, FW * 0.5);
     out.push(drill(cfg, 8, 'Otwarcie i atak na bramkę', b, {
       category: 'Finalizacja', duration: String(cfg.minutes[2]), players: `${cfg.label === '11v11' ? '20–22' : cfg.label === '9v9' ? '16–18' : '12–14'}`, area: `${FL}×${FW} m (całe boisko ${cfg.label})`, load: cfg.load[1],
-      objective: 'Połączenie otwarcia z dalszą fazą: po wyjściu spod pressingu szybki atak i strzał.',
+      objective: 'Połączenie otwarcia z dalszą fazą: po wyjściu spod pressingu sygnał do ataku głębi, szybki atak i strzał.',
       organization: `Całe boisko ${cfg.label}. Niebiescy w ${cfg.system}. Czerwoni: ${press} pressujących w strefie otwarcia i linia obrony na własnej połowie. Strefa otwarcia zaznaczona na 1/3 boiska.`,
       description: 'Bramkarz niebieskich wznawia grę. Po wyprowadzeniu piłki ze strefy otwarcia niebiescy mają 10 sekund na zakończenie akcji strzałem. Pressujący czerwoni nie wracają za linię środkową. Po odbiorze w strefie otwarcia czerwoni atakują bramkę niebieskich.',
-      coachingPoints: 'Po wyjściu ze strefy przyspieszamy: pierwsze podanie do przodu. Napastnicy dają głębię już w chwili otwarcia. Zawodnicy bez piłki wbiegają w pole karne w trzech liniach.',
+      coachingPoints: 'Sygnał do ataku głębi: piłka u bocznego obrońcy albo skrzydłowego przy linii. Wtedy napastnik i skrzydłowy z drugiej strony od razu wbiegają za linię obrony. Pierwsze podanie po wyjściu ze strefy do przodu. W polu karnym trzy linie: bliższy słupek, dalszy słupek, przedpole.',
       variations: 'Jeden pressujący może wrócić za linię środkową. Limit 8 sekund. Bramka po akcji z maksymalnie 5 podaniami liczy się podwójnie.',
     }));
   }
@@ -282,8 +292,8 @@ function drills(cfg) {
       category: 'Gra', duration: String(cfg.minutes[3]), players: cfg.label === '11v11' ? '22' : cfg.label === '9v9' ? '18' : '14', area: `${FL}×${FW} m (całe boisko ${cfg.label})`, load: cfg.load[2],
       objective: 'Przeniesienie nawyków z tygodnia do gry: każde wznowienie od bramki to okazja do otwarcia krótkim podaniem.',
       organization: `Mecz ${cfg.label} na pełnym boisku, oba zespoły w ${cfg.system}. Boisko podzielone na trzy strefy.`,
-      description: 'Gra według przepisów formatu. Dodatkowa zasada: bramka zdobyta po akcji rozpoczętej krótkim podaniem bramkarza we własnej strefie liczy się podwójnie. Przy wznowieniu od bramki przeciwnik ustawia się poza strefą otwarcia.',
-      coachingPoints: 'Trener zatrzymuje grę najwyżej 2–3 razy, tylko przy wznowieniach od bramki. Pytania zamiast gotowych odpowiedzi: „Gdzie była przewaga?”, „Kto był wolny?”. Chwalimy odwagę w grze od tyłu, także po stracie.',
+      description: 'Gra według przepisów formatu. Dodatkowe zasady: przy wznowieniu od bramki obrońcy ustawiają się szeroko, poza polem karnym; bramka po akcji rozpoczętej krótkim podaniem bramkarza liczy się podwójnie; odbiór w ciągu 5 sekund po stracie to punkt dla zespołu.',
+      coachingPoints: 'Trener zatrzymuje grę najwyżej 2–3 razy, tylko przy wznowieniach od bramki. Pytania zamiast gotowych odpowiedzi: „Gdzie była przewaga?”, „Kto był wolny?”, „Czy był warunek na plan B?”. Chwalimy odwagę w grze od tyłu, także po stracie.',
       variations: 'Przeciwnik może pressować od razu. Ostatnia tercja czasu bez dodatkowych zasad.',
     }));
   }
@@ -297,23 +307,23 @@ const addDays = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d
 function sessions(cfg, monday) {
   const m = cfg.minutes;
   const plan = (n, day, title, goal, warmup, ids, summary) => ({
-    id: `pack-otwarcie-${cfg.label}-s${n}`, title: `Otwarcie gry ${cfg.label} — ${title}`, date: addDays(monday, day), group: cfg.group, goal,
-    notes: `Tydzień „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Model gry do tego tygodnia: zakładka Taktyka → Atak – Otwarcie (3 schematy). Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
+    id: `${PACK_PREFIX}-${cfg.label}-s${n}`, title: `Otwarcie gry ${cfg.label} — ${title}`, date: addDays(monday, day), group: cfg.group, goal,
+    notes: `Tydzień „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Model gry do tego tygodnia: zakładka Taktyka → Atak – Otwarcie (3 schematy: szerocy obrońcy i bramkarz jako czwarty, rotacja w środku, plan B). Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
     phases: [PHASE], createdAt: VERSION, updatedAt: VERSION,
     blocks: [
-      { id: `pack-otwarcie-${cfg.label}-s${n}-b1`, drillId: null, title: 'Rozgrzewka', minutes: String(m[0]), note: warmup, part: 'wstepna' },
-      ...ids.map((d, i) => ({ id: `pack-otwarcie-${cfg.label}-s${n}-b${i + 2}`, drillId: `pack-otwarcie-${cfg.label}-d${d}`, minutes: String(m[i + 1]), note: '', part: 'glowna' })),
-      { id: `pack-otwarcie-${cfg.label}-s${n}-b5`, drillId: null, title: 'Zakończenie', minutes: String(m[4]), note: summary, part: 'koncowa' },
+      { id: `${PACK_PREFIX}-${cfg.label}-s${n}-b1`, drillId: null, title: 'Rozgrzewka', minutes: String(m[0]), note: warmup, part: 'wstepna' },
+      ...ids.map((d, i) => ({ id: `${PACK_PREFIX}-${cfg.label}-s${n}-b${i + 2}`, drillId: `${PACK_PREFIX}-${cfg.label}-d${d}`, minutes: String(m[i + 1]), note: '', part: 'glowna' })),
+      { id: `${PACK_PREFIX}-${cfg.label}-s${n}-b5`, drillId: null, title: 'Zakończenie', minutes: String(m[4]), note: summary, part: 'koncowa' },
     ],
   });
   return [
-    plan(1, 0, 'ustawienie i pierwsze podanie', 'Ustawienie zespołu przy otwarciu od bramki i pewne pierwsze podanie bramkarza.',
+    plan(1, 0, 'szerocy obrońcy i bramkarz jako czwarty', 'Ustawienie przy wznowieniu od bramki: obrońcy szeroko, bramkarz jako pierwszy rozgrywający, przewaga przeciw pressującym.',
       'Podania w parach i trójkach w ruchu, przyjęcie kierunkowe na obie nogi. Bramkarze ćwiczą razem z zespołem. Na koniec krótka gra w „dziadka” 3v1.',
-      [1, 2, 3], 'Rozciąganie. Pytania: gdzie ustawiamy się, gdy bramkarz ma piłkę? Kto jest wolny, gdy pressuje dwóch?'),
-    plan(2, 2, 'gra na trzeciego zawodnika', 'Wyjście spod pressingu podaniem w głąb i odegraniem do trzeciego zawodnika.',
+      [1, 2, 3], 'Rozciąganie. Pytania: dlaczego obrońcy stoją tak szeroko? Kto jest wolny, gdy rywal doskoczy do obrońcy?'),
+    plan(2, 2, 'rotacja, trzeci zawodnik i plan B', 'Odpowiedź na krycie indywidualne: zamiana pozycji i gra na trzeciego, a gdy środek jest zamknięty, plan B z drugą piłką.',
       'Prowadzenie piłki ze zmianą kierunku, podania po trójkącie z ruchem za piłką. Zabawa „berek z piłką” w polu 15×15 m.',
-      [4, 5, 6], 'Rozciąganie. Pytania: kiedy gramy w głąb, a kiedy do boku? Co robi zawodnik po podaniu?'),
-    plan(3, 4, 'otwarcie w grze', 'Zastosowanie otwarcia w grze: zmiana strony, przyspieszenie po wyjściu spod pressingu i mecz z zasadą otwarcia.',
+      [4, 5, 6], 'Rozciąganie. Pytania: co robimy, gdy rywal kryje nas indywidualnie? Kiedy bramkarz gra długo?'),
+    plan(3, 4, 'otwarcie w grze', 'Zastosowanie otwarcia w grze: zmiana strony, sygnał do ataku głębi po wyjściu spod pressingu i mecz z zasadami tygodnia.',
       'Koordynacja z piłką i bez, szybkość reakcji w parach. Podania na dalszą nogę w czwórkach ze zmianą pozycji.',
       [7, 8, 9], 'Rozciąganie. Podsumowanie tygodnia: każdy zawodnik mówi jedną rzecz, którą robi przy otwarciu gry.'),
   ];
@@ -335,6 +345,6 @@ export const PACKS = Object.values(FORMATS).map(cfg => ({
   title: `Otwarcie gry ${cfg.label}`,
   group: cfg.group,
   system: cfg.system,
-  description: `Model gry w systemie ${cfg.system} (3 schematy otwarcia) i tydzień treningów pod niego: od ronda z bramkarzem do meczu z zasadą otwarcia.`,
+  description: `Model gry oparty na dominacji piłką w ${cfg.system}: 3 schematy otwarcia (szerocy obrońcy i bramkarz jako czwarty, rotacja przeciw kryciu indywidualnemu, plan B z długim podaniem) i tydzień treningów pod nie. Inspiracja: gra od bramkarza Como Cesca Fàbregasa.`,
   contents: '3 schematy · 3 konspekty · 9 ćwiczeń',
 }));

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, CheckCircle2 } from 'lucide-react';
-import { PACKS, buildPack } from '../packs/otwarcieGry.js';
+import { PACKS, PACK_PREFIX, buildPack } from '../packs/otwarcieGry.js';
 import { applyImport } from '../utils/backup.js';
 import { weekStart } from '../utils/week.js';
 import { track } from '../utils/analytics.js';
@@ -13,7 +13,7 @@ const TAB_KEY = 'modelGryActiveTab';
 function addedPacks() {
   try {
     const ids = new Set((JSON.parse(localStorage.getItem(DRILLS_KEY)) || []).map(d => d.id));
-    return new Set(PACKS.filter(p => ids.has(`pack-otwarcie-${p.id}-d1`)).map(p => p.id));
+    return new Set(PACKS.filter(p => ids.has(`${PACK_PREFIX}-${p.id}-d1`)).map(p => p.id));
   } catch {
     return new Set();
   }
@@ -53,9 +53,9 @@ export default function PacksModal({ onClose }) {
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
           <p className="text-sm text-slate-300">
-            <span className="font-semibold text-white">Otwarcie gry</span> — budowanie akcji od bramkarza. Najpierw model gry: trzy animowane
-            schematy otwarcia (bokiem, środkiem z trzecim zawodnikiem, długim podaniem). Pod niego tydzień treningów: ustawienie
-            i pierwsze podanie, gra na trzeciego zawodnika, otwarcie w grze. Wybierz format swojej drużyny.
+            <span className="font-semibold text-white">Otwarcie gry</span> — budowanie akcji od bramkarza. Model gry oparty na dominacji piłką:
+            trzy animowane schematy otwarcia (szerocy obrońcy i bramkarz jako czwarty, rotacja przeciw kryciu indywidualnemu,
+            plan B z długim podaniem). Pod niego tydzień treningów. Wybierz format swojej drużyny.
           </p>
           <ul className="space-y-2">
             {PACKS.map(p => (

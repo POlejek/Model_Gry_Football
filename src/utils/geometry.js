@@ -184,3 +184,20 @@ export const rectangleToPolygon = (zone) => {
   const { x, y, width, height, ...rest } = zone;
   return { ...rest, type: 'polygon', points: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] };
 };
+
+// Smart guides while dragging (as in PowerPoint): when the dragged point comes within `threshold` px of
+// another point's x (or y), or of one of the extra lines, it snaps onto it and a guide is reported.
+// Returns the snapped point and the guides: v = x of a vertical guide, h = y of a horizontal one.
+export function alignToGuides(point, others, { threshold = 6, xs = [], ys = [] } = {}) {
+  const nearest = (value, candidates) => {
+    let best = null;
+    candidates.forEach(c => {
+      const d = Math.abs(c - value);
+      if (d <= threshold && (best === null || d < Math.abs(best - value))) best = c;
+    });
+    return best;
+  };
+  const v = nearest(point.x, [...others.map(o => o.x), ...xs]);
+  const h = nearest(point.y, [...others.map(o => o.y), ...ys]);
+  return { x: v ?? point.x, y: h ?? point.y, guides: { v, h } };
+}

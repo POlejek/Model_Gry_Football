@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isPointNearLine, isPointInZone, isPointNearPolygonVertex, isPointNearLineEnd, isPointNearControlPoint,
-  getZoneHandles, hitZoneHandle, resizeZone, rectangleToPolygon, zoneHandleCursor,
+  getZoneHandles, hitZoneHandle, resizeZone, rectangleToPolygon, zoneHandleCursor, alignToGuides,
 } from './geometry.js';
 
 describe('isPointNearLine', () => {
@@ -143,5 +143,21 @@ describe('końce linii i punkt kontrolny krzywej', () => {
   it('wykrywa punkt na wygiętej krzywej, a nie na prostej między końcami', () => {
     expect(isPointNearLine(50, -20, curve)).toBe(true);
     expect(isPointNearLine(50, 0, curve)).toBe(false);
+  });
+});
+
+describe('alignToGuides', () => {
+  const others = [{ x: 100, y: 300 }, { x: 400, y: 600 }];
+
+  it('dociąga do pionu i poziomu innego zawodnika w zasięgu progu i zwraca linie pomocnicze', () => {
+    expect(alignToGuides({ x: 104, y: 597 }, others)).toEqual({ x: 100, y: 600, guides: { v: 100, h: 600 } });
+  });
+
+  it('poza progiem nic nie zmienia', () => {
+    expect(alignToGuides({ x: 120, y: 450 }, others)).toEqual({ x: 120, y: 450, guides: { v: null, h: null } });
+  });
+
+  it('wybiera najbliższego i bierze pod uwagę dodatkowe linie (środek boiska)', () => {
+    expect(alignToGuides({ x: 352, y: 302 }, [{ x: 357, y: 290 }], { xs: [350] })).toEqual({ x: 350, y: 302, guides: { v: 350, h: null } });
   });
 });

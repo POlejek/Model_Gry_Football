@@ -12,7 +12,7 @@ import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZ
 import { htmlToLines, htmlToPptRuns, commentFontSize } from './utils/richText.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd, isPointInZone, isPointNearPolygonVertex,
-  hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
+  hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon, alignToGuides,
 } from './utils/geometry.js';
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
@@ -95,6 +95,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   const playerColorInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPlayer, setDraggedPlayer] = useState(null);
+  const [alignGuides, setAlignGuides] = useState(null); // { v, h } linie pomocnicze przy przeciąganiu (jak w PowerPoint)
   const [selectedPlayer, setSelectedPlayer] = useState(null); // Wybrany zawodnik do rotacji
   const [isDraggingRotation, setIsDraggingRotation] = useState(false);
   const [editingPlayerNumber, setEditingPlayerNumber] = useState(null); // Modal edycji numeru
@@ -1641,10 +1642,23 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       });
     }
     
+    // linie pomocnicze wyrównania (tylko w edytorze, nie w eksportach)
+    if (alignGuides) {
+      ctx.save();
+      ctx.strokeStyle = '#e11d48';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      if (alignGuides.v !== null) { ctx.moveTo(alignGuides.v, 0); ctx.lineTo(alignGuides.v, canvas.height); }
+      if (alignGuides.h !== null) { ctx.moveTo(0, alignGuides.h); ctx.lineTo(canvas.width, alignGuides.h); }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     players.team.forEach(player => drawPlayer(ctx, displayPlayer(player), true, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     if (showOpponent) players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     drawBall(ctx, players.ball, gameFormat);
-  }, [showNames, showOpponent, squad, players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
+  }, [alignGuides, showNames, showOpponent, squad, players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
 
   // One transition per effect run. The interval stops itself after the last step, so ticks that
   // fire before React re-renders (slow devices) cannot advance the frame past the end.
@@ -2141,8 +2155,16 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     // Obsługa przeciągania
     if (!isDragging || !draggedPlayer) return;
 
-    const boundedX = Math.max(20, Math.min(x, canvas.width - 20));
-    const boundedY = Math.max(20, Math.min(y, canvas.height - 20));
+    // Smart guides: snap to the same vertical / horizontal as another player, the ball or the pitch's
+    // centre lines; Alt (Option) drags freely, as in PowerPoint.
+    const self = draggedPlayer.type === 'ball' ? players.ball : players[draggedPlayer.type].find(p => p.id === draggedPlayer.id);
+    const others = [...players.team, ...(showOpponent ? players.opponent : []), players.ball].filter(p => p !== self);
+    const snapped = e.altKey
+      ? { x, y, guides: { v: null, h: null } }
+      : alignToGuides({ x, y }, others, { threshold: 6, xs: [canvas.width / 2], ys: [canvas.height / 2] });
+    setAlignGuides(snapped.guides.v !== null || snapped.guides.h !== null ? snapped.guides : null);
+    const boundedX = Math.max(20, Math.min(snapped.x, canvas.width - 20));
+    const boundedY = Math.max(20, Math.min(snapped.y, canvas.height - 20));
 
     if (draggedPlayer.type === 'ball') {
       setPlayers(prev => {
@@ -2273,6 +2295,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
 
     setIsDragging(false);
     setDraggedPlayer(null);
+    setAlignGuides(null);
     setIsDraggingRotation(false);
     setIsDraggingLine(false);
     setIsDraggingControlPoint(false);

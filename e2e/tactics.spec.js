@@ -38,6 +38,23 @@ test.describe('Taktyka', () => {
     expect(scheme.frames[0].opponent.find(p => p.id === 'ost').x).toBeCloseTo(500, -1);
   });
 
+  test('przy przesuwaniu zawodnik dociąga do pionu i poziomu innych (jak w PowerPoint), z Alt bez dociągania', async ({ page }) => {
+    await newScheme(page);
+    // napastnik (350, 570) prawie w pionie z defensywnym pomocnikiem nr 6 (x = 260)
+    await dragOnCanvas(page, [350, 570], [264, 400]);
+    let st = (await firstScheme(page)).frames[0].team.find(p => p.id === 'st');
+    expect(st).toMatchObject({ x: 260 });
+    expect(st.y).toBeCloseTo(400, -1);
+
+    // z Alt: bez dociągania, choć blisko pionu nr 6 i poziomu skrzydłowych rywala (y = 440)
+    await page.keyboard.down('Alt');
+    await dragOnCanvas(page, [260, st.y], [264, 444]);
+    await page.keyboard.up('Alt');
+    st = (await firstScheme(page)).frames[0].team.find(p => p.id === 'st');
+    expect(Math.abs(st.x - 260)).toBeGreaterThan(1);
+    expect(Math.abs(st.y - 440)).toBeGreaterThan(1);
+  });
+
   test('animację można odtworzyć ponownie od początku (zgłoszony błąd)', async ({ page }) => {
     await newScheme(page);
     await page.getByRole('button', { name: 'Dodaj klatkę' }).click();

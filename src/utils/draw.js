@@ -997,7 +997,7 @@ export const SCHEME_H = 1080;
 // Draws a scheme frame exactly like the editor (players with arms, lines, zones, ball).
 // With `to` and 0 < progress < 1 the players are interpolated (animation); `scale` gives a sharper image.
 export function renderSchemeFrame(ctx, from, to = null, progress = 0, {
-  gameFormat = '11v11', teamColor = '#1a365d', opponentColor = '#8b0000', scale = 1, mapTeam = (p) => p,
+  gameFormat = '11v11', teamColor = '#1a365d', opponentColor = '#8b0000', scale = 1, mapTeam = (p) => p, showOpponent = true,
 } = {}) {
   const shown = to && progress >= 1 ? to : from;
   const pos = to ? interpolatePlayers(from, to, Math.min(1, Math.max(0, progress))) : from;
@@ -1008,7 +1008,7 @@ export function renderSchemeFrame(ctx, from, to = null, progress = 0, {
   [...zs.filter(z => z.type !== 'text'), ...zs.filter(z => z.type === 'text')].forEach(z => drawZone(ctx, z, false, undefined, undefined, 0));
   (shown.lines || []).forEach(l => drawLine(ctx, l, false));
   (pos.team || []).forEach(p => drawPlayer(ctx, mapTeam(p), true, null, teamColor, opponentColor, gameFormat, null));
-  (pos.opponent || []).forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
+  if (showOpponent) (pos.opponent || []).forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
   drawBall(ctx, pos.ball || shown.ball || { x: SCHEME_W / 2, y: SCHEME_H / 2 }, gameFormat);
   ctx.restore();
 }

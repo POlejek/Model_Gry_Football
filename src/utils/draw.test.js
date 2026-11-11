@@ -259,4 +259,17 @@ describe('renderSchemeFrame', () => {
     renderSchemeFrame(ctx, frame(100), frame(300), 1, { mapTeam: (p) => { seen.push(p.x); return p; } });
     expect(seen).toEqual([200, 300]);
   });
+
+  it('bez przeciwnika rysuje tylko własną drużynę', () => {
+    const count = (opts) => {
+      const { ctx, calls } = makeCtx();
+      renderSchemeFrame(ctx, frame(100), null, 0, opts);
+      return calls.length;
+    };
+    const solo = { ...frame(100), opponent: [] };
+    const { ctx, calls } = makeCtx();
+    renderSchemeFrame(ctx, solo, null, 0, {});
+    expect(count({ showOpponent: false })).toBe(calls.length);
+    expect(count({})).toBeGreaterThan(calls.length);
+  });
 });

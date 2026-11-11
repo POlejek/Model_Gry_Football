@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, ArrowDownToLine, ArrowUpToLine,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -184,6 +184,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   // Saving waits until stored data is loaded, so the first render's defaults never overwrite it.
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [showNames, setShowNames] = useState(false); // nazwiska z kadry zamiast numerów (drużyna)
+  const [showOpponent, setShowOpponent] = useState(true); // false: przeciwnik ukryty na boisku i w eksportach
 
   // Wczytaj dane z localStorage przy starcie (z migracją wersji)
   useEffect(() => {
@@ -199,14 +200,15 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
       if (data.teamColor) setTeamColor(data.teamColor);
       if (data.opponentColor) setOpponentColor(data.opponentColor);
       if (typeof data.showNames === 'boolean') setShowNames(data.showNames);
+      if (typeof data.showOpponent === 'boolean') setShowOpponent(data.showOpponent);
     }
   }, []);
 
   // Zapisz dane do localStorage przy każdej zmianie
   useEffect(() => {
     if (!storageLoaded) return;
-    saveStoredData({ phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames });
-  }, [storageLoaded, phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames]);
+    saveStoredData({ phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames, showOpponent });
+  }, [storageLoaded, phases, schemes, gameFormat, selectedPhase, selectedSubPhase, expandedPhases, teamColor, opponentColor, showNames, showOpponent]);
 
   // Synchronizuj zawartość comments edytora tylko gdy zmienia się schemat
   useEffect(() => {
@@ -591,7 +593,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             const progress = step / framesPerTransition;
             
             // Rysuj klatkę z liniami ruchu
-            renderSchemeFrame(ctx, currentFrameData, nextFrameData, progress, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p) });
+            renderSchemeFrame(ctx, currentFrameData, nextFrameData, progress, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p), showOpponent });
             
             // Zapisz klatkę
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -606,7 +608,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           }
         } else {
           // Ostatnia klatka - narysuj ją bez interpolacji
-          renderSchemeFrame(ctx, currentFrameData, null, 0, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p) });
+          renderSchemeFrame(ctx, currentFrameData, null, 0, { gameFormat, teamColor, opponentColor, mapTeam: (p) => displayPlayer(p), showOpponent });
           
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
           if (!blob) {
@@ -676,7 +678,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     canvas.width = SCHEME_W * scale;
     canvas.height = SCHEME_H * scale;
     renderSchemeFrame(canvas.getContext('2d'), frame, null, 0,
-      { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p) });
+      { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p), showOpponent });
     return canvas.toDataURL('image/png');
   };
 
@@ -688,7 +690,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     canvas.width = SCHEME_W * scale;
     canvas.height = SCHEME_H * scale;
     const ctx = canvas.getContext('2d');
-    const opts = { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p) };
+    const opts = { gameFormat, teamColor: tColor, opponentColor: oColor, scale, mapTeam: (p) => displayPlayer(p), showOpponent };
     const files = [];
     const push = async () => {
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1633,16 +1635,16 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
         if (target) drawPlayerPath(ctx, player, target, true, interpolationProgress);
       });
 
-      (fromFrame.opponent || []).forEach((player, i) => {
+      (showOpponent ? fromFrame.opponent || [] : []).forEach((player, i) => {
         const target = findMatchingPlayer(toFrame.opponent, player, i);
         if (target) drawPlayerPath(ctx, player, target, false, interpolationProgress);
       });
     }
     
     players.team.forEach(player => drawPlayer(ctx, displayPlayer(player), true, null, teamColor, opponentColor, gameFormat, selectedPlayer));
-    players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat, selectedPlayer));
+    if (showOpponent) players.opponent.forEach(player => drawPlayer(ctx, player, false, null, teamColor, opponentColor, gameFormat, selectedPlayer));
     drawBall(ctx, players.ball, gameFormat);
-  }, [showNames, squad, players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
+  }, [showNames, showOpponent, squad, players, isPlaying, currentFrame, currentScheme, interpolationProgress, lines, currentLine, selectedLineIndex, zones, currentZone, selectedZoneIndex, polygonPoints, zoneColor, zoneType, isDrawingMode, selectedPlayer, gameFormat, teamColor, opponentColor, zoneOpacity]);
 
   // One transition per effect run. The interval stops itself after the last step, so ticks that
   // fire before React re-renders (slow devices) cannot advance the frame past the end.
@@ -1833,7 +1835,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     // Zawodnik i piłka są nad strefami – kliknięcie w nich ma pierwszeństwo przed strefą
     const hitR = ({ '5v5': 30, '7v7': 26, '9v9': 22, '11v11': 18 }[gameFormat] || 18) + 5;
     const hitsPlayerOrBall = Math.hypot(x - players.ball.x, y - players.ball.y) < ({ '5v5': 11, '7v7': 10, '9v9': 9, '11v11': 8 }[gameFormat] || 8) + 5
-      || [...players.team, ...players.opponent].some(p => Math.hypot(x - p.x, y - p.y) < hitR);
+      || [...players.team, ...(showOpponent ? players.opponent : [])].some(p => Math.hypot(x - p.x, y - p.y) < hitR);
 
     // Tryb przesuwania - sprawdź czy kliknięto na strefę
     if (!isDrawingMode && zones.length > 0) {
@@ -1924,7 +1926,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     }
 
     // Sprawdź zawodników
-    for (const player of [...players.team, ...players.opponent]) {
+    for (const player of [...players.team, ...(showOpponent ? players.opponent : [])]) {
       const dist = Math.sqrt((x - player.x) ** 2 + (y - player.y) ** 2);
       if (dist < playerRadius + 5) {
         const playerType = players.team.includes(player) ? 'team' : 'opponent';
@@ -2296,7 +2298,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     const playerRadius = playerSizes[gameFormat] || 18;
 
     // Sprawdź czy kliknięto na zawodniku
-    for (const player of [...players.team, ...players.opponent]) {
+    for (const player of [...players.team, ...(showOpponent ? players.opponent : [])]) {
       const dist = Math.sqrt((x - player.x) ** 2 + (y - player.y) ** 2);
       if (dist < playerRadius + 5) {
         const playerType = players.team.includes(player) ? 'team' : 'opponent';
@@ -2834,7 +2836,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     [...zones.filter(z => z.type !== 'text'), ...zones.filter(z => z.type === 'text')].forEach(zone => drawZone(ctx, zone, false, zoneColor, zoneOpacity, 0));
     lines.forEach(line => drawLine(ctx, line, false));
     players.team.forEach(p => drawPlayer(ctx, displayPlayer(p), true, null, teamColor, opponentColor, gameFormat, null));
-    players.opponent.forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
+    if (showOpponent) players.opponent.forEach(p => drawPlayer(ctx, p, false, null, teamColor, opponentColor, gameFormat, null));
     drawBall(ctx, players.ball, gameFormat);
     const bin = atob(canvas.toDataURL('image/png').split(',')[1]);
     const bytes = new Uint8Array(bin.length);
@@ -2857,6 +2859,20 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
   const allPhaseKeys = phaseOptions(phases).map(o => o.key);
   const coveredPhases = allPhaseKeys.filter(k => drillsForPhase(drillLibrary, k).length > 0).length;
   const drillCount = (key) => drillsForPhase(drillLibrary, key).length;
+
+  // Show / hide the opponent: on the pitch, in the animation and in every export (PNG, video, PowerPoint).
+  const toggleOpponent = () => {
+    if (showOpponent && selectedPlayer?.type === 'opponent') setSelectedPlayer(null);
+    setShowOpponent(!showOpponent);
+  };
+  const opponentToggle = (size, withLabel = false) => (
+    <button onClick={toggleOpponent} aria-pressed={!showOpponent} aria-label="Ukryj przeciwnika"
+      title={showOpponent ? 'Ukryj zawodników przeciwnika na boisku i w eksportach' : 'Pokaż zawodników przeciwnika'}
+      className={`${size} inline-flex items-center rounded-md text-xs transition-colors ${showOpponent ? 'text-slate-300 hover:bg-white/10' : 'bg-blue-600 text-white'}`}>
+      {showOpponent ? <Eye size={15} /> : <EyeOff size={15} />}
+      {withLabel && (showOpponent ? 'Widoczny' : 'Ukryty')}
+    </button>
+  );
 
   const colorSwatch = (kind, value, onPick, inputRef, title, align) => (
     <div className="relative flex items-center">
@@ -3240,6 +3256,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline ml-1">Przeciwnik</span>
           {colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'right')}
+          {opponentToggle('h-8 w-8 justify-center')}
         </div>
 
         {gameFormat === '11v11' && (
@@ -3978,6 +3995,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           <div className="flex items-center gap-4 text-sm text-slate-300">
             <span className="flex items-center gap-2">{colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'left')} Drużyna</span>
             <span className="flex items-center gap-2">{colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'left')} Przeciwnik</span>
+            {opponentToggle('h-9 px-2.5 gap-1.5', true)}
           </div>
           {gameFormat === '11v11' && (
             <div className="grid grid-cols-2 gap-2">

@@ -19,6 +19,25 @@ test.describe('Taktyka', () => {
     expect(after.frames[0].team.find(p => p.id === 'st').x).toBeCloseTo(450, -1);
   });
 
+  test('przeciwnika można ukryć: nie da się go chwycić, a ustawienie przetrwa odświeżenie', async ({ page }) => {
+    await newScheme(page);
+    const hide = page.getByRole('button', { name: 'Ukryj przeciwnika' }).first();
+    await hide.click();
+    await expect(hide).toHaveAttribute('aria-pressed', 'true');
+    // napastnik przeciwnika (350, 510) jest ukryty: przeciągnięcie go nie rusza
+    await dragOnCanvas(page, [350, 510], [500, 200]);
+    let scheme = await firstScheme(page);
+    expect(scheme.frames[0].opponent.find(p => p.id === 'ost')).toMatchObject({ x: 350, y: 510 });
+
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Ukryj przeciwnika' }).first()).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Ukryj przeciwnika' }).first().click();
+    await page.getByText('Schemat 1').first().click();
+    await dragOnCanvas(page, [350, 510], [500, 200]);
+    scheme = await firstScheme(page);
+    expect(scheme.frames[0].opponent.find(p => p.id === 'ost').x).toBeCloseTo(500, -1);
+  });
+
   test('animację można odtworzyć ponownie od początku (zgłoszony błąd)', async ({ page }) => {
     await newScheme(page);
     await page.getByRole('button', { name: 'Dodaj klatkę' }).click();

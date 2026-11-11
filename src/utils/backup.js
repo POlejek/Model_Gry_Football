@@ -15,7 +15,7 @@ const LAST_BACKUP_KEY = 'modelGryLastBackup';
 const UNDO_KEY = 'modelGryUndoImport';
 const SESSION_FORMAT = 'model-gry-training-session';
 const SESSION_LIBRARY_FORMAT = 'model-gry-session-library';
-const SETTINGS_FIELDS = ['gameFormat', 'selectedPhase', 'selectedSubPhase', 'expandedPhases', 'teamColor', 'opponentColor', 'showNames'];
+const SETTINGS_FIELDS = ['gameFormat', 'selectedPhase', 'selectedSubPhase', 'expandedPhases', 'teamColor', 'opponentColor', 'showNames', 'showOpponent'];
 
 export const SECTIONS = [
   { id: 'tactics', label: 'Taktyka', hint: 'fazy, podfazy i schematy (wszystkie formaty gry)' },

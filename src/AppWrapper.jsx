@@ -173,7 +173,7 @@ export default function AppWrapper() {
   const backupAge = backupDue ? backupAgeDays() : null;
   const [showPacks, setShowPacks] = useState(false);
   const utilities = [
-    { label: 'Gotowe treningi', icon: <Sparkles size={16} aria-hidden="true" />, accent: true, title: 'Gotowe tygodnie treningów do wczytania',
+    { label: 'Gotowe treningi', icon: <Sparkles size={16} aria-hidden="true" />, accent: true, title: 'Gotowe modele gry i treningi do wczytania',
       open: () => { track('open_ready_trainings'); setShowPacks(true); } },
     { label: 'Dane', icon: <Database size={16} aria-hidden="true" />, open: () => setShowData(true),
       title: backupDue ? 'Zrób kopię zapasową — ostatnia ponad 14 dni temu albo nigdy' : 'Eksport, import i kopia zapasowa danych',

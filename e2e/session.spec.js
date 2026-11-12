@@ -159,7 +159,7 @@ test.describe('Konspekt', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   });
 
-  test('gotowe treningi: pakiet „Otwarcie gry 9v9” dodaje model gry (Taktyka) i tydzień treningów', async ({ page }) => {
+  test('gotowe treningi: pakiet „Otwarcie gry 9v9” dodaje model gry (Taktyka) i treningi', async ({ page }) => {
     await page.getByRole('button', { name: 'Gotowe treningi' }).click();
     const dialog = page.getByRole('dialog', { name: 'Gotowe treningi' });
     await expect(dialog.getByRole('button', { name: /^Dodaj Otwarcie gry/ })).toHaveCount(3);

@@ -308,7 +308,7 @@ function sessions(cfg, monday) {
   const m = cfg.minutes;
   const plan = (n, day, title, goal, warmup, ids, summary) => ({
     id: `${PACK_PREFIX}-${cfg.label}-s${n}`, title: `Otwarcie gry ${cfg.label} — ${title}`, date: addDays(monday, day), group: cfg.group, goal,
-    notes: `Tydzień „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Model gry do tego tygodnia: zakładka Taktyka → Atak – Otwarcie (3 schematy: szerocy obrońcy i bramkarz jako czwarty, rotacja w środku, plan B). Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
+    notes: `Zestaw „Otwarcie gry” (${cfg.label}, ${cfg.system}), trening ${n} z 3. Model gry do tych treningów: zakładka Taktyka → Atak – Otwarcie (3 schematy: szerocy obrońcy i bramkarz jako czwarty, rotacja w środku, plan B). Gotowy pakiet PlanGry: zmieniaj czasy, pola i liczbę zawodników pod swoją grupę.`,
     phases: [PHASE], createdAt: VERSION, updatedAt: VERSION,
     blocks: [
       { id: `${PACK_PREFIX}-${cfg.label}-s${n}-b1`, drillId: null, title: 'Rozgrzewka', minutes: String(m[0]), note: warmup, part: 'wstepna' },
@@ -345,6 +345,6 @@ export const PACKS = Object.values(FORMATS).map(cfg => ({
   title: `Otwarcie gry ${cfg.label}`,
   group: cfg.group,
   system: cfg.system,
-  description: `Model gry oparty na dominacji piłką w ${cfg.system}: 3 schematy otwarcia (szerocy obrońcy i bramkarz jako czwarty, rotacja przeciw kryciu indywidualnemu, plan B z długim podaniem) i tydzień treningów pod nie. Inspiracja: gra od bramkarza Como Cesca Fàbregasa.`,
+  description: `Model gry oparty na dominacji piłką w ${cfg.system}: 3 schematy otwarcia (szerocy obrońcy i bramkarz jako czwarty, rotacja przeciw kryciu indywidualnemu, plan B z długim podaniem) oraz treningi pod nie.`,
   contents: '3 schematy · 3 konspekty · 9 ćwiczeń',
 }));

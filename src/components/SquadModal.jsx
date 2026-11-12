@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
-import { POSITIONS, sortSquad } from '../utils/squad.js';
+import React, { useState, useRef } from 'react';
+import { Plus, Trash2, X, ClipboardPaste } from 'lucide-react';
+import { POSITIONS, sortSquad, parseSquadText, mergeSquad } from '../utils/squad.js';
 
 const inputCls = 'w-full px-2 py-1.5 bg-white/10 border border-white/15 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400';
 
@@ -17,6 +17,23 @@ export default function SquadModal({ squad, onChange, onClose }) {
   };
   const remove = (id) => update(rows.filter(r => r.id !== id));
 
+  // Pasting a list from Excel or a text editor: the text goes to a box with a preview first.
+  const [pasteText, setPasteText] = useState(null);
+  const dialogRef = useRef(null);
+  // closing the box keeps the keyboard in the window, so Escape still closes it
+  const closePaste = () => { setPasteText(null); dialogRef.current?.focus(); };
+  const parsed = pasteText ? parseSquadText(pasteText) : [];
+  const applyPaste = (mode) => { update(sortSquad(mergeSquad(rows, parsed, mode))); closePaste(); };
+  const posLabel = (id) => POSITIONS.find(p => p.id === id)?.label || id;
+  // Ctrl+V anywhere in the window (outside the fields) opens the box with the pasted list
+  const onPaste = (e) => {
+    if (pasteText !== null || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const text = e.clipboardData?.getData('text') || '';
+    if (!text.trim()) return;
+    e.preventDefault();
+    setPasteText(text);
+  };
+
   const numberCounts = rows.reduce((acc, r) => {
     const k = String(r.number).trim();
     if (k) acc[k] = (acc[k] || 0) + 1;
@@ -26,9 +43,9 @@ export default function SquadModal({ squad, onChange, onClose }) {
   return (
     <div className="fixed inset-0 z-[150] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label="Kadra zespołu"
-        className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-xl max-h-[88vh] flex flex-col text-white"
-        onClick={e => e.stopPropagation()}
-        onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+        className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-xl max-h-[88vh] flex flex-col text-white outline-none"
+        onClick={e => e.stopPropagation()} onPaste={onPaste} tabIndex={-1} ref={dialogRef}
+        onKeyDown={e => { if (e.key === 'Escape') { if (pasteText !== null) closePaste(); else onClose(); } }}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
           <div>
             <h2 className="text-lg font-semibold">Kadra zespołu <span className="text-sm font-normal text-slate-400">({rows.length})</span></h2>
@@ -38,10 +55,43 @@ export default function SquadModal({ squad, onChange, onClose }) {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3">
+          {pasteText !== null && (
+            <section aria-label="Wklej listę zawodników" className="mb-4 rounded-xl border border-blue-500/30 bg-blue-500/[0.06] p-3 space-y-2">
+              <p className="text-sm font-semibold">Wklej listę zawodników</p>
+              <p className="text-xs text-slate-400">
+                Skopiuj kolumny z Excela albo listę z notatnika (Ctrl+C) i wklej tutaj (Ctrl+V). Jeden zawodnik w wierszu:
+                numer, imię i nazwisko, pozycja (np. „7 Jan Kowalski POM”). Numer i pozycja nie są wymagane.
+              </p>
+              <textarea autoFocus value={pasteText} onChange={e => setPasteText(e.target.value)} rows={5} aria-label="Lista zawodników"
+                placeholder={'1  Jan Kowalski  Bramkarz\n4  Piotr Nowak  Obrońca\n10  Adam Zieliński  POM'}
+                className={`${inputCls} font-mono text-xs`} />
+              {parsed.length > 0 ? (
+                <>
+                  <p className="text-xs text-emerald-300">Rozpoznano zawodników: {parsed.length}</p>
+                  <ul className="max-h-32 overflow-y-auto text-xs text-slate-300 space-y-0.5">
+                    {parsed.map((p, i) => (
+                      <li key={i} className="grid grid-cols-[2.5rem_1fr_6rem] gap-2">
+                        <span className="text-slate-400">{p.number || '—'}</span><span className="truncate">{p.name || '—'}</span><span className="text-slate-400">{posLabel(p.position)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : pasteText.trim() && <p className="text-xs text-amber-300">Nie rozpoznano zawodników. Każdy zawodnik w osobnym wierszu.</p>}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button onClick={() => applyPaste('add')} disabled={!parsed.length}
+                  className="px-3 py-1.5 rounded-md text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-40">Dodaj do kadry</button>
+                {rows.length > 0 && (
+                  <button onClick={() => applyPaste('replace')} disabled={!parsed.length}
+                    className="px-3 py-1.5 rounded-md text-sm bg-white/10 hover:bg-white/15 disabled:opacity-40">Zastąp kadrę</button>
+                )}
+                <button onClick={closePaste} className="px-3 py-1.5 rounded-md text-sm text-slate-300 hover:bg-white/10">Anuluj</button>
+              </div>
+            </section>
+          )}
           {rows.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-8">
               Kadra jest pusta.<br />
-              <span className="text-slate-400">Dodaj zawodników, aby wybierać ich na boisku i pokazywać nazwiska zamiast numerów.</span>
+              <span className="text-slate-400">Dodaj zawodników albo wklej listę z Excela lub notatnika (Ctrl+V), aby wybierać ich na boisku i pokazywać nazwiska zamiast numerów.</span>
             </p>
           ) : (
             // phone: number, position and delete share a row and the name gets the full width below
@@ -77,6 +127,9 @@ export default function SquadModal({ squad, onChange, onClose }) {
         <div className="px-5 py-3 border-t border-white/10 flex items-center gap-2">
           <button onClick={addRow} className="px-3 py-1.5 rounded-md text-sm bg-white/10 hover:bg-white/15 inline-flex items-center gap-1.5">
             <Plus size={14} /> Dodaj zawodnika
+          </button>
+          <button onClick={() => setPasteText(pasteText ?? '')} className="px-3 py-1.5 rounded-md text-sm bg-white/10 hover:bg-white/15 inline-flex items-center gap-1.5">
+            <ClipboardPaste size={14} /> Wklej listę
           </button>
           <div className="flex-1" />
           <button onClick={onClose} className="px-4 py-1.5 rounded-md text-sm bg-blue-600 hover:bg-blue-500">Gotowe</button>

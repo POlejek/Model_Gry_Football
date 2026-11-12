@@ -133,26 +133,38 @@ describe('Zgoda na statystyki', () => {
 });
 
 describe('Instrukcja', () => {
-  it('otwiera się sama przy pierwszej wizycie nowego użytkownika, potem już nie', async () => {
+  it('nowy użytkownik widzi raz małą podpowiedź zamiast całej instrukcji; z podpowiedzi otwiera instrukcję', async () => {
     const user = userEvent.setup();
     localStorage.removeItem('plangryGuideSeen');
     const { unmount } = render(<AppWrapper />);
+    expect(screen.queryByRole('dialog', { name: 'Instrukcja' })).not.toBeInTheDocument();
+    const hint = screen.getByRole('complementary', { name: 'Podpowiedź: instrukcja' });
+    await user.click(within(hint).getByRole('button', { name: 'Otwórz instrukcję' }));
     const guide = screen.getByRole('dialog', { name: 'Instrukcja' });
     expect(within(guide).getByRole('heading', { name: 'Linie wyrównania' })).toBeInTheDocument();
-    expect(within(guide).getAllByRole('navigation', { name: 'Spis treści' }).length).toBeGreaterThan(0);
-    await user.click(within(guide).getByRole('button', { name: 'Zamknij instrukcję' }));
-    expect(screen.queryByRole('dialog', { name: 'Instrukcja' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Podpowiedź: instrukcja' })).not.toBeInTheDocument();
     unmount();
     render(<AppWrapper />);
-    expect(screen.queryByRole('dialog', { name: 'Instrukcja' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Podpowiedź: instrukcja' })).not.toBeInTheDocument();
   });
 
-  it('nie otwiera się sama, gdy trener ma już zapisane dane, ale jest pod przyciskiem „Instrukcja”', async () => {
+  it('„Nie teraz” chowa podpowiedź na stałe', async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem('plangryGuideSeen');
+    const { unmount } = render(<AppWrapper />);
+    await user.click(screen.getByRole('button', { name: 'Nie teraz' }));
+    expect(screen.queryByRole('complementary', { name: 'Podpowiedź: instrukcja' })).not.toBeInTheDocument();
+    unmount();
+    render(<AppWrapper />);
+    expect(screen.queryByRole('complementary', { name: 'Podpowiedź: instrukcja' })).not.toBeInTheDocument();
+  });
+
+  it('trener z zapisanymi danymi nie dostaje podpowiedzi, a instrukcja jest pod przyciskiem', async () => {
     const user = userEvent.setup();
     localStorage.removeItem('plangryGuideSeen');
     localStorage.setItem('trainingSessions', JSON.stringify([{ id: 's', title: 'Mój', blocks: [] }]));
     render(<AppWrapper />);
-    expect(screen.queryByRole('dialog', { name: 'Instrukcja' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Podpowiedź: instrukcja' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Instrukcja' }));
     expect(screen.getByRole('dialog', { name: 'Instrukcja' })).toBeInTheDocument();
   });

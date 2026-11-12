@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 
 // In-app user guide ("Instrukcja"): one page with a table of contents, opened from the top bar,
-// from the editors' hints (a section id) and on a new user's first visit.
+// from the editors' hints (a section id) and from the hint card a new user sees once.
 export const GUIDE_SEEN_KEY = 'plangryGuideSeen';
 export const OPEN_GUIDE_EVENT = 'plangry:guide';
 export const openGuide = (section) => window.dispatchEvent(new CustomEvent(OPEN_GUIDE_EVENT, { detail: { section } }));
@@ -52,14 +52,14 @@ export const GUIDE_SECTIONS = [
         <Points items={[
           <>Po lewej są fazy gry (Atak, A/O, Obrona, O/A, SFG) i ich podfazy. <B>Dodaj fazę</B> albo „+” przy fazie dodaje własne.</>,
           <>Wybierz podfazę i kliknij <B>Nowy schemat</B>. Nazwę, fazę i komentarze (zadania dla zawodników) uzupełnisz po prawej.</>,
-          <>Format gry (5v5, 7v7, 9v9, 11v11) zmienisz na górnym pasku; dla 11v11 jest też <B>Formacja</B> drużyny i przeciwnika.</>,
+          <>Format gry (5v5, 7v7, 9v9, 11v11) zmienisz na górnym pasku; dla 11v11 w menu <B>Formacja</B> ustawisz formację drużyny i przeciwnika.</>,
         ]} />
         <Sub>Ustawianie i rysowanie</Sub>
         <Points items={[
           <>Przeciągaj zawodników i piłkę. Uchwyt nad zaznaczonym zawodnikiem obraca go, a <B>dwuklik</B> zmienia numer i kolor.</>,
           <>Narzędzia na pasku: przesuwanie, <B>linie</B> (strzałki podań, biegu, prowadzenia), <B>strefy</B> i <B>tekst</B>.</>,
           <><B>Nr / Nazwiska</B> – na boisku numery albo nazwiska z Kadry.</>,
-          <>Kolory drużyn zmienisz kwadracikami na pasku, a <B>ikona oka</B> obok koloru przeciwnika ukrywa jego zawodników (na boisku i w eksportach).</>,
+          <>Kolory drużyn zmienisz kwadracikami na pasku. W menu <B>Formacja</B> (na telefonie w panelu Drużyny) jest też <B>Ukryj przeciwnika</B> – chowa jego zawodników na boisku i w eksportach.</>,
         ]} />
         <Sub>Animacja</Sub>
         <Steps items={[

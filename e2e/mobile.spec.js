@@ -141,22 +141,24 @@ test.describe('Telefon z Androidem – druk', () => {
 });
 
 test.describe('Instrukcja', () => {
-  test('pierwsza wizyta pokazuje instrukcję, spis treści przenosi do rozdziału, po odświeżeniu już się nie otwiera', async ({ page }) => {
+  test('nowy użytkownik widzi małą podpowiedź; z niej otwiera instrukcję, spis treści przenosi do rozdziału, po odświeżeniu podpowiedzi już nie ma', async ({ page }) => {
     // clear storage at the start of the next load (the open page may still save while unloading)
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('guide-test')) { localStorage.clear(); sessionStorage.setItem('guide-test', '1'); }
     });
     await page.reload();
+    const hint = page.getByRole('complementary', { name: 'Podpowiedź: instrukcja' });
+    await expect(hint).toBeVisible();
     const guide = page.getByRole('dialog', { name: 'Instrukcja' });
-    await expect(guide).toBeVisible();
+    await expect(guide).toBeHidden(); // no full page on start
+    await hint.getByRole('button', { name: 'Otwórz instrukcję' }).click();
     await guide.getByRole('navigation', { name: 'Spis treści' }).filter({ visible: true }).getByRole('button', { name: 'Linie wyrównania' }).click();
     await expect(guide.getByRole('heading', { name: 'Linie wyrównania' })).toBeInViewport();
     await guide.getByRole('button', { name: 'Zamknij instrukcję' }).click();
     await expect(guide).toBeHidden();
 
-    // po odświeżeniu już się sama nie otwiera
     await page.reload();
     await expect(page.getByRole('tab', { name: /Taktyka/ })).toBeVisible();
-    await expect(guide).toBeHidden();
+    await expect(hint).toBeHidden();
   });
 });

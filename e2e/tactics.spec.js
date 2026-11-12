@@ -21,8 +21,10 @@ test.describe('Taktyka', () => {
 
   test('przeciwnika można ukryć: nie da się go chwycić, a ustawienie przetrwa odświeżenie', async ({ page }) => {
     await newScheme(page);
-    const hide = page.getByRole('button', { name: 'Ukryj przeciwnika' }).first();
+    await page.getByRole('button', { name: 'Formacja' }).filter({ visible: true }).click(); // telefon: przełącznik w panelu Drużyny
+    const hide = page.getByRole('button', { name: 'Ukryj przeciwnika' }).filter({ visible: true });
     await hide.click();
+    await page.keyboard.press('Escape');
     await expect(hide).toHaveAttribute('aria-pressed', 'true');
     // napastnik przeciwnika (350, 510) jest ukryty: przeciągnięcie go nie rusza
     await dragOnCanvas(page, [350, 510], [500, 200]);
@@ -30,8 +32,10 @@ test.describe('Taktyka', () => {
     expect(scheme.frames[0].opponent.find(p => p.id === 'ost')).toMatchObject({ x: 350, y: 510 });
 
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Ukryj przeciwnika' }).first()).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Ukryj przeciwnika' }).first().click();
+    await page.getByRole('button', { name: 'Formacja' }).filter({ visible: true }).click();
+    await expect(page.getByRole('button', { name: 'Ukryj przeciwnika' }).filter({ visible: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Ukryj przeciwnika' }).filter({ visible: true }).click();
+    await page.keyboard.press('Escape');
     await page.getByText('Schemat 1').first().click();
     await dragOnCanvas(page, [350, 510], [500, 200]);
     scheme = await firstScheme(page);

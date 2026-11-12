@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, Minus, Trash2, Play, Pause, SkipBack, SkipForward, Save, ChevronRight, ChevronDown, Download, Upload, Bold, Italic,
   MousePointer2, MoveUpRight, Square, Copy, ClipboardPaste, Undo2, Redo2, Check, AlertTriangle, MoreHorizontal, Keyboard,
-  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff,
+  X, Layers, SlidersHorizontal, Pentagon, Type as TypeIcon, Image as ImageIcon, ArrowDownToLine, ArrowUpToLine, EyeOff,
 } from 'lucide-react';
 import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -2889,12 +2889,15 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     if (showOpponent && selectedPlayer?.type === 'opponent') setSelectedPlayer(null);
     setShowOpponent(!showOpponent);
   };
-  const opponentToggle = (size, withLabel = false) => (
+  // a row in the Formacja menu (desktop) and in the phone panel
+  const opponentToggle = () => (
     <button onClick={toggleOpponent} aria-pressed={!showOpponent} aria-label="Ukryj przeciwnika"
-      title={showOpponent ? 'Ukryj zawodników przeciwnika na boisku i w eksportach' : 'Pokaż zawodników przeciwnika'}
-      className={`${size} inline-flex items-center rounded-md text-xs transition-colors ${showOpponent ? 'text-slate-300 hover:bg-white/10' : 'bg-blue-600 text-white'}`}>
-      {showOpponent ? <Eye size={15} /> : <EyeOff size={15} />}
-      {withLabel && (showOpponent ? 'Widoczny' : 'Ukryty')}
+      title="Ukrywa zawodników przeciwnika na boisku, w animacji i w eksportach"
+      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-slate-200 hover:bg-white/10 transition-colors">
+      <EyeOff size={15} className="text-slate-400" /> <span className="flex-1 text-left">Ukryj przeciwnika</span>
+      <span className={`w-8 h-[18px] rounded-full p-0.5 transition-colors ${showOpponent ? 'bg-white/15' : 'bg-blue-600'}`}>
+        <span className={`block w-3.5 h-3.5 rounded-full bg-white transition-transform ${showOpponent ? '' : 'translate-x-3.5'}`} />
+      </span>
     </button>
   );
 
@@ -3280,17 +3283,19 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           {colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'right')}
           <span className="text-xs text-slate-400 hidden min-[1500px]:inline ml-1">Przeciwnik</span>
           {colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'right')}
-          {opponentToggle('h-8 w-8 justify-center')}
         </div>
 
-        {gameFormat === '11v11' && (
-          <div className="relative hidden md:block">
-            <button className={TOOLBAR_BTN} title="Ustaw formację drużyny lub przeciwnika"
+        <div className="relative hidden md:block">
+            <button className={TOOLBAR_BTN} title={gameFormat === '11v11' ? 'Formacja drużyny i przeciwnika, ukrycie przeciwnika' : 'Ukrycie przeciwnika'}
+              aria-label="Formacja" aria-expanded={openFormationMenu === 'formation'}
               onClick={(e) => { e.stopPropagation(); setOpenFormationMenu(openFormationMenu === 'formation' ? null : 'formation'); }}>
+              {!showOpponent && <EyeOff size={13} className="text-blue-300" aria-hidden="true" />}
               Formacja <ChevronDown size={13} />
             </button>
             {openFormationMenu === 'formation' && (
-              <div className="absolute top-full mt-1 right-0 w-64 bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50 grid grid-cols-2 gap-2">
+              <div className="absolute top-full mt-1 right-0 w-64 bg-slate-900 border border-white/15 rounded-lg shadow-2xl p-2 z-50" onClick={(e) => e.stopPropagation()}>
+              {gameFormat === '11v11' && (
+              <div className="grid grid-cols-2 gap-2 pb-2 mb-1 border-b border-white/10">
                 {[['team', 'Drużyna'], ['opponent', 'Przeciwnik']].map(([side, label]) => (
                   <div key={side}>
                     <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
@@ -3303,9 +3308,11 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   </div>
                 ))}
               </div>
+              )}
+              {opponentToggle()}
+              </div>
             )}
-          </div>
-        )}
+        </div>
 
         <div className="hidden md:block w-px h-6 bg-white/10 mx-1 flex-shrink-0" />
         <button className={TOOLBAR_BTN} onClick={undoScheme} disabled={!canUndoScheme} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={15} /></button>
@@ -4019,7 +4026,6 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           <div className="flex items-center gap-4 text-sm text-slate-300">
             <span className="flex items-center gap-2">{colorSwatch('team', teamColor, handleTeamColorChange, teamColorInputRef, 'Kolor drużyny', 'left')} Drużyna</span>
             <span className="flex items-center gap-2">{colorSwatch('opponent', opponentColor, handleOpponentColorChange, opponentColorInputRef, 'Kolor przeciwnika', 'left')} Przeciwnik</span>
-            {opponentToggle('h-9 px-2.5 gap-1.5', true)}
           </div>
           {gameFormat === '11v11' && (
             <div className="grid grid-cols-2 gap-2">
@@ -4038,6 +4044,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
               ))}
             </div>
           )}
+          <div className="-mx-2">{opponentToggle()}</div>
         </div>
         <div className="p-6 border-b border-white/10">
           <h2 className="text-xl font-bold mb-4">Szczegóły schematu</h2>

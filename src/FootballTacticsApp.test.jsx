@@ -64,11 +64,17 @@ describe('Taktyka — formaty gry', () => {
     expect(stored().gameFormat).toBe(format);
   });
 
-  it('formacje są dostępne tylko dla 11v11', async () => {
+  it('formacje są dostępne tylko dla 11v11, a ukrycie przeciwnika w menu Formacja w każdym formacie', async () => {
     const { user } = setup();
-    expect(screen.getByRole('button', { name: /Formacja/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Formacja' }));
+    expect(screen.getAllByRole('button', { name: '1-4-4-2' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Ukryj przeciwnika' }).length).toBeGreaterThan(0);
     await pickFormat(user, '5v5');
-    expect(screen.queryByRole('button', { name: /Formacja/ })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: '1-4-4-2' })).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Formacja' }));
+    const toggle = screen.getAllByRole('button', { name: 'Ukryj przeciwnika' })[0];
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('wczytuje zapis sprzed dodania 5v5 i pozwala od razu użyć nowego formatu', async () => {

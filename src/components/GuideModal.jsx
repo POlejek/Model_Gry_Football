@@ -113,6 +113,7 @@ export const GUIDE_SECTIONS = [
         <Points items={[
           <>Z palety po lewej <B>przeciągnij</B> zawodników i sprzęt (pachołki, bramki, tyczki, bandy…) na boisko albo kliknij element, aby go dodać.</>,
           <>W zakładce <B>Boisko i kolory</B> wybierzesz pole (całe, połowa, własny wymiar w metrach, w poziomie lub pionie), kolory drużyn i bandy z logo Szkółki. Po zmianie boiska ćwiczenie dopasowuje się proporcjonalnie.</>,
+          <>Tam też <B>Rozmiar zawodników</B> – jeden suwak zmienia wszystkich zawodników we wszystkich klatkach, a nowi dostają ten sam rozmiar. Rozmiar jednego elementu zmienisz w jego <B>Właściwościach</B>; przy zawodniku jest też „Ten rozmiar dla wszystkich zawodników”.</>,
           <>Przeciągnij po pustym polu, aby zaznaczyć kilka elementów; <K>Shift</K>+klik dodaje do zaznaczenia. <B>Dwuklik</B> – szybka zmiana koloru.</>,
           <><B>+ Klatka</B> kopiuje ustawienie – przesuń zawodników i odtwórz animację.</>,
         ]} />

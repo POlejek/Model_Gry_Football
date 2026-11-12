@@ -7,7 +7,8 @@ export const test = base.extend({
     page.on('pageerror', (err) => errors.push(err.message));
     page.on('dialog', (d) => d.accept());
     await page.goto('./');
-    await page.evaluate(() => localStorage.clear());
+    // empty storage, past the guide that opens on a new user's first visit (tested on its own)
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('plangryGuideSeen', '1'); });
     await page.reload();
     await use(page);
     expect(errors, 'błędy JavaScript na stronie').toEqual([]);

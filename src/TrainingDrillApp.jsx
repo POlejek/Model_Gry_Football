@@ -11,6 +11,7 @@ import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import { isClearing } from './utils/backup.js';
 import { track } from './utils/analytics.js';
+import { openGuide } from './components/GuideModal.jsx';
 import { boardSize, drawBoards, logoImage, hasBrand, drawBoardItem, setBoardBrand, BOARD_ITEM_H, BOARD_CONTENTS, DEFAULT_BOARD_STYLE } from './utils/boards.js';
 import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
@@ -1950,6 +1951,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   <p>Dwuklik na elemencie → szybka zmiana koloru.</p>
                   <p>Linie wyrównania: przesuwany element przyciąga się do pionu lub poziomu innych elementów i środka boiska (czerwona linia). Alt przy przeciąganiu wyłącza przyciąganie.</p>
                   <p>Animacja: „+ Klatka” kopiuje bieżące ustawienie — przesuń zawodników i odtwórz.</p>
+                  <button onClick={() => openGuide('training')} className="text-blue-300 hover:text-blue-200 underline">Pełna instrukcja</button>
                 </div>
               </details>
             </div>

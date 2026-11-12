@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// the guide opens by itself only for a new user; tests start past it (its own tests clear the flag)
+beforeEach(() => { localStorage.setItem('plangryGuideSeen', '1'); });
 
 afterEach(() => {
   cleanup();

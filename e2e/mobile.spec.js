@@ -66,9 +66,9 @@ test.describe('Telefon – układ', () => {
     });
   }
 
-  test('Gotowe treningi, Dane, Kadra i Szkółka są w menu „Więcej”', async ({ page }) => {
+  test('Gotowe treningi, Dane, Kadra, Szkółka i Instrukcja są w menu „Więcej”', async ({ page }) => {
     await page.getByRole('button', { name: 'Więcej' }).click();
-    await expect(page.getByRole('menuitem')).toHaveText([/Gotowe treningi/, /Dane/, /Kadra/, /Szkółka/]);
+    await expect(page.getByRole('menuitem')).toHaveText([/Gotowe treningi/, /Dane/, /Kadra/, /Szkółka/, /Instrukcja/]);
     await page.getByRole('menuitem', { name: /Kadra/ }).click();
     await expect(page.getByRole('dialog', { name: 'Kadra zespołu' })).toBeVisible();
   });
@@ -137,5 +137,26 @@ test.describe('Telefon z Androidem – druk', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await expect(ready).toHaveCount(0);
     expect(await page.evaluate(() => document.body.classList.contains('printing-session'))).toBe(false);
+  });
+});
+
+test.describe('Instrukcja', () => {
+  test('pierwsza wizyta pokazuje instrukcję, spis treści przenosi do rozdziału, po odświeżeniu już się nie otwiera', async ({ page }) => {
+    // clear storage at the start of the next load (the open page may still save while unloading)
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('guide-test')) { localStorage.clear(); sessionStorage.setItem('guide-test', '1'); }
+    });
+    await page.reload();
+    const guide = page.getByRole('dialog', { name: 'Instrukcja' });
+    await expect(guide).toBeVisible();
+    await guide.getByRole('navigation', { name: 'Spis treści' }).filter({ visible: true }).getByRole('button', { name: 'Linie wyrównania' }).click();
+    await expect(guide.getByRole('heading', { name: 'Linie wyrównania' })).toBeInViewport();
+    await guide.getByRole('button', { name: 'Zamknij instrukcję' }).click();
+    await expect(guide).toBeHidden();
+
+    // po odświeżeniu już się sama nie otwiera
+    await page.reload();
+    await expect(page.getByRole('tab', { name: /Taktyka/ })).toBeVisible();
+    await expect(guide).toBeHidden();
   });
 });

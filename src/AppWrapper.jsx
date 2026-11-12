@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal, Sparkles } from 'lucide-react';
+import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal, Sparkles, BookOpen } from 'lucide-react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
 import SquadModal from './components/SquadModal.jsx';
 import ClubModal from './components/ClubModal.jsx';
 import DataModal, { IMPORT_RESULT_KEY } from './components/DataModal.jsx';
-import { needsBackup, backupAgeDays } from './utils/backup.js';
+import { needsBackup, backupAgeDays, KEYS } from './utils/backup.js';
 import { loadSquad, saveSquad } from './utils/squad.js';
 import { loadClub, saveClub } from './utils/club.js';
 import ConsentBanner from './components/ConsentBanner.jsx';
 import PacksModal from './components/PacksModal.jsx';
+import GuideModal, { GUIDE_SEEN_KEY, OPEN_GUIDE_EVENT } from './components/GuideModal.jsx';
 import { needsConsent, setConsent, initAnalytics, trackScreen, track } from './utils/analytics.js';
 
 const TABS = [
@@ -172,6 +173,19 @@ export default function AppWrapper() {
   }, []);
   const backupAge = backupDue ? backupAgeDays() : null;
   const [showPacks, setShowPacks] = useState(false);
+  // Instrukcja: opens by itself on a new user's first visit (nothing saved yet), then from the top bar
+  // or a hint in the editors (with the section to show).
+  const [guide, setGuide] = useState(() => {
+    try {
+      const fresh = !localStorage.getItem(GUIDE_SEEN_KEY) && !Object.values(KEYS).some(k => localStorage.getItem(k));
+      return fresh ? { section: null } : null;
+    } catch { return null; }
+  });
+  useEffect(() => {
+    const onOpen = (e) => setGuide({ section: e.detail?.section || null });
+    window.addEventListener(OPEN_GUIDE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_GUIDE_EVENT, onOpen);
+  }, []);
   const utilities = [
     { label: 'Gotowe treningi', icon: <Sparkles size={16} aria-hidden="true" />, accent: true, title: 'Gotowe modele gry i treningi do wczytania',
       open: () => { track('open_ready_trainings'); setShowPacks(true); } },
@@ -182,6 +196,8 @@ export default function AppWrapper() {
       title: 'Kadra zespołu: numery, nazwiska i pozycje', note: squad.length ? `(${squad.length})` : '' },
     { label: 'Szkółka', open: () => setShowClub(true), title: 'Szkółka: nazwa, logo, trener i asystent (nagłówek konspektu)',
       icon: club.logo ? <img src={club.logo} alt="" className="w-5 h-5 object-contain rounded-sm bg-white" /> : <School size={16} aria-hidden="true" /> },
+    { label: 'Instrukcja', icon: <BookOpen size={16} aria-hidden="true" />, title: 'Instrukcja: opis wszystkich opcji PlanGry',
+      open: () => { track('open_guide'); setGuide({ section: null }); } },
   ];
   const utilBtn = 'px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5';
 
@@ -278,6 +294,7 @@ export default function AppWrapper() {
       {showData && <DataModal droppedFiles={droppedFiles} onClose={() => { setShowData(false); setDroppedFiles(null); setBackupDue(needsBackup()); }} />}
       {askConsent && <ConsentBanner onChoose={chooseConsent} />}
       {showPacks && <PacksModal onClose={() => setShowPacks(false)} />}
+      {guide && <GuideModal section={guide.section} onClose={() => setGuide(null)} />}
       {showClub && <ClubModal club={club} onChange={updateClub} onClose={() => setShowClub(false)} />}
       {draggingFiles && !showClub && (
         <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center bg-blue-950/60 border-4 border-dashed border-blue-400/70">

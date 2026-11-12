@@ -138,6 +138,29 @@ test.describe('Trening', () => {
     expect(Math.abs(b.x - a.x)).toBeGreaterThan(1);
   });
 
+  test('rozmiar wszystkich zawodników: suwak w „Boisko i kolory”, nowi dostają ten sam rozmiar, „ten rozmiar dla wszystkich”', async ({ page }) => {
+    await paletteTile(page, 'Zawodnik A').click();
+    await paletteTile(page, 'Zawodnik B').click();
+    await paletteTile(page, 'Stożek').click();
+    await page.keyboard.press('Escape'); // nothing selected: the panel shows the pitch settings
+    const slider = page.getByLabel('Rozmiar wszystkich zawodników').filter({ visible: true });
+    await slider.fill('0.7');
+    let items = (await trainingDraft(page)).frames[0].items;
+    expect(items.filter(i => i.type === 'player').map(i => i.scale)).toEqual([0.7, 0.7]);
+    expect(items.find(i => i.type === 'cone').scale).toBe(1); // equipment keeps its size
+
+    await paletteTile(page, 'Zawodnik A').click(); // a new player matches the others
+    items = (await trainingDraft(page)).frames[0].items;
+    const added = items.filter(i => i.type === 'player').at(-1);
+    expect(added.scale).toBe(0.7);
+
+    // the selected (new) player made bigger, then its size given to everyone
+    await page.getByLabel('Rozmiar elementu').filter({ visible: true }).fill('1.2');
+    await page.getByRole('button', { name: 'Ten rozmiar dla wszystkich zawodników' }).filter({ visible: true }).click();
+    items = (await trainingDraft(page)).frames[0].items;
+    expect(items.filter(i => i.type === 'player').map(i => i.scale)).toEqual([1.2, 1.2, 1.2]);
+  });
+
   test('banda jak pachołek: dodanie z palety, własny tekst, długość i przesunięcie', async ({ page }) => {
     await paletteTile(page, 'Banda').click();
     let [board] = (await trainingDraft(page)).frames[0].items;

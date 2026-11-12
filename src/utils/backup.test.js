@@ -152,6 +152,7 @@ describe('przypomnienie o kopii i zajętość pamięci', () => {
   });
 
   it('liczy zajętość pamięci w bajtach', () => {
+    localStorage.clear();
     localStorage.setItem('k', 'abcd');
     expect(storageUsage()).toBe(('k'.length + 4) * 2);
   });

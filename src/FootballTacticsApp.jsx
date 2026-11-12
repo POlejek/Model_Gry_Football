@@ -8,6 +8,7 @@ import PptxGenJs from 'pptxgenjs';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { loadStoredData, saveStoredData } from './utils/storage.js';
 import { track } from './utils/analytics.js';
+import { openGuide } from './components/GuideModal.jsx';
 import { drawField, drawPlayer, drawPlayerLabel, drawPlayerPath, drawBall, drawZone, drawLine, drawTextNote, interpolatePlayers, findMatchingPlayer, TEXT_NOTE_SIZE, renderSchemeFrame, SCHEME_W, SCHEME_H } from './utils/draw.js';
 import { htmlToLines, htmlToPptRuns, commentFontSize } from './utils/richText.js';
 import {
@@ -4254,6 +4255,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   ].map(([k, d]) => (
                     <p key={k}><kbd className="bg-white/10 px-1 rounded text-slate-300">{k}</kbd> {d}</p>
                   ))}
+                  <button onClick={() => openGuide('tactics')} className="pt-1 text-blue-300 hover:text-blue-200 underline">Pełna instrukcja</button>
                 </div>
               </div>
             </div>

@@ -11,6 +11,7 @@ import { shortName, sortSquad } from './utils/squad.js';
 import { phaseOptions, readModelPhases, phaseLabel } from './utils/modelPhases.js';
 import { isClearing } from './utils/backup.js';
 import { track } from './utils/analytics.js';
+import { openGuide } from './components/GuideModal.jsx';
 import { boardSize, drawBoards, logoImage, hasBrand, drawBoardItem, setBoardBrand, BOARD_ITEM_H, BOARD_CONTENTS, DEFAULT_BOARD_STYLE } from './utils/boards.js';
 import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
@@ -954,11 +955,19 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
     return eq.team === 'A' ? teamAColor : teamBColor;
   };
 
+  // One size for all players: the slider in "Boisko i kolory" sets every player in every frame, and a
+  // new player takes the size the players on the pitch already have.
+  const allPlayers = frames.flatMap(f => f.items).filter(i => i.type === 'player');
+  const playerScales = [...new Set(allPlayers.map(i => i.scale || 1))];
+  const playerScale = playerScales.length ? playerScales.sort((a, b) =>
+    allPlayers.filter(i => (i.scale || 1) === b).length - allPlayers.filter(i => (i.scale || 1) === a).length)[0] : 1;
+  const setAllPlayersScale = (value) => updateKind('all', 'items', list => list.map(i => (i.type === 'player' ? { ...i, scale: value } : i)));
+
   const addItem = (eq, pos = null) => {
     checkpoint();
     const id = newId();
     const item = {
-      id, type: eq.type, scale: 1, rotation: 0,
+      id, type: eq.type, scale: eq.type === 'player' ? playerScale : 1, rotation: 0,
       ...(pos ? { x: clamp(pos.x, 10, pitchSize.w - 10), y: clamp(pos.y, 10, pitchSize.h - 10) } : freeSpot()),
       color: eq.type === 'player' ? playerColorFor(eq) : eq.color,
     };
@@ -1827,7 +1836,11 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                 <p className={fieldLabel}>Rozmiar <span className="text-slate-400 tabular-nums">{Math.round((single.obj.scale || 1) * 100)}%</span></p>
                 <input type="range" min={0.4} max={2.5} step={0.05} value={single.obj.scale || 1}
                   onChange={e => patchObj('all', 'items', single.obj.id, { scale: parseFloat(e.target.value) })}
-                  className="w-full" />
+                  className="w-full" aria-label="Rozmiar elementu" />
+                {single.obj.type === 'player' && playerScales.length > 1 && (
+                  <button onClick={() => { checkpoint(); setAllPlayersScale(single.obj.scale || 1); }}
+                    className="mt-1 text-xs text-blue-300 hover:text-blue-200 underline">Ten rozmiar dla wszystkich zawodników</button>
+                )}
               </div>
 
               <div>
@@ -1911,6 +1924,18 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
               </div>
 
               <div>
+                <p className={fieldLabel}>Rozmiar zawodników <span className="text-slate-400 tabular-nums">
+                  {allPlayers.length ? `${Math.round(playerScale * 100)}%${playerScales.length > 1 ? ' (różne)' : ''}` : ''}</span></p>
+                <input type="range" min={0.4} max={2.5} step={0.05} value={playerScale} disabled={!allPlayers.length}
+                  onPointerDown={checkpoint} onKeyDown={checkpoint}
+                  onChange={e => setAllPlayersScale(parseFloat(e.target.value))}
+                  className="w-full disabled:opacity-40" aria-label="Rozmiar wszystkich zawodników" />
+                <p className="text-xs text-slate-400 mt-0.5">{allPlayers.length
+                  ? 'Zmienia wszystkich zawodników (z bramkarzami i jokerami) we wszystkich klatkach; nowi dostaną ten sam rozmiar.'
+                  : 'Dodaj zawodników, aby ustawić ich rozmiar.'}</p>
+              </div>
+
+              <div>
                 <p className={fieldLabel}>Kolory drużyn</p>
                 <div className="flex flex-col gap-1.5">
                   {[['A', teamAColor, setTeamAColor, 'Drużyna A'], ['B', teamBColor, setTeamBColor, 'Drużyna B'], ['C', jokerColor, null, 'Jokery']].map(([team, color, setColor, name]) => (
@@ -1950,6 +1975,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   <p>Dwuklik na elemencie → szybka zmiana koloru.</p>
                   <p>Linie wyrównania: przesuwany element przyciąga się do pionu lub poziomu innych elementów i środka boiska (czerwona linia). Alt przy przeciąganiu wyłącza przyciąganie.</p>
                   <p>Animacja: „+ Klatka” kopiuje bieżące ustawienie — przesuń zawodników i odtwórz.</p>
+                  <button onClick={() => openGuide('training')} className="text-blue-300 hover:text-blue-200 underline">Pełna instrukcja</button>
                 </div>
               </details>
             </div>

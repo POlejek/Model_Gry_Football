@@ -101,3 +101,62 @@ export function assignSquadToTeam(team, squad) {
   });
   return result;
 }
+
+// ── Pasting a squad list (Excel, Google Sheets, a text editor) ──
+// Each line is one player. Excel gives tab-separated cells; a text line may be "7 Jan Kowalski",
+// "7. Jan Kowalski – POM", "Jan Kowalski;7;Obrońca" or just a name. The number is the cell (or the
+// leading / trailing token) made of digits, the position a recognised word, the rest is the name.
+const plain = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+const POSITION_WORDS = [
+  ['BR', ['br', 'bramkarz', 'gk', 'goalkeeper', 'golkiper']],
+  ['OBR', ['obr', 'obronca', 'obroncy', 'def', 'defender', 'so', 'bo', 'cb', 'lb', 'rb', 'lo', 'po', 'sw', 'stoper']],
+  ['POM', ['pom', 'pomocnik', 'mid', 'midfielder', 'sp', 'cm', 'dm', 'am', 'cdm', 'cam', 'lp', 'pp', 'lm', 'rm', 'skrzydlowy', 'skrzydlo']],
+  ['NAP', ['nap', 'napastnik', 'fw', 'st', 'att', 'forward', 'cf', 'striker', 'lw', 'rw']],
+];
+export function parsePosition(text) {
+  const w = plain(String(text || '').trim()).replace(/[^a-z]/g, '');
+  if (!w) return null;
+  const hit = POSITION_WORDS.find(([, words]) => words.includes(w));
+  return hit ? hit[0] : null;
+}
+const HEADER_WORDS = ['nr', 'numer', 'imie', 'i', 'nazwisko', 'pozycja', 'zawodnik', 'zawodnicy', 'name', 'no', 'lp', 'and'];
+const isNumber = (s) => /^\d{1,3}$/.test(s);
+
+export function parseSquadText(text) {
+  return String(text || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).flatMap((line) => {
+    let cells = line.includes('\t') ? line.split('\t') : line.includes(';') ? line.split(';') : null;
+    if (!cells) {
+      // free text: number and position at the start or the end, separated by spaces, dots or dashes
+      const tokens = line.replace(/[.,)]/g, ' ').split(/\s+[-–—|]\s+|\s+/).filter(Boolean);
+      cells = tokens;
+    }
+    cells = cells.map(c => c.trim()).filter(Boolean);
+    if (!cells.length) return [];
+    let number = '', position = null;
+    const name = [];
+    cells.forEach((c) => {
+      const bare = c.replace(/^#/, '').replace(/[.)]$/, '');
+      if (!number && isNumber(bare)) number = String(parseInt(bare, 10));
+      else if (!position && parsePosition(c)) position = parsePosition(c);
+      else if (!/^[-–—|]+$/.test(c)) name.push(c);
+    });
+    const words = name.join(' ').split(/[\s/]+/).map(w => plain(w).replace(/[^a-z]/g, '')).filter(Boolean);
+    if (!number && !position && words.length && words.every(w => HEADER_WORDS.includes(w))) return []; // header row
+    if (!number && !name.length) return [];
+    return [{ number, name: name.join(' '), position: position || 'POM' }];
+  });
+}
+
+// Adds parsed rows to the squad (or replaces it). Players without a number get the next free one.
+export function mergeSquad(squad, parsed, mode = 'add') {
+  const base = mode === 'replace' ? [] : [...squad];
+  const used = new Set(base.map(m => String(m.number).trim()).filter(Boolean));
+  parsed.forEach(p => { if (p.number) used.add(p.number); });
+  let next = 1;
+  const free = () => { while (used.has(String(next))) next++; used.add(String(next)); return String(next); };
+  const stamp = Date.now();
+  return [...base, ...parsed.map((p, i) => ({
+    id: `p-${stamp}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+    number: p.number || free(), name: p.name, position: p.position,
+  }))];
+}

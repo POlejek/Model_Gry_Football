@@ -33,7 +33,7 @@ export default function PacksModal({ onClose }) {
     track('add_pack', { pack: `otwarcie-${pack.id}` });
     try {
       localStorage.setItem(TAB_KEY, 'tactics');
-      sessionStorage.setItem(IMPORT_RESULT_KEY, `Dodano „${pack.title}”: model gry (${pack.system}) — 3 schematy w Taktyce → Atak – Otwarcie, oraz tydzień treningów: 3 konspekty w bieżącym tygodniu i 9 ćwiczeń w bibliotece. Możesz to cofnąć w oknie „Dane”.`);
+      sessionStorage.setItem(IMPORT_RESULT_KEY, `Dodano „${pack.title}”: model gry (${pack.system}) — 3 schematy w Taktyce → Atak – Otwarcie, oraz treningi: 3 konspekty w bieżącym tygodniu i 9 ćwiczeń w bibliotece. Możesz to cofnąć w oknie „Dane”.`);
     } catch { /* ignore */ }
     window.location.reload();
   };
@@ -46,17 +46,12 @@ export default function PacksModal({ onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 py-3 border-b border-white/10">
           <div>
             <h2 className="text-lg font-semibold">Gotowe treningi</h2>
-            <p className="text-xs text-slate-400">Tydzień treningów do wczytania jednym kliknięciem. Wszystko możesz potem zmienić po swojemu.</p>
+            <p className="text-xs text-slate-400">Modele gry i zestawy treningów do wczytania jednym kliknięciem. Wszystko możesz potem zmienić po swojemu.</p>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-white" aria-label="Zamknij gotowe treningi"><X size={18} /></button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
-          <p className="text-sm text-slate-300">
-            <span className="font-semibold text-white">Otwarcie gry</span> — budowanie akcji od bramkarza. Model gry oparty na dominacji piłką:
-            trzy animowane schematy otwarcia (szerocy obrońcy i bramkarz jako czwarty, rotacja przeciw kryciu indywidualnemu,
-            plan B z długim podaniem). Pod niego tydzień treningów. Wybierz format swojej drużyny.
-          </p>
           <ul className="space-y-2">
             {PACKS.map(p => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -79,9 +74,8 @@ export default function PacksModal({ onClose }) {
           </ul>
           {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
           <p className="text-xs text-slate-400">
-            Schematy trafią do Taktyki (faza Atak – Otwarcie), konspekty do bieżącego tygodnia (poniedziałek, środa, piątek),
-            a ćwiczenia do biblioteki w Treningu.
-            Twoje dotychczasowe treningi zostają bez zmian. Kolejne tematy pojawią się tutaj.
+            Schematy trafiają do Taktyki, konspekty do bieżącego tygodnia w Konspekcie, a ćwiczenia do biblioteki w Treningu.
+            Twoje dotychczasowe treningi zostają bez zmian. Kolejne modele gry i zestawy treningów pojawią się tutaj.
           </p>
         </div>
       </div>

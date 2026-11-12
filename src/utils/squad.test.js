@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadSquad, saveSquad, shortName, findByNumber, sortSquad, assignSquadToTeam, SQUAD_KEY } from './squad.js';
+import { loadSquad, saveSquad, shortName, findByNumber, sortSquad, assignSquadToTeam, parseSquadText, mergeSquad, SQUAD_KEY } from './squad.js';
 
 describe('kadra — zapis i pomocnicze', () => {
   it('zapisuje i wczytuje kadrę; uszkodzone dane dają pustą listę', () => {
@@ -62,5 +62,37 @@ describe('assignSquadToTeam (Ustaw z kadry)', () => {
   it('pusta kadra lub drużyna nie zmienia niczego', () => {
     expect(assignSquadToTeam(team, [])).toEqual({});
     expect(assignSquadToTeam([], squad)).toEqual({});
+  });
+});
+
+describe('wklejanie kadry', () => {
+  it('Excel: kolumny rozdzielone tabulatorem, z nagłówkiem, osobne imię i nazwisko', () => {
+    const text = 'Nr\tImię\tNazwisko\tPozycja\n1\tJan\tKowalski\tBramkarz\n4\tPiotr\tNowak\tObrońca\n10\tAdam\tŁącki\tPOM\n';
+    expect(parseSquadText(text)).toEqual([
+      { number: '1', name: 'Jan Kowalski', position: 'BR' },
+      { number: '4', name: 'Piotr Nowak', position: 'OBR' },
+      { number: '10', name: 'Adam Łącki', position: 'POM' },
+    ]);
+    expect(parseSquadText('Nr\tImię i nazwisko\tPozycja\n1\tJan Kowalski\tBR')).toEqual([{ number: '1', name: 'Jan Kowalski', position: 'BR' }]);
+  });
+
+  it('notatnik: numer na początku albo końcu, kropki, myślniki, średniki i same nazwiska', () => {
+    const text = '7. Jan Kowalski – napastnik\r\nPiotr Nowak 5\nAdam Zieliński;8;ŚO\n  \nKamil Wójcik\n#9 Ola Lis ST';
+    expect(parseSquadText(text)).toEqual([
+      { number: '7', name: 'Jan Kowalski', position: 'NAP' },
+      { number: '5', name: 'Piotr Nowak', position: 'POM' },
+      { number: '8', name: 'Adam Zieliński', position: 'OBR' },
+      { number: '', name: 'Kamil Wójcik', position: 'POM' },
+      { number: '9', name: 'Ola Lis', position: 'NAP' },
+    ]);
+  });
+
+  it('dodaje do kadry i nadaje wolne numery, albo zastępuje kadrę', () => {
+    const squad = [{ id: 'a', number: '1', name: 'Stary', position: 'BR' }];
+    const parsed = [{ number: '', name: 'Bez Numeru', position: 'POM' }, { number: '2', name: 'Dwa', position: 'OBR' }];
+    const added = mergeSquad(squad, parsed);
+    expect(added.map(m => [m.number, m.name])).toEqual([['1', 'Stary'], ['3', 'Bez Numeru'], ['2', 'Dwa']]);
+    expect(new Set(added.map(m => m.id)).size).toBe(3);
+    expect(mergeSquad(squad, parsed, 'replace').map(m => [m.number, m.name])).toEqual([['1', 'Bez Numeru'], ['2', 'Dwa']]);
   });
 });

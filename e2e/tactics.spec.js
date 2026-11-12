@@ -203,3 +203,30 @@ test.describe('Taktyka', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
+
+test.describe('Kadra', () => {
+  test('wklejenie listy z Excela (Ctrl+V w oknie) i z notatnika dodaje zawodników', async ({ page }) => {
+    await page.getByRole('button', { name: /Kadra/ }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Kadra zespołu' });
+    // Ctrl+V poza polami: tekst z Excela (tabulatory, nagłówek)
+    await dialog.evaluate((el) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', 'Nr\tImię i nazwisko\tPozycja\n1\tJan Kowalski\tBramkarz\n4\tPiotr Nowak\tObrońca\n');
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    await expect(dialog.getByText('Rozpoznano zawodników: 2')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Dodaj do kadry' }).click();
+
+    // przycisk „Wklej listę”: lista z notatnika
+    await dialog.getByRole('button', { name: 'Wklej listę' }).click();
+    await dialog.getByLabel('Lista zawodników').fill('9. Adam Zieliński – napastnik\nKamil Wójcik');
+    await expect(dialog.getByText('Rozpoznano zawodników: 2')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Dodaj do kadry' }).click();
+
+    const squad = await page.evaluate(() => JSON.parse(localStorage.getItem('modelGrySquad')));
+    expect(squad.map(m => [m.number, m.name, m.position])).toEqual([
+      ['1', 'Jan Kowalski', 'BR'], ['2', 'Kamil Wójcik', 'POM'], ['4', 'Piotr Nowak', 'OBR'], ['9', 'Adam Zieliński', 'NAP'],
+    ]);
+    await expect(dialog.getByRole('heading', { name: /Kadra zespołu \(4\)/ })).toBeVisible();
+  });
+});

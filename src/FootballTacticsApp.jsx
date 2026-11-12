@@ -4250,6 +4250,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                     ['Delete', 'usuń zaznaczoną linię lub strefę'],
                     ['Esc', 'anuluj rysowanie / odznacz'],
                     ['Dwuklik', 'numer i kolor zawodnika'],
+                    ['Alt + przeciąganie', 'bez przyciągania do linii wyrównania'],
                   ].map(([k, d]) => (
                     <p key={k}><kbd className="bg-white/10 px-1 rounded text-slate-300">{k}</kbd> {d}</p>
                   ))}

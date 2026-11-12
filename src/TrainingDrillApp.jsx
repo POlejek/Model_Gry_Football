@@ -15,7 +15,7 @@ import { boardSize, drawBoards, logoImage, hasBrand, drawBoardItem, setBoardBran
 import { loadClub, EMPTY_CLUB } from './utils/club.js';
 import {
   isPointNearLine, isPointNearControlPoint, isPointNearLineEnd,
-  isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon,
+  isPointInZone, isPointNearPolygonVertex, hitZoneHandle, resizeZone, zoneHandleCursor, rectangleToPolygon, alignGroupToGuides,
 } from './utils/geometry.js';
 import {
   FULL_W, FULL_H, CROP_H, LEGACY_PITCH, getPitchSize, TWO_PI, normAngle, clamp, transformObj, translateObj, fitFramesTo, zoneBBox, objectsInRect, findObj, lerpObj, interpolateFrames, TYPE_LABELS, DEFAULT_META, META_FIELDS, emptyFrame, isEmptyScene, drillSignature, makeSceneKey, PL_MAP, safeFileName, normalizeDrill, DRILL_FORMAT, LIBRARY_FORMAT, toLibraryEntry, parseDrillFile, wrapText, equipmentSummary, DRAFT_KEY, remapFrames, RUNOFF, contentCrop,
@@ -803,6 +803,17 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
       ctx.restore();
     }
 
+    // alignment guides while moving (editor only, never in exports)
+    if (drag?.type === 'move' && drag.guides) {
+      ctx.save();
+      ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 1.5 * uiScale; ctx.setLineDash([6 * uiScale, 4 * uiScale]);
+      ctx.beginPath();
+      if (drag.guides.v !== null) { ctx.moveTo(drag.guides.v, 0); ctx.lineTo(drag.guides.v, pitchSize.h); }
+      if (drag.guides.h !== null) { ctx.moveTo(0, drag.guides.h); ctx.lineTo(pitchSize.w, drag.guides.h); }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     if (drag?.type === 'marquee') {
       ctx.save();
       ctx.fillStyle = 'rgba(59,130,246,0.08)'; ctx.strokeStyle = '#3b82f6';
@@ -1129,7 +1140,20 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
         )));
         break;
       case 'move': {
-        const dx = x - drag.start.x, dy = y - drag.start.y;
+        let dx = x - drag.start.x, dy = y - drag.start.y;
+        // Smart guides (as in PowerPoint): the moved players / equipment snap to the vertical or
+        // horizontal of another item or the pitch centre; Alt (Option) moves freely.
+        const isMoved = (i) => drag.origin[i.id]?.kind === 'items';
+        const movedItems = frame.items.filter(isMoved).map(i => drag.origin[i.id].obj);
+        let guides = null;
+        if (movedItems.length && !e.altKey) {
+          const others = frame.items.filter(i => !isMoved(i));
+          const snap = alignGroupToGuides(movedItems.map(o => ({ x: o.x + dx, y: o.y + dy })), others,
+            { threshold: 6 * uiScale, xs: [pitchSize.w / 2], ys: [pitchSize.h / 2] });
+          dx += snap.dx; dy += snap.dy;
+          if (snap.guides.v !== null || snap.guides.h !== null) guides = snap.guides;
+        }
+        if (JSON.stringify(guides) !== JSON.stringify(drag.guides ?? null)) setDrag(d => ({ ...d, guides }));
         const move = (kind) => (o) => {
           const orig = drag.origin[o.id];
           if (!orig) return o;
@@ -1916,6 +1940,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                     ['Ctrl+C / V / D', 'kopiuj / wklej / duplikuj'],
                     ['Ctrl+A', 'zaznacz wszystko'],
                     ['Strzałki', 'przesuń o 1 px (Shift: 10)'],
+                    ['Alt + przeciąganie', 'bez przyciągania do linii wyrównania'],
                     ['Delete', 'usuń'],
                     ['Esc', 'anuluj / odznacz'],
                   ].map(([k, d]) => (
@@ -1923,6 +1948,7 @@ export default function TrainingDrillApp({ active = true, squad = [], openDrillR
                   ))}
                   <p className="pt-1">Przeciągnij po pustym polu, aby zaznaczyć kilka elementów; Shift+klik dodaje do zaznaczenia.</p>
                   <p>Dwuklik na elemencie → szybka zmiana koloru.</p>
+                  <p>Linie wyrównania: przesuwany element przyciąga się do pionu lub poziomu innych elementów i środka boiska (czerwona linia). Alt przy przeciąganiu wyłącza przyciąganie.</p>
                   <p>Animacja: „+ Klatka” kopiuje bieżące ustawienie — przesuń zawodników i odtwórz.</p>
                 </div>
               </details>

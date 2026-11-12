@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isPointNearLine, isPointInZone, isPointNearPolygonVertex, isPointNearLineEnd, isPointNearControlPoint,
-  getZoneHandles, hitZoneHandle, resizeZone, rectangleToPolygon, zoneHandleCursor, alignToGuides,
+  getZoneHandles, hitZoneHandle, resizeZone, rectangleToPolygon, zoneHandleCursor, alignToGuides, alignGroupToGuides,
 } from './geometry.js';
 
 describe('isPointNearLine', () => {
@@ -159,5 +159,16 @@ describe('alignToGuides', () => {
 
   it('wybiera najbliższego i bierze pod uwagę dodatkowe linie (środek boiska)', () => {
     expect(alignToGuides({ x: 352, y: 302 }, [{ x: 357, y: 290 }], { xs: [350] })).toEqual({ x: 350, y: 302, guides: { v: 350, h: null } });
+  });
+});
+
+describe('alignGroupToGuides', () => {
+  it('przesuwa grupę o najmniejszą poprawkę, która ustawia któryś punkt na linii', () => {
+    const r = alignGroupToGuides([{ x: 103, y: 50 }, { x: 205, y: 412 }], [{ x: 100, y: 410 }, { x: 200, y: 900 }]);
+    expect(r).toEqual({ dx: -3, dy: -2, guides: { v: 100, h: 410 } });
+  });
+
+  it('bez linii w zasięgu nie przesuwa', () => {
+    expect(alignGroupToGuides([{ x: 50, y: 50 }], [{ x: 300, y: 300 }])).toEqual({ dx: 0, dy: 0, guides: { v: null, h: null } });
   });
 });

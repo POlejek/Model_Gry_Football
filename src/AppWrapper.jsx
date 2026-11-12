@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal, Sparkles, BookOpen } from 'lucide-react';
+import { Route, Dumbbell, ClipboardList, Database, Users, School, MoreHorizontal, Goal, Sparkles, BookOpen, X } from 'lucide-react';
 import FootballTacticsApp from './FootballTacticsApp';
 import TrainingDrillApp from './TrainingDrillApp';
 import SessionPlanApp from './SessionPlanApp.jsx';
@@ -173,14 +173,18 @@ export default function AppWrapper() {
   }, []);
   const backupAge = backupDue ? backupAgeDays() : null;
   const [showPacks, setShowPacks] = useState(false);
-  // Instrukcja: opens by itself on a new user's first visit (nothing saved yet), then from the top bar
-  // or a hint in the editors (with the section to show).
-  const [guide, setGuide] = useState(() => {
+  // Instrukcja: from the top bar or a hint in the editors (with the section to show). A new user
+  // (nothing saved yet) gets a small hint card pointing to it once, instead of the whole page.
+  const [guide, setGuide] = useState(null);
+  const [guideHint, setGuideHint] = useState(() => {
     try {
-      const fresh = !localStorage.getItem(GUIDE_SEEN_KEY) && !Object.values(KEYS).some(k => localStorage.getItem(k));
-      return fresh ? { section: null } : null;
-    } catch { return null; }
+      return !localStorage.getItem(GUIDE_SEEN_KEY) && !Object.values(KEYS).some(k => localStorage.getItem(k));
+    } catch { return false; }
   });
+  const closeGuideHint = () => {
+    setGuideHint(false);
+    try { localStorage.setItem(GUIDE_SEEN_KEY, '1'); } catch { /* ignore */ }
+  };
   useEffect(() => {
     const onOpen = (e) => setGuide({ section: e.detail?.section || null });
     window.addEventListener(OPEN_GUIDE_EVENT, onOpen);
@@ -197,7 +201,7 @@ export default function AppWrapper() {
     { label: 'Szkółka', open: () => setShowClub(true), title: 'Szkółka: nazwa, logo, trener i asystent (nagłówek konspektu)',
       icon: club.logo ? <img src={club.logo} alt="" className="w-5 h-5 object-contain rounded-sm bg-white" /> : <School size={16} aria-hidden="true" /> },
     { label: 'Instrukcja', icon: <BookOpen size={16} aria-hidden="true" />, title: 'Instrukcja: opis wszystkich opcji PlanGry',
-      open: () => { track('open_guide'); setGuide({ section: null }); } },
+      open: () => { track('open_guide'); setGuideHint(false); setGuide({ section: null }); } },
   ];
   const utilBtn = 'px-3 py-1.5 rounded-md text-sm text-slate-300 hover:text-white hover:bg-white/10 inline-flex items-center gap-1.5';
 
@@ -295,6 +299,23 @@ export default function AppWrapper() {
       {askConsent && <ConsentBanner onChoose={chooseConsent} />}
       {showPacks && <PacksModal onClose={() => setShowPacks(false)} />}
       {guide && <GuideModal section={guide.section} onClose={() => setGuide(null)} />}
+      {guideHint && !guide && (
+        <aside role="complementary" aria-label="Podpowiedź: instrukcja"
+          className="fixed z-[145] right-3 top-12 w-[min(20rem,calc(100vw-1.5rem))] rounded-xl bg-slate-900 border border-blue-500/40 shadow-2xl p-3 text-sm text-slate-200">
+          <span className="absolute -top-1.5 right-6 w-3 h-3 rotate-45 bg-slate-900 border-l border-t border-blue-500/40" aria-hidden="true" />
+          <div className="flex items-start gap-2">
+            <BookOpen size={16} className="text-blue-300 mt-0.5 flex-shrink-0" aria-hidden="true" />
+            <p className="flex-1">Pierwszy raz w PlanGry? Krótki opis wszystkich opcji znajdziesz w <span className="font-semibold text-white">Instrukcji</span>
+              {isPhone ? ' (menu ⋯ u góry).' : ' (przycisk u góry).'}</p>
+            <button onClick={closeGuideHint} className="p-0.5 -mt-0.5 text-slate-400 hover:text-white" aria-label="Zamknij podpowiedź"><X size={15} /></button>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <button onClick={closeGuideHint} className="px-2.5 py-1 rounded-md text-xs text-slate-300 hover:bg-white/10">Nie teraz</button>
+            <button onClick={() => { closeGuideHint(); track('open_guide', { from: 'hint' }); setGuide({ section: null }); }}
+              className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white">Otwórz instrukcję</button>
+          </div>
+        </aside>
+      )}
       {showClub && <ClubModal club={club} onChange={updateClub} onClose={() => setShowClub(false)} />}
       {draggingFiles && !showClub && (
         <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center bg-blue-950/60 border-4 border-dashed border-blue-400/70">

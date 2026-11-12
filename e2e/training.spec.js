@@ -119,6 +119,25 @@ test.describe('Trening', () => {
     expect(cone.y).toBeCloseTo(760 / 2, -1);
   });
 
+  test('linie wyrównania: przesuwany pachołek dociąga do pionu innego, z Alt nie', async ({ page }) => {
+    const canvas = page.locator('canvas:visible');
+    const box = await canvas.boundingBox();
+    await paletteTile(page, 'Stożek').dragTo(canvas, { targetPosition: { x: box.width * 0.25, y: box.height * 0.5 } });
+    await paletteTile(page, 'Stożek').dragTo(canvas, { targetPosition: { x: box.width * 0.75, y: box.height * 0.25 } });
+    let [a, b] = (await trainingDraft(page)).frames[0].items;
+
+    await dragOnCanvas(page, [b.x, b.y], [a.x + 4, 150]);
+    [a, b] = (await trainingDraft(page)).frames[0].items;
+    expect(b.x).toBeCloseTo(a.x, 5);
+    expect(b.y).toBeCloseTo(150, -1);
+
+    await page.keyboard.down('Alt');
+    await dragOnCanvas(page, [b.x, b.y], [a.x + 4, 250]);
+    await page.keyboard.up('Alt');
+    [a, b] = (await trainingDraft(page)).frames[0].items;
+    expect(Math.abs(b.x - a.x)).toBeGreaterThan(1);
+  });
+
   test('banda jak pachołek: dodanie z palety, własny tekst, długość i przesunięcie', async ({ page }) => {
     await paletteTile(page, 'Banda').click();
     let [board] = (await trainingDraft(page)).frames[0].items;

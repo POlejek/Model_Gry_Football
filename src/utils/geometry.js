@@ -201,3 +201,15 @@ export function alignToGuides(point, others, { threshold = 6, xs = [], ys = [] }
   const h = nearest(point.y, [...others.map(o => o.y), ...ys]);
   return { x: v ?? point.x, y: h ?? point.y, guides: { v, h } };
 }
+
+// The same for several objects moved together (a selection): the group shifts by the smallest
+// correction that puts one of its points on a guide. Returns { dx, dy, guides }.
+export function alignGroupToGuides(points, others, opts = {}) {
+  let bx = null, by = null;
+  points.forEach((p) => {
+    const { x, y, guides } = alignToGuides(p, others, opts);
+    if (guides.v !== null && (bx === null || Math.abs(x - p.x) < Math.abs(bx.d))) bx = { d: x - p.x, v: guides.v };
+    if (guides.h !== null && (by === null || Math.abs(y - p.y) < Math.abs(by.d))) by = { d: y - p.y, h: guides.h };
+  });
+  return { dx: bx ? bx.d : 0, dy: by ? by.d : 0, guides: { v: bx ? bx.v : null, h: by ? by.h : null } };
+}

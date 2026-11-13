@@ -59,6 +59,21 @@ test.describe('Taktyka', () => {
     expect(Math.abs(st.y - 440)).toBeGreaterThan(1);
   });
 
+  test('nazwisko wpisane zamiast numeru trafia do Kadry, a zawodnik zostaje z numerem i pokazuje nazwisko', async ({ page }) => {
+    await newScheme(page);
+    // napastnik nr 9 (350, 570): dwuklik otwiera edycję
+    await page.mouse.dblclick(...(await canvasPoint(page, 350, 570)));
+    const field = page.getByPlaceholder('np. 9, Kowalski albo 9 Kowalski');
+    await field.fill('Kowalski');
+    await field.press('Enter');
+
+    const squad = await page.evaluate(() => JSON.parse(localStorage.getItem('modelGrySquad')));
+    expect(squad).toEqual([expect.objectContaining({ number: '9', name: 'Kowalski', position: 'NAP' })]);
+    const st = (await firstScheme(page)).frames[0].team.find(p => p.id === 'st');
+    expect(st.number).toBe('9');
+    await expect(page.getByRole('button', { name: 'Nazwiska z kadry' }).filter({ visible: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('animację można odtworzyć ponownie od początku (zgłoszony błąd)', async ({ page }) => {
     await newScheme(page);
     await page.getByRole('button', { name: 'Dodaj klatkę' }).click();

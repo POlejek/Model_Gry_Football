@@ -153,6 +153,7 @@ export const GUIDE_SECTIONS = [
         <><B>Dodaj zawodnika</B> – numer, imię i nazwisko, pozycja. Numer łączy zawodnika z kółkiem na boisku.</>,
         <><B>Wklej listę</B> albo <K>Ctrl+V</K> w oknie Kadry: skopiuj kolumny z Excela lub listę z notatnika – jeden zawodnik w wierszu, np. „7 Jan Kowalski POM”. Przed zapisaniem zobaczysz podgląd i wybierzesz <B>Dodaj do kadry</B> albo <B>Zastąp kadrę</B>.</>,
         <>W Taktyce przełącznik <B>Nazwiska</B> pokazuje nazwiska zamiast numerów.</>,
+        <>W Taktyce możesz też <B>dwukliknąć zawodnika i wpisać nazwisko</B> (albo „9 Kowalski”) – zapisze się w Kadrze pod numerem tego zawodnika, a na boisku pokażą się nazwiska.</>,
       ]} />
     ),
   },

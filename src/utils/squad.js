@@ -160,3 +160,30 @@ export function mergeSquad(squad, parsed, mode = 'add') {
     number: p.number || free(), name: p.name, position: p.position,
   }))];
 }
+
+// A name typed on the pitch (Taktyka) instead of a number: saved in the squad, so the player keeps a
+// number and the name shows through "Nazwiska". Accepts "Kowalski", "9 Kowalski" or "Jan Kowalski NAP".
+// A name already in the squad reuses that member's number; otherwise the typed number, the player's
+// current number or the first free one. Returns null when the input has no name (just a number).
+export function nameToSquad(squad, input, { currentNumber = '', position = 'POM' } = {}) {
+  if (!/\p{L}/u.test(String(input || ''))) return null;
+  const [parsed] = parseSquadText(String(input).trim());
+  if (!parsed || !parsed.name) return null;
+  const typedPosition = /\s/.test(String(input).trim()) && parsePosition(String(input).trim().split(/\s+/).pop()) ? parsed.position : null;
+  const same = (m) => String(m.name || '').trim().toLowerCase() === parsed.name.toLowerCase();
+  const byName = !parsed.number && squad.find(same);
+  if (byName) return { number: String(byName.number), squad };
+  const current = /^\d{1,3}$/.test(String(currentNumber).trim()) ? String(parseInt(currentNumber, 10)) : '';
+  let number = parsed.number || current;
+  if (!number) {
+    const used = new Set(squad.map(m => String(m.number).trim()));
+    let n = 1;
+    while (used.has(String(n))) n++;
+    number = String(n);
+  }
+  const existing = squad.find(m => String(m.number).trim() === number);
+  const next = existing
+    ? squad.map(m => (m === existing ? { ...m, name: parsed.name, position: typedPosition || m.position || position } : m))
+    : [...squad, { id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, number, name: parsed.name, position: typedPosition || position }];
+  return { number, squad: next };
+}

@@ -283,7 +283,7 @@ export default function AppWrapper() {
 
       {/* Both tabs stay mounted so switching keeps the open scheme, frame and undo history. */}
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'tactics' ? 'flex' : 'hidden'}`}>
-        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} /></TabErrorBoundary>
+        <TabErrorBoundary name="Taktyka"><FootballTacticsApp embedded active={activeTab === 'tactics'} squad={squad} onSquadChange={updateSquad} onOpenDrill={(id) => { selectTab('training'); setDrillRequest({ id, nonce: Date.now() }); }} /></TabErrorBoundary>
       </div>
       <div className={`flex-1 flex-col overflow-hidden ${activeTab === 'training' ? 'flex' : 'hidden'}`}>
         <TabErrorBoundary name="Trening"><TrainingDrillApp active={activeTab === 'training'} squad={squad} club={club} openDrillRequest={drillRequest} /></TabErrorBoundary>

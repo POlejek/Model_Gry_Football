@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadSquad, saveSquad, shortName, findByNumber, sortSquad, assignSquadToTeam, parseSquadText, mergeSquad, SQUAD_KEY } from './squad.js';
+import { loadSquad, saveSquad, shortName, findByNumber, sortSquad, assignSquadToTeam, parseSquadText, mergeSquad, nameToSquad, SQUAD_KEY } from './squad.js';
 
 describe('kadra — zapis i pomocnicze', () => {
   it('zapisuje i wczytuje kadrę; uszkodzone dane dają pustą listę', () => {
@@ -94,5 +94,37 @@ describe('wklejanie kadry', () => {
     expect(added.map(m => [m.number, m.name])).toEqual([['1', 'Stary'], ['3', 'Bez Numeru'], ['2', 'Dwa']]);
     expect(new Set(added.map(m => m.id)).size).toBe(3);
     expect(mergeSquad(squad, parsed, 'replace').map(m => [m.number, m.name])).toEqual([['1', 'Bez Numeru'], ['2', 'Dwa']]);
+  });
+});
+
+describe('nazwisko wpisane na boisku trafia do kadry', () => {
+  const squad = [{ id: 'a', number: '7', name: 'Adam Nowak', position: 'NAP' }];
+
+  it('samo nazwisko: zapisuje je pod obecnym numerem zawodnika z pozycją z boiska', () => {
+    const r = nameToSquad(squad, 'Kowalski', { currentNumber: '9', position: 'POM' });
+    expect(r.number).toBe('9');
+    expect(r.squad.at(-1)).toMatchObject({ number: '9', name: 'Kowalski', position: 'POM' });
+    expect(r.squad).toHaveLength(2);
+  });
+
+  it('numer i nazwisko (z pozycją) w jednym polu', () => {
+    const r = nameToSquad([], '10 Jan Zieliński NAP', { currentNumber: '4', position: 'OBR' });
+    expect(r).toMatchObject({ number: '10' });
+    expect(r.squad).toEqual([expect.objectContaining({ number: '10', name: 'Jan Zieliński', position: 'NAP' })]);
+  });
+
+  it('nazwisko z kadry: używa numeru tego zawodnika, nie dubluje', () => {
+    const r = nameToSquad(squad, 'adam nowak', { currentNumber: '3' });
+    expect(r).toEqual({ number: '7', squad });
+  });
+
+  it('numer zajęty w kadrze: nadpisuje nazwisko, zachowuje pozycję', () => {
+    const r = nameToSquad(squad, 'Lis', { currentNumber: '7', position: 'BR' });
+    expect(r.squad).toEqual([{ id: 'a', number: '7', name: 'Lis', position: 'NAP' }]);
+  });
+
+  it('bez numeru zawodnika: pierwszy wolny numer; sam numer to nie nazwisko', () => {
+    expect(nameToSquad(squad, 'Wójcik', { currentNumber: 'ABC' }).number).toBe('1');
+    expect(nameToSquad(squad, '12')).toBeNull();
   });
 });

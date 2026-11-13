@@ -18,7 +18,7 @@ import {
 import { ErrorBanner } from './components/ErrorBanner.jsx';
 import { LINE_TYPES, ZONE_SHAPES } from './utils/lineTypes.jsx';
 import { safeFileName } from './utils/drill.js';
-import { findByNumber, shortName, sortSquad, assignSquadToTeam } from './utils/squad.js';
+import { findByNumber, shortName, sortSquad, assignSquadToTeam, nameToSquad } from './utils/squad.js';
 import { phaseKey, phaseOptions, readDrillLibrary, drillsForPhase } from './utils/modelPhases.js';
 
 
@@ -27,7 +27,7 @@ const MENU_ITEM = 'w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-
 const optionBtnClass = (active) => `h-8 px-1 rounded-md inline-flex items-center justify-center transition-colors ${
   active ? 'bg-white/20 ring-1 ring-blue-400 text-white' : 'text-slate-300 hover:bg-white/10'}`;
 
-const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpenDrill = null }) => {
+const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onSquadChange = null, onOpenDrill = null }) => {
   const [gameFormat, setGameFormat] = useState('11v11');
   const [selectedPhase, setSelectedPhase] = useState('Atak');
   const [selectedSubPhase, setSelectedSubPhase] = useState('Otwarcie');
@@ -2396,11 +2396,28 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
     }
 
     const { player, type } = editingPlayerNumber;
+    let value = newPlayerNumber.trim();
+    // A name typed for an own player goes to the squad (Kadra): the player keeps a number and the
+    // pitch shows the name through "Nazwiska".
+    if (type === 'team' && onSquadChange) {
+      // position from depth among own players (own goal at the bottom): keeper, then thirds of the outfield
+      const ys = players.team.map(p => p.y);
+      const deepest = Math.max(...ys);
+      const outfield = players.team.filter(p => p.y < deepest).map(p => p.y);
+      const depth = outfield.length > 1 ? (deepest - player.y) / (deepest - Math.min(...outfield)) : 0.5;
+      const position = player.y >= deepest ? 'BR' : depth < 0.3 ? 'OBR' : depth < 0.7 ? 'POM' : 'NAP';
+      const saved = nameToSquad(squad, value, { currentNumber: player.number, position });
+      if (saved) {
+        value = saved.number;
+        if (saved.squad !== squad) onSquadChange(saved.squad);
+        setShowNames(true);
+      }
+    }
     
     setPlayers(prev => ({
       ...prev,
       [type]: prev[type].map(p =>
-        p.id === player.id ? { ...p, number: newPlayerNumber.trim(), color: newPlayerColor } : p
+        p.id === player.id ? { ...p, number: value, color: newPlayerColor } : p
       )
     }));
     
@@ -2411,7 +2428,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
           i === currentFrame ? {
             ...f,
             [type]: f[type].map(p =>
-              p.id === player.id ? { ...p, number: newPlayerNumber.trim(), color: newPlayerColor } : p
+              p.id === player.id ? { ...p, number: value, color: newPlayerColor } : p
             ),
             lines: lines
           } : f
@@ -4362,7 +4379,7 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Numer zawodnika</label>
+                <label className="block text-sm font-medium text-slate-400 mb-2">{editingPlayerNumber.type === 'team' && onSquadChange ? 'Numer lub nazwisko' : 'Numer zawodnika'}</label>
                 <input
                   type="text"
                   value={newPlayerNumber}
@@ -4376,8 +4393,11 @@ const FootballTacticsApp = ({ embedded = false, active = true, squad = [], onOpe
                   }}
                   autoFocus
                   className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none text-lg font-semibold text-center"
-                  placeholder="Wprowadź numer"
+                  placeholder={editingPlayerNumber.type === 'team' && onSquadChange ? 'np. 9, Kowalski albo 9 Kowalski' : 'Wprowadź numer'}
                 />
+                {editingPlayerNumber.type === 'team' && onSquadChange && (
+                  <p className="mt-1.5 text-xs text-slate-400">Nazwisko zapisze się w Kadrze pod numerem tego zawodnika.</p>
+                )}
               </div>
 
               {editingPlayerNumber.type === 'team' && (
